@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
@@ -10,6 +9,7 @@ type Memory = {
   caption: string;
   uri: string | null;
   mediaType: 'photo' | 'video';
+  isScreenshot: boolean;
 };
 
 export default function OnThisDay() {
@@ -49,7 +49,6 @@ export default function OnThisDay() {
       const endOfDay = new Date(targetDate);
       endOfDay.setHours(23, 59, 59, 999);
 
-      // Search for both photos AND videos on this date
       const result = await MediaLibrary.getAssetsAsync({
         mediaType: ['photo', 'video'],
         createdAfter: startOfDay.getTime(),
@@ -63,12 +62,20 @@ export default function OnThisDay() {
         const info = await MediaLibrary.getAssetInfoAsync(asset.id);
         const savedCaption = await AsyncStorage.getItem(`caption_${asset.id}`);
 
+        // Detect screenshots in two ways:
+        // 1. Check the media subtype iOS assigns to screenshots
+        // 2. Check if the filename contains "Screenshot" which iOS also does
+        const isScreenshot =
+          (info as any).mediaSubtypes?.includes('screenshot') ||
+          (asset.filename?.toLowerCase().includes('screenshot') ?? false);
+
         found.push({
           id: asset.id,
           year: String(today.getFullYear() - yearsAgo),
           caption: savedCaption || '',
           uri: info.localUri || asset.uri,
           mediaType: asset.mediaType === 'video' ? 'video' : 'photo',
+          isScreenshot,
         });
       }
     }
@@ -91,6 +98,13 @@ export default function OnThisDay() {
       );
     }
     setSelectedMemory(null);
+  };
+
+  // Helper that returns the right label and emoji for each memory type
+  const getMediaLabel = (memory: Memory) => {
+    if (memory.mediaType === 'video') return '🎥 Video';
+    if (memory.isScreenshot) return '📸 Screenshot';
+    return '📷 Photo';
   };
 
   if (!permission?.granted) {
@@ -122,6 +136,13 @@ export default function OnThisDay() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>On This Day</Text>
         <Text style={styles.headerDate}>{dateString}</Text>
+        {/* Temporary reset button — remove before App Store launch */}
+        <TouchableOpacity onPress={async () => {
+          await AsyncStorage.removeItem('onboarding_complete');
+          alert('Onboarding reset — restart the app');
+        }}>
+          <Text style={styles.resetText}>Reset onboarding</Text>
+        </TouchableOpacity>
       </View>
 
       {memoryList.length === 0 ? (
@@ -137,27 +158,32 @@ export default function OnThisDay() {
         memoryList.map((memory) => (
           <View key={memory.id} style={styles.memoryCard}>
 
-            {/* Show video or photo depending on media type */}
             <TouchableOpacity onPress={() => setFullScreenMemory(memory)}>
               {memory.mediaType === 'video' ? (
                 <View style={styles.videoThumbnail}>
                   <Text style={styles.videoIcon}>▶</Text>
                   <Text style={styles.videoLabel}>Video memory</Text>
                 </View>
-              ) : (
-                memory.uri ? (
+              ) : memory.uri ? (
+                <View>
                   <Image source={{ uri: memory.uri }} style={styles.memoryImage} />
-                ) : (
-                  <View style={styles.imagePlaceholder}>
-                    <Text style={styles.imagePlaceholderText}>📷</Text>
-                  </View>
-                )
+                  {/* Show screenshot banner across the top of the image */}
+                  {memory.isScreenshot && (
+                    <View style={styles.screenshotBanner}>
+                      <Text style={styles.screenshotBannerText}>📸 Screenshot</Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <Text style={styles.imagePlaceholderText}>📷</Text>
+                </View>
               )}
             </TouchableOpacity>
 
             <View style={styles.memoryInfo}>
               <Text style={styles.yearTag}>
-                {memory.year} · {memory.mediaType === 'video' ? '🎥 Video' : '📷 Photo'}
+                {memory.year} · {getMediaLabel(memory)}
               </Text>
               {memory.caption ? (
                 <Text style={styles.captionText}>"{memory.caption}"</Text>
@@ -205,46 +231,26 @@ export default function OnThisDay() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Full screen viewer for photos and videos */}
+      {/* Full screen viewer */}
       {fullScreenMemory && (
-        <FullScreenViewer
-          memory={fullScreenMemory}
-          onClose={() => setFullScreenMemory(null)}
-        />
+        <Modal visible transparent animationType="fade">
+          <TouchableOpacity
+            style={styles.fullScreenOverlay}
+            onPress={() => setFullScreenMemory(null)}>
+            <Image
+              source={{ uri: fullScreenMemory.uri! }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+            {fullScreenMemory.isScreenshot && (
+              <Text style={styles.fullScreenLabel}>📸 Screenshot</Text>
+            )}
+            <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
+          </TouchableOpacity>
+        </Modal>
       )}
 
     </ScrollView>
-  );
-}
-
-// Separate component for the full screen viewer
-// Videos need their own player hook so we keep them in their own component
-function FullScreenViewer({ memory, onClose }: { memory: Memory; onClose: () => void }) {
-  const player = useVideoPlayer(
-    memory.mediaType === 'video' ? memory.uri ?? '' : '',
-    p => { p.loop = true; p.play(); }
-  );
-
-  return (
-    <Modal visible transparent animationType="fade">
-      <TouchableOpacity style={styles.fullScreenOverlay} onPress={onClose}>
-        {memory.mediaType === 'video' ? (
-          <VideoView
-            player={player}
-            style={styles.fullScreenImage}
-            contentFit="contain"
-            nativeControls
-          />
-        ) : (
-          <Image
-            source={{ uri: memory.uri! }}
-            style={styles.fullScreenImage}
-            resizeMode="contain"
-          />
-        )}
-        <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
-      </TouchableOpacity>
-    </Modal>
   );
 }
 
@@ -253,6 +259,7 @@ const styles = StyleSheet.create({
   header: { paddingTop: 70, paddingHorizontal: 24, paddingBottom: 24 },
   headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
   headerDate: { fontSize: 16, color: '#888888' },
+  resetText: { color: '#333333', fontSize: 12, marginTop: 8 },
   centreScreen: {
     flex: 1, backgroundColor: '#0d0d0d',
     justifyContent: 'center', alignItems: 'center', padding: 32,
@@ -280,6 +287,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a1a', borderRadius: 16, overflow: 'hidden',
   },
   memoryImage: { width: '100%', height: 280 },
+  screenshotBanner: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingVertical: 6, paddingHorizontal: 12,
+  },
+  screenshotBannerText: { color: '#ffffff', fontSize: 12, fontWeight: '600' },
   videoThumbnail: {
     width: '100%', height: 280, backgroundColor: '#1a1a2e',
     justifyContent: 'center', alignItems: 'center',
@@ -329,5 +343,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   fullScreenImage: { width: '100%', height: '85%' },
-  fullScreenDismiss: { color: '#555555', fontSize: 13, marginTop: 16 },
+  fullScreenLabel: { color: '#888888', fontSize: 13, marginTop: 8 },
+  fullScreenDismiss: { color: '#555555', fontSize: 13, marginTop: 4 },
 });
