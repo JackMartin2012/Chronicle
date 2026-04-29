@@ -1,21 +1,79 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as MediaLibrary from 'expo-media-library';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-const memories = [
-  { id: '1', year: '2023', caption: '', placeholder: 'A photo from 3 years ago today' },
-  { id: '2', year: '2022', caption: '', placeholder: 'A photo from 4 years ago today' },
-  { id: '3', year: '2021', caption: '', placeholder: 'A photo from 5 years ago today' },
-];
+type Memory = {
+  id: string;
+  year: string;
+  caption: string;
+  uri: string | null;
+};
 
 export default function OnThisDay() {
-  const [memoryList, setMemoryList] = useState(memories);
+  const [memoryList, setMemoryList] = useState<Memory[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<string | null>(null);
   const [captionText, setCaptionText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [fullScreenUri, setFullScreenUri] = useState<string | null>(null);
+  const [permission, requestPermission] = MediaLibrary.usePermissions();
 
   const today = new Date();
   const dateString = today.toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
+
+  useEffect(() => {
+    if (permission?.granted) {
+      loadMemories();
+    } else if (permission?.canAskAgain) {
+      requestPermission();
+    }
+  }, [permission]);
+
+  const loadMemories = async () => {
+    setLoading(true);
+    const today = new Date();
+    const yearsToCheck = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+    const found: Memory[] = [];
+
+    for (const yearsAgo of yearsToCheck) {
+      const targetDate = new Date(today);
+      targetDate.setFullYear(today.getFullYear() - yearsAgo);
+
+      const startOfDay = new Date(targetDate);
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date(targetDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const result = await MediaLibrary.getAssetsAsync({
+        mediaType: 'photo',
+        createdAfter: startOfDay.getTime(),
+        createdBefore: endOfDay.getTime(),
+        first: 1,
+        sortBy: MediaLibrary.SortBy.creationTime,
+      });
+
+      if (result.assets.length > 0) {
+        const asset = result.assets[0];
+        const info = await MediaLibrary.getAssetInfoAsync(asset.id);
+
+        // Load any previously saved caption for this photo
+        const savedCaption = await AsyncStorage.getItem(`caption_${asset.id}`);
+
+        found.push({
+          id: asset.id,
+          year: String(today.getFullYear() - yearsAgo),
+          caption: savedCaption || '',
+          uri: info.localUri || asset.uri,
+        });
+      }
+    }
+
+    setMemoryList(found);
+    setLoading(false);
+  };
 
   const openCaption = (id: string) => {
     const memory = memoryList.find(m => m.id === id);
@@ -23,12 +81,42 @@ export default function OnThisDay() {
     setSelectedMemory(id);
   };
 
-  const saveCaption = () => {
-    setMemoryList(prev =>
-      prev.map(m => m.id === selectedMemory ? { ...m, caption: captionText } : m)
-    );
+  const saveCaption = async () => {
+    if (selectedMemory) {
+      // Save the caption permanently to the phone
+      await AsyncStorage.setItem(`caption_${selectedMemory}`, captionText);
+
+      // Update the screen to show the new caption straight away
+      setMemoryList(prev =>
+        prev.map(m => m.id === selectedMemory ? { ...m, caption: captionText } : m)
+      );
+    }
     setSelectedMemory(null);
   };
+
+  if (!permission?.granted) {
+    return (
+      <View style={styles.centreScreen}>
+        <Text style={styles.permissionTitle}>Chronicle needs your photos</Text>
+        <Text style={styles.permissionSubtitle}>
+          To show your memories, Chronicle needs access to your camera roll.
+          Your photos never leave your device.
+        </Text>
+        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+          <Text style={styles.permissionButtonText}>Give access</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.centreScreen}>
+        <ActivityIndicator size="large" color="#ffffff" />
+        <Text style={styles.loadingText}>Finding your memories...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -37,28 +125,47 @@ export default function OnThisDay() {
         <Text style={styles.headerDate}>{dateString}</Text>
       </View>
 
-      {memoryList.map((memory) => (
-        <View key={memory.id} style={styles.memoryCard}>
-          <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>📷</Text>
-          </View>
-          <View style={styles.memoryInfo}>
-            <Text style={styles.yearTag}>{memory.year}</Text>
-            {memory.caption ? (
-              <Text style={styles.captionText}>"{memory.caption}"</Text>
-            ) : (
-              <Text style={styles.captionPrompt}>What was happening this day in {memory.year}?</Text>
-            )}
-            <TouchableOpacity
-              style={styles.addCaptionButton}
-              onPress={() => openCaption(memory.id)}>
-              <Text style={styles.addCaptionText}>
-                {memory.caption ? '✏️ Edit caption' : '+ Add caption'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+      {memoryList.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyEmoji}>📷</Text>
+          <Text style={styles.emptyTitle}>No photos found</Text>
+          <Text style={styles.emptySubtitle}>
+            You don't have any photos from this date in previous years.
+            Check back as you build your library!
+          </Text>
         </View>
-      ))}
+      ) : (
+        memoryList.map((memory) => (
+          <View key={memory.id} style={styles.memoryCard}>
+            {memory.uri ? (
+              <TouchableOpacity onPress={() => setFullScreenUri(memory.uri)}>
+                <Image source={{ uri: memory.uri }} style={styles.memoryImage} />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Text style={styles.imagePlaceholderText}>📷</Text>
+              </View>
+            )}
+            <View style={styles.memoryInfo}>
+              <Text style={styles.yearTag}>{memory.year}</Text>
+              {memory.caption ? (
+                <Text style={styles.captionText}>"{memory.caption}"</Text>
+              ) : (
+                <Text style={styles.captionPrompt}>
+                  What was happening this day in {memory.year}?
+                </Text>
+              )}
+              <TouchableOpacity
+                style={styles.addCaptionButton}
+                onPress={() => openCaption(memory.id)}>
+                <Text style={styles.addCaptionText}>
+                  {memory.caption ? '✏️ Edit caption' : '+ Add caption'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))
+      )}
 
       <Modal visible={selectedMemory !== null} animationType="slide" transparent>
         <KeyboardAvoidingView
@@ -86,6 +193,19 @@ export default function OnThisDay() {
         </KeyboardAvoidingView>
       </Modal>
 
+      <Modal visible={fullScreenUri !== null} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.fullScreenOverlay}
+          onPress={() => setFullScreenUri(null)}>
+          <Image
+            source={{ uri: fullScreenUri! }}
+            style={styles.fullScreenImage}
+            resizeMode="contain"
+          />
+          <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
+        </TouchableOpacity>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -95,17 +215,43 @@ const styles = StyleSheet.create({
   header: { paddingTop: 70, paddingHorizontal: 24, paddingBottom: 24 },
   headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
   headerDate: { fontSize: 16, color: '#888888' },
+  centreScreen: {
+    flex: 1, backgroundColor: '#0d0d0d',
+    justifyContent: 'center', alignItems: 'center', padding: 32,
+  },
+  permissionTitle: {
+    fontSize: 24, fontWeight: 'bold', color: '#ffffff',
+    textAlign: 'center', marginBottom: 16,
+  },
+  permissionSubtitle: {
+    fontSize: 15, color: '#666666', textAlign: 'center',
+    lineHeight: 22, marginBottom: 32,
+  },
+  permissionButton: {
+    backgroundColor: '#ffffff', borderRadius: 12,
+    paddingVertical: 14, paddingHorizontal: 32,
+  },
+  permissionButtonText: { color: '#000000', fontWeight: '600', fontSize: 16 },
+  loadingText: { color: '#666666', marginTop: 16, fontSize: 15 },
+  emptyState: { padding: 40, alignItems: 'center' },
+  emptyEmoji: { fontSize: 48, marginBottom: 16 },
+  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
+  emptySubtitle: { fontSize: 15, color: '#666666', textAlign: 'center', lineHeight: 22 },
   memoryCard: {
     marginHorizontal: 16, marginBottom: 20,
     backgroundColor: '#1a1a1a', borderRadius: 16, overflow: 'hidden',
   },
+  memoryImage: { width: '100%', height: 280 },
   imagePlaceholder: {
     width: '100%', height: 240, backgroundColor: '#2a2a2a',
     justifyContent: 'center', alignItems: 'center',
   },
   imagePlaceholderText: { fontSize: 48 },
   memoryInfo: { padding: 16 },
-  yearTag: { fontSize: 13, color: '#888888', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 },
+  yearTag: {
+    fontSize: 13, color: '#888888', marginBottom: 6,
+    textTransform: 'uppercase', letterSpacing: 1,
+  },
   captionPrompt: { fontSize: 16, color: '#cccccc', marginBottom: 12 },
   captionText: { fontSize: 16, color: '#ffffff', marginBottom: 12, fontStyle: 'italic' },
   addCaptionButton: {
@@ -114,8 +260,7 @@ const styles = StyleSheet.create({
   },
   addCaptionText: { color: '#888888', fontSize: 14 },
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'flex-end',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end',
   },
   modalBox: {
     backgroundColor: '#1a1a1a', borderTopLeftRadius: 24, borderTopRightRadius: 24,
@@ -135,4 +280,10 @@ const styles = StyleSheet.create({
   saveButtonText: { color: '#000000', fontWeight: '600', fontSize: 16 },
   cancelButton: { alignItems: 'center', padding: 10 },
   cancelButtonText: { color: '#555555', fontSize: 15 },
+  fullScreenOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  fullScreenImage: { width: '100%', height: '85%' },
+  fullScreenDismiss: { color: '#555555', fontSize: 13, marginTop: 16 },
 });
