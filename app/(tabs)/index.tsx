@@ -1,98 +1,122 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const memories = [
+  {
+    id: '1',
+    year: '2023',
+    caption: '',
+    placeholder: 'A photo from 3 years ago today',
+  },
+  {
+    id: '2',
+    year: '2022',
+    caption: '',
+    placeholder: 'A photo from 4 years ago today',
+  },
+  {
+    id: '3',
+    year: '2021',
+    caption: '',
+    placeholder: 'A photo from 5 years ago today',
+  },
+];
 
-export default function HomeScreen() {
+export default function OnThisDay() {
+  const today = new Date();
+  const dateString = today.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>On This Day</Text>
+        <Text style={styles.headerDate}>{dateString}</Text>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      {memories.map((memory) => (
+        <View key={memory.id} style={styles.memoryCard}>
+          <View style={styles.imagePlaceholder}>
+            <Text style={styles.imagePlaceholderText}>📷</Text>
+          </View>
+          <View style={styles.memoryInfo}>
+            <Text style={styles.yearTag}>{memory.year}</Text>
+            <Text style={styles.captionPrompt}>
+              What was happening this day in {memory.year}?
+            </Text>
+            <View style={styles.addCaptionButton}>
+              <Text style={styles.addCaptionText}>+ Add caption</Text>
+            </View>
+          </View>
+        </View>
+      ))}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    backgroundColor: '#0d0d0d',
+  },
+  header: {
+    paddingTop: 70,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+  },
+  headerTitle: {
+    fontSize: 34,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 4,
+  },
+  headerDate: {
+    fontSize: 16,
+    color: '#888888',
+  },
+  memoryCard: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  imagePlaceholder: {
+    width: '100%',
+    height: 240,
+    backgroundColor: '#2a2a2a',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  imagePlaceholderText: {
+    fontSize: 48,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  memoryInfo: {
+    padding: 16,
+  },
+  yearTag: {
+    fontSize: 13,
+    color: '#888888',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  captionPrompt: {
+    fontSize: 16,
+    color: '#cccccc',
+    marginBottom: 12,
+  },
+  addCaptionButton: {
+    borderWidth: 1,
+    borderColor: '#333333',
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+  },
+  addCaptionText: {
+    color: '#888888',
+    fontSize: 14,
   },
 });
