@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
@@ -8,6 +9,7 @@ type Memory = {
   year: string;
   caption: string;
   uri: string | null;
+  mediaType: 'photo' | 'video';
 };
 
 export default function OnThisDay() {
@@ -15,7 +17,7 @@ export default function OnThisDay() {
   const [selectedMemory, setSelectedMemory] = useState<string | null>(null);
   const [captionText, setCaptionText] = useState('');
   const [loading, setLoading] = useState(true);
-  const [fullScreenUri, setFullScreenUri] = useState<string | null>(null);
+  const [fullScreenMemory, setFullScreenMemory] = useState<Memory | null>(null);
   const [permission, requestPermission] = MediaLibrary.usePermissions();
 
   const today = new Date();
@@ -47,8 +49,9 @@ export default function OnThisDay() {
       const endOfDay = new Date(targetDate);
       endOfDay.setHours(23, 59, 59, 999);
 
+      // Search for both photos AND videos on this date
       const result = await MediaLibrary.getAssetsAsync({
-        mediaType: 'photo',
+        mediaType: ['photo', 'video'],
         createdAfter: startOfDay.getTime(),
         createdBefore: endOfDay.getTime(),
         first: 1,
@@ -58,8 +61,6 @@ export default function OnThisDay() {
       if (result.assets.length > 0) {
         const asset = result.assets[0];
         const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-
-        // Load any previously saved caption for this photo
         const savedCaption = await AsyncStorage.getItem(`caption_${asset.id}`);
 
         found.push({
@@ -67,6 +68,7 @@ export default function OnThisDay() {
           year: String(today.getFullYear() - yearsAgo),
           caption: savedCaption || '',
           uri: info.localUri || asset.uri,
+          mediaType: asset.mediaType === 'video' ? 'video' : 'photo',
         });
       }
     }
@@ -83,10 +85,7 @@ export default function OnThisDay() {
 
   const saveCaption = async () => {
     if (selectedMemory) {
-      // Save the caption permanently to the phone
       await AsyncStorage.setItem(`caption_${selectedMemory}`, captionText);
-
-      // Update the screen to show the new caption straight away
       setMemoryList(prev =>
         prev.map(m => m.id === selectedMemory ? { ...m, caption: captionText } : m)
       );
@@ -128,26 +127,38 @@ export default function OnThisDay() {
       {memoryList.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyEmoji}>📷</Text>
-          <Text style={styles.emptyTitle}>No photos found</Text>
+          <Text style={styles.emptyTitle}>No memories found</Text>
           <Text style={styles.emptySubtitle}>
-            You don't have any photos from this date in previous years.
+            You don't have any photos or videos from this date in previous years.
             Check back as you build your library!
           </Text>
         </View>
       ) : (
         memoryList.map((memory) => (
           <View key={memory.id} style={styles.memoryCard}>
-            {memory.uri ? (
-              <TouchableOpacity onPress={() => setFullScreenUri(memory.uri)}>
-                <Image source={{ uri: memory.uri }} style={styles.memoryImage} />
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.imagePlaceholder}>
-                <Text style={styles.imagePlaceholderText}>📷</Text>
-              </View>
-            )}
+
+            {/* Show video or photo depending on media type */}
+            <TouchableOpacity onPress={() => setFullScreenMemory(memory)}>
+              {memory.mediaType === 'video' ? (
+                <View style={styles.videoThumbnail}>
+                  <Text style={styles.videoIcon}>▶</Text>
+                  <Text style={styles.videoLabel}>Video memory</Text>
+                </View>
+              ) : (
+                memory.uri ? (
+                  <Image source={{ uri: memory.uri }} style={styles.memoryImage} />
+                ) : (
+                  <View style={styles.imagePlaceholder}>
+                    <Text style={styles.imagePlaceholderText}>📷</Text>
+                  </View>
+                )
+              )}
+            </TouchableOpacity>
+
             <View style={styles.memoryInfo}>
-              <Text style={styles.yearTag}>{memory.year}</Text>
+              <Text style={styles.yearTag}>
+                {memory.year} · {memory.mediaType === 'video' ? '🎥 Video' : '📷 Photo'}
+              </Text>
               {memory.caption ? (
                 <Text style={styles.captionText}>"{memory.caption}"</Text>
               ) : (
@@ -167,6 +178,7 @@ export default function OnThisDay() {
         ))
       )}
 
+      {/* Caption modal */}
       <Modal visible={selectedMemory !== null} animationType="slide" transparent>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -193,20 +205,46 @@ export default function OnThisDay() {
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal visible={fullScreenUri !== null} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.fullScreenOverlay}
-          onPress={() => setFullScreenUri(null)}>
+      {/* Full screen viewer for photos and videos */}
+      {fullScreenMemory && (
+        <FullScreenViewer
+          memory={fullScreenMemory}
+          onClose={() => setFullScreenMemory(null)}
+        />
+      )}
+
+    </ScrollView>
+  );
+}
+
+// Separate component for the full screen viewer
+// Videos need their own player hook so we keep them in their own component
+function FullScreenViewer({ memory, onClose }: { memory: Memory; onClose: () => void }) {
+  const player = useVideoPlayer(
+    memory.mediaType === 'video' ? memory.uri ?? '' : '',
+    p => { p.loop = true; p.play(); }
+  );
+
+  return (
+    <Modal visible transparent animationType="fade">
+      <TouchableOpacity style={styles.fullScreenOverlay} onPress={onClose}>
+        {memory.mediaType === 'video' ? (
+          <VideoView
+            player={player}
+            style={styles.fullScreenImage}
+            contentFit="contain"
+            nativeControls
+          />
+        ) : (
           <Image
-            source={{ uri: fullScreenUri! }}
+            source={{ uri: memory.uri! }}
             style={styles.fullScreenImage}
             resizeMode="contain"
           />
-          <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
-        </TouchableOpacity>
-      </Modal>
-
-    </ScrollView>
+        )}
+        <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
+      </TouchableOpacity>
+    </Modal>
   );
 }
 
@@ -242,6 +280,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a1a', borderRadius: 16, overflow: 'hidden',
   },
   memoryImage: { width: '100%', height: 280 },
+  videoThumbnail: {
+    width: '100%', height: 280, backgroundColor: '#1a1a2e',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  videoIcon: { fontSize: 48, color: '#ffffff', marginBottom: 8 },
+  videoLabel: { fontSize: 14, color: '#888888' },
   imagePlaceholder: {
     width: '100%', height: 240, backgroundColor: '#2a2a2a',
     justifyContent: 'center', alignItems: 'center',
