@@ -30,7 +30,6 @@ export default function DailySelfie() {
 
   const loadSelfies = async () => {
     setLoading(true);
-    // Load all saved selfie keys from the filing cabinet
     const keys = await AsyncStorage.getAllKeys();
     const selfieKeys = keys.filter(k => k.startsWith('selfie_'));
     const entries: SelfieEntry[] = [];
@@ -38,13 +37,11 @@ export default function DailySelfie() {
     for (const key of selfieKeys) {
       const uri = await AsyncStorage.getItem(key);
       if (uri) {
-        // Turn "selfie_2026-04-29" back into just "2026-04-29"
         const date = key.replace('selfie_', '');
         entries.push({ date, uri });
       }
     }
 
-    // Sort so most recent selfie appears at the top
     entries.sort((a, b) => b.date.localeCompare(a.date));
     setSelfies(entries);
     setLoading(false);
@@ -53,19 +50,15 @@ export default function DailySelfie() {
   const takeSelfie = async () => {
     if (!cameraRef.current) return;
 
-    // Take the photo using the front camera
     const photo = await cameraRef.current.takePictureAsync({
       quality: 0.8,
       base64: false,
     });
 
     if (photo?.uri) {
-      // Save the photo to the phone's camera roll
       if (mediaPermission?.granted) {
         await MediaLibrary.saveToLibraryAsync(photo.uri);
       }
-
-      // Save the address of the photo in our filing cabinet under today's date
       await AsyncStorage.setItem(`selfie_${todayKey}`, photo.uri);
       setCameraOpen(false);
       loadSelfies();
@@ -99,12 +92,18 @@ export default function DailySelfie() {
           </Text>
         </View>
 
-        {/* Big take selfie button or today done message */}
+        {/* Today's selfie card */}
         {hasTodaySelfie ? (
           <View style={styles.todayDoneCard}>
             <Text style={styles.todayDoneEmoji}>✅</Text>
             <Text style={styles.todayDoneTitle}>Today's selfie saved!</Text>
             <Text style={styles.todayDoneSubtitle}>Come back tomorrow for your next one.</Text>
+            {/* Retake button */}
+            <TouchableOpacity
+              style={styles.retakeButton}
+              onPress={() => setCameraOpen(true)}>
+              <Text style={styles.retakeText}>Retake today's selfie</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <TouchableOpacity
@@ -116,7 +115,7 @@ export default function DailySelfie() {
           </TouchableOpacity>
         )}
 
-        {/* Grid of all past selfies */}
+        {/* Selfie grid */}
         {loading ? (
           <ActivityIndicator color="#ffffff" style={{ marginTop: 40 }} />
         ) : selfies.length > 0 ? (
@@ -148,7 +147,7 @@ export default function DailySelfie() {
         )}
       </ScrollView>
 
-      {/* Camera modal - opens full screen when taking a selfie */}
+      {/* Camera modal */}
       <Modal visible={cameraOpen} animationType="slide">
         <View style={styles.cameraContainer}>
           <CameraView
@@ -174,12 +173,15 @@ export default function DailySelfie() {
       <Modal visible={fullScreenUri !== null} transparent animationType="fade">
         <TouchableOpacity
           style={styles.fullScreenOverlay}
+          activeOpacity={1}
           onPress={() => setFullScreenUri(null)}>
-          <Image
-            source={{ uri: fullScreenUri! }}
-            style={styles.fullScreenImage}
-            resizeMode="contain"
-          />
+          {fullScreenUri ? (
+            <Image
+              source={{ uri: fullScreenUri }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+          ) : null}
           <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
         </TouchableOpacity>
       </Modal>
@@ -225,7 +227,12 @@ const styles = StyleSheet.create({
   },
   todayDoneEmoji: { fontSize: 48, marginBottom: 12 },
   todayDoneTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
-  todayDoneSubtitle: { fontSize: 14, color: '#666666' },
+  todayDoneSubtitle: { fontSize: 14, color: '#666666', marginBottom: 4 },
+  retakeButton: {
+    marginTop: 16, borderWidth: 1, borderColor: '#2a2a4a',
+    borderRadius: 10, padding: 12, alignItems: 'center', width: '100%',
+  },
+  retakeText: { color: '#666666', fontSize: 14 },
   section: { paddingHorizontal: 16, marginBottom: 40 },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: '#ffffff', marginBottom: 16 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -248,9 +255,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent', borderWidth: 4, borderColor: '#ffffff',
     justifyContent: 'center', alignItems: 'center',
   },
-  shutterInner: {
-    width: 64, height: 64, borderRadius: 32, backgroundColor: '#ffffff',
-  },
+  shutterInner: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#ffffff' },
   fullScreenOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.95)',
     justifyContent: 'center', alignItems: 'center',

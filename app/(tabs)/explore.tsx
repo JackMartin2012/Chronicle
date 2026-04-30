@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
@@ -20,13 +21,13 @@ export default function ThePresent() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [selectedPrompt, setSelectedPrompt] = useState<string | null>(null);
   const [answerText, setAnswerText] = useState('');
+  const router = useRouter();
 
   const today = new Date();
   const dateString = today.toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
 
-  // Create a simple date key like "2026-04-29" to store today's entries under
   const todayKey = today.toISOString().split('T')[0];
 
   useEffect(() => {
@@ -34,7 +35,6 @@ export default function ThePresent() {
   }, []);
 
   const loadEntries = async () => {
-    // Look in the filing cabinet for anything saved today
     const saved = await AsyncStorage.getItem(`entries_${todayKey}`);
     if (saved) {
       setEntries(JSON.parse(saved));
@@ -42,7 +42,6 @@ export default function ThePresent() {
   };
 
   const openPrompt = (prompt: string) => {
-    // If already answered today, load the existing answer so they can edit it
     const existing = entries.find(e => e.prompt === prompt);
     setAnswerText(existing?.answer || '');
     setSelectedPrompt(prompt);
@@ -50,8 +49,6 @@ export default function ThePresent() {
 
   const saveAnswer = async () => {
     if (!selectedPrompt) return;
-
-    // Either update an existing entry or add a new one
     const updated = entries.filter(e => e.prompt !== selectedPrompt);
     const newEntry: Entry = {
       prompt: selectedPrompt,
@@ -59,8 +56,6 @@ export default function ThePresent() {
       date: todayKey,
     };
     const newEntries = [...updated, newEntry];
-
-    // Save to the filing cabinet under today's date
     await AsyncStorage.setItem(`entries_${todayKey}`, JSON.stringify(newEntries));
     setEntries(newEntries);
     setSelectedPrompt(null);
@@ -80,8 +75,10 @@ export default function ThePresent() {
         </Text>
       </View>
 
-      {/* Selfie card */}
-      <TouchableOpacity style={styles.selfieCard}>
+      {/* Selfie card — navigates to selfie tab */}
+      <TouchableOpacity
+        style={styles.selfieCard}
+        onPress={() => router.push('/(tabs)/selfie')}>
         <Text style={styles.selfieEmoji}>🤳</Text>
         <View style={styles.selfieText}>
           <Text style={styles.selfieTitle}>Today's selfie</Text>
@@ -141,7 +138,7 @@ export default function ThePresent() {
         </TouchableOpacity>
       </View>
 
-      {/* Answer modal - slides up from bottom when you tap a prompt */}
+      {/* Answer modal */}
       <Modal visible={selectedPrompt !== null} animationType="slide" transparent>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

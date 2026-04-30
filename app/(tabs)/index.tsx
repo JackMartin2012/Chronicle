@@ -62,9 +62,6 @@ export default function OnThisDay() {
         const info = await MediaLibrary.getAssetInfoAsync(asset.id);
         const savedCaption = await AsyncStorage.getItem(`caption_${asset.id}`);
 
-        // Detect screenshots in two ways:
-        // 1. Check the media subtype iOS assigns to screenshots
-        // 2. Check if the filename contains "Screenshot" which iOS also does
         const isScreenshot =
           (info as any).mediaSubtypes?.includes('screenshot') ||
           (asset.filename?.toLowerCase().includes('screenshot') ?? false);
@@ -100,7 +97,6 @@ export default function OnThisDay() {
     setSelectedMemory(null);
   };
 
-  // Helper that returns the right label and emoji for each memory type
   const getMediaLabel = (memory: Memory) => {
     if (memory.mediaType === 'video') return '🎥 Video';
     if (memory.isScreenshot) return '📸 Screenshot';
@@ -136,13 +132,6 @@ export default function OnThisDay() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>On This Day</Text>
         <Text style={styles.headerDate}>{dateString}</Text>
-        {/* Temporary reset button — remove before App Store launch */}
-        <TouchableOpacity onPress={async () => {
-          await AsyncStorage.removeItem('onboarding_complete');
-          alert('Onboarding reset — restart the app');
-        }}>
-          <Text style={styles.resetText}>Reset onboarding</Text>
-        </TouchableOpacity>
       </View>
 
       {memoryList.length === 0 ? (
@@ -157,7 +146,6 @@ export default function OnThisDay() {
       ) : (
         memoryList.map((memory) => (
           <View key={memory.id} style={styles.memoryCard}>
-
             <TouchableOpacity onPress={() => setFullScreenMemory(memory)}>
               {memory.mediaType === 'video' ? (
                 <View style={styles.videoThumbnail}>
@@ -167,7 +155,6 @@ export default function OnThisDay() {
               ) : memory.uri ? (
                 <View>
                   <Image source={{ uri: memory.uri }} style={styles.memoryImage} />
-                  {/* Show screenshot banner across the top of the image */}
                   {memory.isScreenshot && (
                     <View style={styles.screenshotBanner}>
                       <Text style={styles.screenshotBannerText}>📸 Screenshot</Text>
@@ -231,24 +218,25 @@ export default function OnThisDay() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Full screen viewer */}
-      {fullScreenMemory && (
-        <Modal visible transparent animationType="fade">
-          <TouchableOpacity
-            style={styles.fullScreenOverlay}
-            onPress={() => setFullScreenMemory(null)}>
+      {/* Full screen viewer — fixed */}
+      <Modal visible={fullScreenMemory !== null} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.fullScreenOverlay}
+          onPress={() => setFullScreenMemory(null)}
+          activeOpacity={1}>
+          {fullScreenMemory?.uri ? (
             <Image
-              source={{ uri: fullScreenMemory.uri! }}
+              source={{ uri: fullScreenMemory.uri }}
               style={styles.fullScreenImage}
               resizeMode="contain"
             />
-            {fullScreenMemory.isScreenshot && (
-              <Text style={styles.fullScreenLabel}>📸 Screenshot</Text>
-            )}
-            <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
-          </TouchableOpacity>
-        </Modal>
-      )}
+          ) : null}
+          {fullScreenMemory?.isScreenshot && (
+            <Text style={styles.fullScreenLabel}>📸 Screenshot</Text>
+          )}
+          <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
+        </TouchableOpacity>
+      </Modal>
 
     </ScrollView>
   );
@@ -259,7 +247,6 @@ const styles = StyleSheet.create({
   header: { paddingTop: 70, paddingHorizontal: 24, paddingBottom: 24 },
   headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
   headerDate: { fontSize: 16, color: '#888888' },
-  resetText: { color: '#333333', fontSize: 12, marginTop: 8 },
   centreScreen: {
     flex: 1, backgroundColor: '#0d0d0d',
     justifyContent: 'center', alignItems: 'center', padding: 32,
@@ -288,8 +275,7 @@ const styles = StyleSheet.create({
   },
   memoryImage: { width: '100%', height: 280 },
   screenshotBanner: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
+    position: 'absolute', top: 0, left: 0, right: 0,
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingVertical: 6, paddingHorizontal: 12,
   },
