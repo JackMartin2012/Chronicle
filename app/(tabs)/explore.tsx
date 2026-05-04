@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -19,6 +20,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+const { width, height } = Dimensions.get('window');
 
 const moods = [
   { emoji: '😔', label: 'Low' },
@@ -116,6 +119,10 @@ export default function ThePresent() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+
+  // Full screen photo viewer
+  const [fullScreenUri, setFullScreenUri] = useState<string | null>(null);
+
   const router = useRouter();
 
   const today = new Date();
@@ -137,18 +144,15 @@ export default function ThePresent() {
   }, [activeTab]);
 
   useEffect(() => {
-    return () => {
-      if (sound) sound.unloadAsync();
-    };
+    return () => { if (sound) sound.unloadAsync(); };
   }, [sound]);
 
   const loadEntry = async () => {
     const saved = await AsyncStorage.getItem(`day_entry_${todayKey}`);
     if (saved) {
-     const parsed = JSON.parse(saved);
-     // Make sure extraPhotos always exists as an array
-     setEntry({ ...emptyEntry, ...parsed, extraPhotos: parsed.extraPhotos || [] });
-   }
+      const parsed = JSON.parse(saved);
+      setEntry({ ...emptyEntry, ...parsed, extraPhotos: parsed.extraPhotos || [] });
+    }
   };
 
   const saveEntry = async (updated: DayEntry) => {
@@ -164,9 +168,11 @@ export default function ThePresent() {
       const val = await AsyncStorage.getItem(key);
       if (val) {
         const parsed = JSON.parse(val);
-        // Only show days that have at least a photo or mood saved
         if (parsed.photoUri || parsed.mood) {
-          days.push({ key: key.replace('day_entry_', ''), entry: { ...emptyEntry, ...parsed, extraPhotos: parsed.extraPhotos || [] } });
+          days.push({
+            key: key.replace('day_entry_', ''),
+            entry: { ...emptyEntry, ...parsed, extraPhotos: parsed.extraPhotos || [] }
+          });
         }
       }
     }
@@ -192,7 +198,13 @@ export default function ThePresent() {
       const weather = getWeatherInfo(data.current_weather.weathercode, data.current_weather.temperature);
       const saved2 = await AsyncStorage.getItem(`day_entry_${todayKey}`);
       const existing = saved2 ? JSON.parse(saved2) : emptyEntry;
-      const updated = { ...existing, weatherEmoji: weather.emoji, weatherDescription: weather.description, weatherTemp: weather.temp };
+      const updated = {
+        ...emptyEntry, ...existing,
+        extraPhotos: existing.extraPhotos || [],
+        weatherEmoji: weather.emoji,
+        weatherDescription: weather.description,
+        weatherTemp: weather.temp,
+      };
       setEntry(updated);
       await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(updated));
     } catch (e) { console.log('Weather error:', e); }
@@ -210,8 +222,7 @@ export default function ThePresent() {
             const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
             if (!result.canceled && result.assets[0]) {
               if (isExtra) {
-                const updated = { ...entry, extraPhotos: [...entry.extraPhotos, result.assets[0].uri] };
-                saveEntry(updated);
+                saveEntry({ ...entry, extraPhotos: [...entry.extraPhotos, result.assets[0].uri] });
               } else {
                 saveEntry({ ...entry, photoUri: result.assets[0].uri });
               }
@@ -224,8 +235,7 @@ export default function ThePresent() {
             const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
             if (!result.canceled && result.assets[0]) {
               if (isExtra) {
-                const updated = { ...entry, extraPhotos: [...entry.extraPhotos, result.assets[0].uri] };
-                saveEntry(updated);
+                saveEntry({ ...entry, extraPhotos: [...entry.extraPhotos, result.assets[0].uri] });
               } else {
                 saveEntry({ ...entry, photoUri: result.assets[0].uri });
               }
@@ -241,18 +251,14 @@ export default function ThePresent() {
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Chronicle needs microphone access to record voice memos.');
+        Alert.alert('Permission needed', 'Chronicle needs microphone access.');
         return;
       }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       setRecording(recording);
       setIsRecording(true);
-    } catch (e) {
-      console.log('Recording error:', e);
-    }
+    } catch (e) { console.log('Recording error:', e); }
   };
 
   const stopRecording = async () => {
@@ -261,14 +267,12 @@ export default function ThePresent() {
     await recording.stopAndUnloadAsync();
     const uri = recording.getURI();
     setRecording(null);
-    if (uri) {
-      const updated = { ...entry, voiceMemoUri: uri };
-      saveEntry(updated);
-    }
+    if (uri) saveEntry({ ...entry, voiceMemoUri: uri });
   };
 
-  const playVoiceMemo = async () => {
-    if (!entry.voiceMemoUri) return;
+  const playVoiceMemo = async (uri?: string) => {
+    const memoUri = uri || entry.voiceMemoUri;
+    if (!memoUri) return;
     if (isPlaying && sound) {
       await sound.stopAsync();
       setIsPlaying(false);
@@ -276,16 +280,14 @@ export default function ThePresent() {
     }
     try {
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
-      const { sound: newSound } = await Audio.Sound.createAsync({ uri: entry.voiceMemoUri });
+      const { sound: newSound } = await Audio.Sound.createAsync({ uri: memoUri });
       setSound(newSound);
       setIsPlaying(true);
       await newSound.playAsync();
       newSound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) setIsPlaying(false);
       });
-    } catch (e) {
-      console.log('Playback error:', e);
-    }
+    } catch (e) { console.log('Playback error:', e); }
   };
 
   const openModal = (field: string, currentValue: string, currentRating?: number) => {
@@ -336,17 +338,19 @@ export default function ThePresent() {
     setNotificationsEnabled(false);
   };
 
-  const formatDate = (key: string) => {
-    const date = new Date(key);
-    return date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const formatArchiveDate = (key: string) => {
+    return new Date(key + 'T12:00:00').toLocaleDateString('en-GB', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
   };
 
   return (
     <View style={styles.outerContainer}>
 
-      {/* Header with tab switcher */}
+      {/* Header — matches The Past style */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>The Present</Text>
+        <Text style={styles.headerDate}>{dateString}</Text>
         <View style={styles.tabSwitcher}>
           <TouchableOpacity
             style={[styles.tabButton, activeTab === 'today' && styles.tabButtonActive]}
@@ -369,7 +373,6 @@ export default function ThePresent() {
       {activeTab === 'today' && (
         <ScrollView style={styles.container}>
           <View style={styles.subHeader}>
-            <Text style={styles.headerDate}>{dateString}</Text>
             <Text style={styles.headerSubtitle}>Today's entry becomes tomorrow's flashback.</Text>
           </View>
 
@@ -383,7 +386,7 @@ export default function ThePresent() {
             <Text style={styles.selfieArrow}>→</Text>
           </TouchableOpacity>
 
-          {/* Main photo + extra photos strip */}
+          {/* Main photo + strip */}
           <View style={styles.photoSection}>
             <TouchableOpacity style={styles.photoCard} onPress={() => pickPhoto(false)}>
               {entry.photoUri ? (
@@ -402,26 +405,22 @@ export default function ThePresent() {
               )}
             </TouchableOpacity>
 
-            {/* Extra photos strip */}
             {(entry.photoUri || entry.extraPhotos.length > 0) && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.extraStrip}
-                contentContainerStyle={styles.extraStripContent}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                style={styles.extraStrip} contentContainerStyle={styles.extraStripContent}>
                 {entry.extraPhotos.map((uri, index) => (
-                  <Image key={index} source={{ uri }} style={styles.extraPhoto} />
+                  <TouchableOpacity key={index} onPress={() => setFullScreenUri(uri)}>
+                    <Image source={{ uri }} style={styles.extraPhoto} />
+                  </TouchableOpacity>
                 ))}
-                <TouchableOpacity
-                  style={styles.addExtraButton}
-                  onPress={() => pickPhoto(true)}>
+                <TouchableOpacity style={styles.addExtraButton} onPress={() => pickPhoto(true)}>
                   <Text style={styles.addExtraText}>+</Text>
                 </TouchableOpacity>
               </ScrollView>
             )}
           </View>
 
-          {/* Mood + Weather row */}
+          {/* Mood + Weather */}
           <View style={styles.row}>
             <View style={styles.moodCard}>
               <Text style={styles.cardLabel}>MOOD</Text>
@@ -442,7 +441,6 @@ export default function ThePresent() {
               ) : (
                 <Text style={styles.moodPrompt}>How are you feeling?</Text>
               )}
-              {/* Day description */}
               <TouchableOpacity
                 style={styles.dayDescButton}
                 onPress={() => openModal('dayDescription', entry.dayDescription)}>
@@ -479,7 +477,7 @@ export default function ThePresent() {
             <Text style={styles.voicePrompt}>Tell me about your day...</Text>
             {entry.voiceMemoUri ? (
               <View style={styles.voiceControls}>
-                <TouchableOpacity style={styles.voicePlayButton} onPress={playVoiceMemo}>
+                <TouchableOpacity style={styles.voicePlayButton} onPress={() => playVoiceMemo()}>
                   <Text style={styles.voicePlayText}>{isPlaying ? '⏸ Stop' : '▶ Play memo'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -503,10 +501,8 @@ export default function ThePresent() {
             )}
           </View>
 
-          {/* Today's highlight */}
-          <TouchableOpacity
-            style={styles.entryCard}
-            onPress={() => openModal('highlight', entry.highlight)}>
+          {/* Highlight */}
+          <TouchableOpacity style={styles.entryCard} onPress={() => openModal('highlight', entry.highlight)}>
             <Text style={styles.cardLabel}>TODAY'S HIGHLIGHT</Text>
             <Text style={styles.entryPrompt}>{highlightPrompt}</Text>
             {entry.highlight ? (
@@ -516,10 +512,8 @@ export default function ThePresent() {
             )}
           </TouchableOpacity>
 
-          {/* What I learned */}
-          <TouchableOpacity
-            style={styles.entryCard}
-            onPress={() => openModal('learned', entry.learned)}>
+          {/* Learned */}
+          <TouchableOpacity style={styles.entryCard} onPress={() => openModal('learned', entry.learned)}>
             <Text style={styles.cardLabel}>WHAT I LEARNED</Text>
             <Text style={styles.entryPrompt}>{learnPrompt}</Text>
             {entry.learned ? (
@@ -529,10 +523,8 @@ export default function ThePresent() {
             )}
           </TouchableOpacity>
 
-          {/* Today's song */}
-          <TouchableOpacity
-            style={styles.entryCard}
-            onPress={() => openModal('song', entry.songName, entry.songRating)}>
+          {/* Song */}
+          <TouchableOpacity style={styles.entryCard} onPress={() => openModal('song', entry.songName, entry.songRating)}>
             <Text style={styles.cardLabel}>TODAY'S SONG</Text>
             {entry.songName ? (
               <View>
@@ -559,10 +551,8 @@ export default function ThePresent() {
             )}
           </TouchableOpacity>
 
-          {/* Who I was with */}
-          <TouchableOpacity
-            style={styles.entryCard}
-            onPress={() => openModal('withWho', entry.withWho)}>
+          {/* With who */}
+          <TouchableOpacity style={styles.entryCard} onPress={() => openModal('withWho', entry.withWho)}>
             <Text style={styles.cardLabel}>WHO I WAS WITH</Text>
             {entry.withWho ? (
               <Text style={styles.entryAnswer}>👥 {entry.withWho}</Text>
@@ -601,7 +591,7 @@ export default function ThePresent() {
         </ScrollView>
       )}
 
-      {/* YOUR DAYS ARCHIVE TAB */}
+      {/* YOUR DAYS ARCHIVE */}
       {activeTab === 'archive' && (
         <ScrollView style={styles.container}>
           <View style={styles.subHeader}>
@@ -634,7 +624,7 @@ export default function ThePresent() {
                   )}
                   <View style={styles.archiveInfo}>
                     <Text style={styles.archiveDate}>
-                      {new Date(key).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                      {new Date(key + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                     </Text>
                     {dayEntry.mood && <Text style={styles.archiveMood}>{dayEntry.mood}</Text>}
                   </View>
@@ -648,104 +638,142 @@ export default function ThePresent() {
       {/* Day detail modal */}
       <Modal visible={selectedDay !== null} animationType="slide">
         <View style={styles.dayModal}>
-          <ScrollView>
-            {selectedDay && (
-              <>
-                {selectedDay.entry.photoUri ? (
-                  <Image source={{ uri: selectedDay.entry.photoUri }} style={styles.dayModalPhoto} />
-                ) : null}
-
-                <View style={styles.dayModalContent}>
-                  <Text style={styles.dayModalDate}>{formatDate(selectedDay.key)}</Text>
-
-                  {/* Mood and weather row */}
-                  <View style={styles.dayModalRow}>
-                    {selectedDay.entry.mood && (
-                      <View style={styles.dayModalChip}>
-                        <Text style={styles.dayModalChipText}>
-                          {selectedDay.entry.mood} {moods.find(m => m.emoji === selectedDay.entry.mood)?.label}
-                        </Text>
-                      </View>
-                    )}
-                    {selectedDay.entry.weatherEmoji && (
-                      <View style={styles.dayModalChip}>
-                        <Text style={styles.dayModalChipText}>
-                          {selectedDay.entry.weatherEmoji} {selectedDay.entry.weatherTemp}°C
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {selectedDay.entry.dayDescription ? (
-                    <Text style={styles.dayModalDescription}>"{selectedDay.entry.dayDescription}"</Text>
-                  ) : null}
-
-                  {selectedDay.entry.highlight ? (
-                    <View style={styles.dayModalSection}>
-                      <Text style={styles.dayModalLabel}>HIGHLIGHT</Text>
-                      <Text style={styles.dayModalText}>"{selectedDay.entry.highlight}"</Text>
-                    </View>
-                  ) : null}
-
-                  {selectedDay.entry.learned ? (
-                    <View style={styles.dayModalSection}>
-                      <Text style={styles.dayModalLabel}>WHAT I LEARNED</Text>
-                      <Text style={styles.dayModalText}>"{selectedDay.entry.learned}"</Text>
-                    </View>
-                  ) : null}
-
-                  {selectedDay.entry.songName ? (
-                    <View style={styles.dayModalSection}>
-                      <Text style={styles.dayModalLabel}>SONG</Text>
-                      <Text style={styles.dayModalText}>🎵 {selectedDay.entry.songName}</Text>
-                      {selectedDay.entry.songRating > 0 && (
-                        <Text style={styles.dayModalSubtext}>{selectedDay.entry.songRating}/10</Text>
-                      )}
-                      {selectedDay.entry.songMeaning ? (
-                        <Text style={styles.dayModalText}>"{selectedDay.entry.songMeaning}"</Text>
-                      ) : null}
-                    </View>
-                  ) : null}
-
-                  {selectedDay.entry.withWho ? (
-                    <View style={styles.dayModalSection}>
-                      <Text style={styles.dayModalLabel}>WITH</Text>
-                      <Text style={styles.dayModalText}>👥 {selectedDay.entry.withWho}</Text>
-                    </View>
-                  ) : null}
-
-                  {/* Extra photos */}
-                  {selectedDay.entry.extraPhotos?.length > 0 && (
-                    <View style={styles.dayModalSection}>
-                      <Text style={styles.dayModalLabel}>MORE PHOTOS</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        {selectedDay.entry.extraPhotos.map((uri, i) => (
-                          <Image key={i} source={{ uri }} style={styles.dayModalExtraPhoto} />
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
-
-                  {/* Voice memo */}
-                  {selectedDay.entry.voiceMemoUri ? (
-                    <View style={styles.dayModalSection}>
-                      <Text style={styles.dayModalLabel}>VOICE MEMO</Text>
-                      <TouchableOpacity style={styles.voicePlayButton} onPress={playVoiceMemo}>
-                        <Text style={styles.voicePlayText}>{isPlaying ? '⏸ Stop' : '▶ Play memo'}</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Hero photo — tappable */}
+            {selectedDay?.entry.photoUri ? (
+              <TouchableOpacity onPress={() => setFullScreenUri(selectedDay.entry.photoUri)}>
+                <Image source={{ uri: selectedDay.entry.photoUri }} style={styles.dayModalPhoto} />
+                <View style={styles.photoTapHint}>
+                  <Text style={styles.photoTapHintText}>Tap to view full screen</Text>
                 </View>
-              </>
-            )}
+              </TouchableOpacity>
+            ) : null}
+
+            <View style={styles.dayModalContent}>
+              <View style={styles.dayTitleRow}>
+                <View style={styles.dayYearBadge}>
+                  <Text style={styles.dayYearBadgeText}>
+                    {selectedDay?.key ? new Date(selectedDay.key + 'T12:00:00').getFullYear() : ''}
+                  </Text>
+                </View>
+                <Text style={styles.dayDateText}>
+                  {selectedDay?.key ? formatArchiveDate(selectedDay.key) : ''}
+                </Text>
+              </View>
+
+              {/* Mood + weather chips */}
+              <View style={styles.dayModalRow}>
+                {selectedDay?.entry.mood && (
+                  <View style={styles.dayModalChip}>
+                    <Text style={styles.dayModalChipText}>
+                      {selectedDay.entry.mood} {moods.find(m => m.emoji === selectedDay.entry.mood)?.label}
+                    </Text>
+                  </View>
+                )}
+                {selectedDay?.entry.weatherEmoji && (
+                  <View style={styles.dayModalChip}>
+                    <Text style={styles.dayModalChipText}>
+                      {selectedDay.entry.weatherEmoji} {selectedDay.entry.weatherTemp}°C
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {selectedDay?.entry.dayDescription ? (
+                <Text style={styles.dayModalDescription}>"{selectedDay.entry.dayDescription}"</Text>
+              ) : null}
+
+              {/* Context fields — tappable to add */}
+              <Text style={styles.sectionTitle}>Context</Text>
+              <Text style={styles.sectionSubtitle}>What was this day like?</Text>
+
+              {[
+                { key: 'highlight', label: 'HIGHLIGHT', emoji: '✨', value: selectedDay?.entry.highlight },
+                { key: 'learned', label: 'WHAT I LEARNED', emoji: '💡', value: selectedDay?.entry.learned },
+                { key: 'withWho', label: 'WHO I WAS WITH', emoji: '👥', value: selectedDay?.entry.withWho },
+              ].map(field => (
+                field.value ? (
+                  <View key={field.key} style={styles.dayModalSection}>
+                    <Text style={styles.dayModalLabel}>{field.emoji} {field.label}</Text>
+                    <Text style={styles.dayModalText}>"{field.value}"</Text>
+                  </View>
+                ) : null
+              ))}
+
+              {selectedDay?.entry.songName ? (
+                <View style={styles.dayModalSection}>
+                  <Text style={styles.dayModalLabel}>🎵 SONG</Text>
+                  <Text style={styles.dayModalText}>{selectedDay.entry.songName}</Text>
+                  {selectedDay.entry.songRating > 0 && (
+                    <Text style={styles.dayModalSubtext}>{selectedDay.entry.songRating}/10</Text>
+                  )}
+                  {selectedDay.entry.songMeaning ? (
+                    <Text style={styles.dayModalText}>"{selectedDay.entry.songMeaning}"</Text>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Extra photos — tappable */}
+              {(selectedDay?.entry.extraPhotos?.length ?? 0) > 0 && (
+                <View style={styles.dayModalSection}>
+                  <Text style={styles.dayModalLabel}>📷 MORE PHOTOS</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {(selectedDay?.entry.extraPhotos ?? []).map((uri, i) => (
+                      <TouchableOpacity key={i} onPress={() => setFullScreenUri(uri)}>
+                        <Image source={{ uri }} style={styles.dayModalExtraPhoto} />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Voice memo */}
+              {selectedDay?.entry.voiceMemoUri ? (
+                <View style={styles.dayModalSection}>
+                  <Text style={styles.dayModalLabel}>🎙 VOICE MEMO</Text>
+                  <TouchableOpacity
+                    style={styles.voicePlayButton}
+                    onPress={() => playVoiceMemo(selectedDay.entry.voiceMemoUri)}>
+                    <Text style={styles.voicePlayText}>{isPlaying ? '⏸ Stop' : '▶ Play memo'}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+            </View>
           </ScrollView>
+
           <TouchableOpacity
             style={styles.dayModalClose}
             onPress={() => setSelectedDay(null)}>
-            <Text style={styles.dayModalCloseText}>Close</Text>
+            <Text style={styles.dayModalCloseText}>← Back to The Present</Text>
           </TouchableOpacity>
+
+          {/* Full screen viewer — inside day modal */}
+          <Modal visible={fullScreenUri !== null} transparent animationType="fade">
+            <TouchableOpacity
+              style={styles.fullScreenOverlay}
+              activeOpacity={1}
+              onPress={() => setFullScreenUri(null)}>
+              {fullScreenUri && (
+                <Image source={{ uri: fullScreenUri }} style={styles.fullScreenImage} resizeMode="contain" />
+              )}
+              <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
+            </TouchableOpacity>
+          </Modal>
         </View>
+      </Modal>
+
+      {/* Full screen for today's photos */}
+      <Modal visible={fullScreenUri !== null && selectedDay === null} transparent animationType="fade">
+        <TouchableOpacity
+          style={styles.fullScreenOverlay}
+          activeOpacity={1}
+          onPress={() => setFullScreenUri(null)}>
+          {fullScreenUri && (
+            <Image source={{ uri: fullScreenUri }} style={styles.fullScreenImage} resizeMode="contain" />
+          )}
+          <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
+        </TouchableOpacity>
       </Modal>
 
       {/* Text input modal */}
@@ -830,20 +858,27 @@ export default function ThePresent() {
 const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#0d0d0d' },
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 0, backgroundColor: '#0d0d0d' },
-  headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 16 },
+
+  // Header — matches The Past exactly
+  header: {
+    paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12,
+    backgroundColor: '#0d0d0d',
+  },
+  headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 2 },
+  headerDate: { fontSize: 20, fontWeight: '700', color: '#ffffff', marginBottom: 16 },
   tabSwitcher: {
     flexDirection: 'row', backgroundColor: '#1a1a1a',
-    borderRadius: 12, padding: 4, marginBottom: 8,
+    borderRadius: 12, padding: 4,
   },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   tabButtonActive: { backgroundColor: '#4a90d9' },
   tabButtonText: { fontSize: 14, fontWeight: '600', color: '#555555' },
   tabButtonTextActive: { color: '#ffffff' },
+
   subHeader: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 },
-  headerDate: { fontSize: 16, color: '#888888', marginBottom: 4 },
   headerSubtitle: { fontSize: 13, color: '#555555', fontStyle: 'italic' },
   archiveSubtitle: { fontSize: 14, color: '#555555', fontStyle: 'italic' },
+
   selfieCard: {
     marginHorizontal: 16, marginBottom: 16, backgroundColor: '#1a1a1a',
     borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'center',
@@ -854,6 +889,7 @@ const styles = StyleSheet.create({
   selfieTitle: { fontSize: 16, fontWeight: '600', color: '#ffffff', marginBottom: 2 },
   selfieSubtitle: { fontSize: 12, color: '#666666' },
   selfieArrow: { color: '#555555', fontSize: 16 },
+
   photoSection: { marginHorizontal: 16, marginBottom: 16 },
   photoCard: { borderRadius: 16, overflow: 'hidden', backgroundColor: '#1a1a1a' },
   todayPhoto: { width: '100%', height: 240 },
@@ -873,11 +909,11 @@ const styles = StyleSheet.create({
   extraStripContent: { gap: 8, paddingRight: 8 },
   extraPhoto: { width: 80, height: 80, borderRadius: 10 },
   addExtraButton: {
-    width: 80, height: 80, borderRadius: 10,
-    backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a',
-    justifyContent: 'center', alignItems: 'center',
+    width: 80, height: 80, borderRadius: 10, backgroundColor: '#1a1a1a',
+    borderWidth: 1, borderColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center',
   },
   addExtraText: { color: '#4a90d9', fontSize: 28, fontWeight: '300' },
+
   row: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, gap: 12 },
   moodCard: {
     flex: 1, backgroundColor: '#1a1a1a', borderRadius: 16,
@@ -897,15 +933,14 @@ const styles = StyleSheet.create({
   moodEmoji: { fontSize: 17 },
   moodSelected: { fontSize: 11, color: '#4a90d9', fontWeight: '600', marginBottom: 8 },
   moodPrompt: { fontSize: 11, color: '#555555', marginBottom: 8 },
-  dayDescButton: {
-    marginTop: 4, padding: 8, backgroundColor: '#2a2a2a', borderRadius: 8,
-  },
+  dayDescButton: { marginTop: 4, padding: 8, backgroundColor: '#2a2a2a', borderRadius: 8 },
   dayDescText: { fontSize: 12, color: '#cccccc', fontStyle: 'italic', lineHeight: 18 },
   dayDescPlaceholder: { fontSize: 12, color: '#444444' },
   weatherContent: { alignItems: 'center' },
   weatherEmoji: { fontSize: 28, marginBottom: 4 },
   weatherTemp: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', marginBottom: 2 },
   weatherDesc: { fontSize: 10, color: '#666666', textAlign: 'center' },
+
   voiceCard: {
     marginHorizontal: 16, marginBottom: 16, backgroundColor: '#1a1a1a',
     borderRadius: 16, padding: 18, borderWidth: 1, borderColor: '#2a2a2a',
@@ -918,18 +953,15 @@ const styles = StyleSheet.create({
   voiceRecordButtonActive: { backgroundColor: '#3a1a1a', borderWidth: 1, borderColor: '#ff4444' },
   voiceRecordEmoji: { fontSize: 22 },
   voiceRecordText: { flex: 1, fontSize: 14, color: '#cccccc' },
-  recordingDot: {
-    width: 10, height: 10, borderRadius: 5, backgroundColor: '#ff4444',
-  },
+  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ff4444' },
   voiceControls: { gap: 10 },
-  voicePlayButton: {
-    backgroundColor: '#4a90d9', borderRadius: 12, padding: 12, alignItems: 'center',
-  },
+  voicePlayButton: { backgroundColor: '#4a90d9', borderRadius: 12, padding: 12, alignItems: 'center' },
   voicePlayText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
   voiceRerecordButton: {
     borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 12, padding: 12, alignItems: 'center',
   },
   voiceRerecordText: { color: '#666666', fontSize: 14 },
+
   entryCard: {
     marginHorizontal: 16, marginBottom: 16, backgroundColor: '#1a1a1a',
     borderRadius: 16, padding: 18, borderWidth: 1, borderColor: '#2a2a2a',
@@ -942,8 +974,10 @@ const styles = StyleSheet.create({
   ratingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2a2a2a' },
   ratingDotFilled: { backgroundColor: '#4a90d9' },
   ratingNumber: { fontSize: 13, color: '#4a90d9', fontWeight: '600', marginLeft: 4 },
+
   section: { paddingHorizontal: 16, marginBottom: 40 },
-  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#ffffff', marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#ffffff', marginBottom: 4 },
+  sectionSubtitle: { fontSize: 13, color: '#555555', marginBottom: 12, fontStyle: 'italic' },
   notificationCard: {
     backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16,
     flexDirection: 'row', alignItems: 'center', marginBottom: 12,
@@ -962,29 +996,42 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 12, padding: 12, alignItems: 'center',
   },
   testButtonText: { color: '#444444', fontSize: 13 },
+
+  // Archive grid
   archiveGrid: {
     flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16,
     paddingBottom: 40, gap: 8,
   },
   archiveItem: { width: '31%', borderRadius: 12, overflow: 'hidden', backgroundColor: '#1a1a1a' },
   archivePhoto: { width: '100%', aspectRatio: 1 },
-  archivePhotoEmpty: {
-    backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center',
-  },
+  archivePhotoEmpty: { backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' },
   archiveMoodLarge: { fontSize: 32 },
   archiveInfo: {
     padding: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
   archiveDate: { fontSize: 11, color: '#888888', fontWeight: '600' },
   archiveMood: { fontSize: 14 },
+
   emptyState: { padding: 40, alignItems: 'center', marginTop: 40 },
   emptyEmoji: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
   emptySubtitle: { fontSize: 15, color: '#666666', textAlign: 'center', lineHeight: 22 },
+
+  // Day detail modal
   dayModal: { flex: 1, backgroundColor: '#0d0d0d' },
   dayModalPhoto: { width: '100%', height: 300 },
-  dayModalContent: { padding: 24 },
-  dayModalDate: { fontSize: 22, fontWeight: 'bold', color: '#ffffff', marginBottom: 16 },
+  photoTapHint: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)', padding: 8, alignItems: 'center',
+  },
+  photoTapHintText: { color: '#ffffff', fontSize: 12 },
+  dayModalContent: { padding: 24, paddingBottom: 100 },
+  dayTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' },
+  dayYearBadge: {
+    backgroundColor: '#4a90d9', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 16,
+  },
+  dayYearBadgeText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
+  dayDateText: { fontSize: 16, fontWeight: '700', color: '#ffffff', flex: 1, flexWrap: 'wrap' },
   dayModalRow: { flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
   dayModalChip: {
     backgroundColor: '#1a1a1a', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14,
@@ -992,8 +1039,7 @@ const styles = StyleSheet.create({
   },
   dayModalChipText: { fontSize: 14, color: '#ffffff' },
   dayModalDescription: {
-    fontSize: 17, color: '#cccccc', fontStyle: 'italic',
-    marginBottom: 20, lineHeight: 26,
+    fontSize: 17, color: '#cccccc', fontStyle: 'italic', marginBottom: 20, lineHeight: 26,
   },
   dayModalSection: { marginBottom: 20 },
   dayModalLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '700', letterSpacing: 1.5, marginBottom: 8 },
@@ -1001,10 +1047,21 @@ const styles = StyleSheet.create({
   dayModalSubtext: { fontSize: 13, color: '#666666', marginTop: 4 },
   dayModalExtraPhoto: { width: 120, height: 120, borderRadius: 10, marginRight: 8 },
   dayModalClose: {
-    margin: 24, backgroundColor: '#1a1a1a', borderRadius: 14,
-    padding: 16, alignItems: 'center',
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    margin: 16, backgroundColor: '#1a1a1a',
+    borderRadius: 14, padding: 16, alignItems: 'center',
   },
   dayModalCloseText: { color: '#ffffff', fontWeight: '600', fontSize: 16 },
+
+  // Full screen
+  fullScreenOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  fullScreenImage: { width: '100%', height: '85%' },
+  fullScreenDismiss: { color: '#555555', fontSize: 13, marginTop: 16 },
+
+  // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
   modalBox: {
     backgroundColor: '#1a1a1a', borderTopLeftRadius: 24, borderTopRightRadius: 24,

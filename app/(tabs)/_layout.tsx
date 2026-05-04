@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 
 export default function TabLayout() {
@@ -6,7 +7,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#0e0808',
+          backgroundColor: '#0d0d0d',
           borderTopColor: '#1a1a1a',
         },
         tabBarActiveTintColor: '#ffffff',
@@ -17,6 +18,9 @@ export default function TabLayout() {
         options={{
           title: 'The Past',
           tabBarActiveTintColor: '#9b72ff',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="time-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -24,6 +28,9 @@ export default function TabLayout() {
         options={{
           title: 'The Present',
           tabBarActiveTintColor: '#4a90d9',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="today-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
