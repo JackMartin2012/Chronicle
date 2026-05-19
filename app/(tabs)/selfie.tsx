@@ -5,6 +5,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   Image,
   Modal,
@@ -43,6 +44,15 @@ export default function DailySelfie() {
   const [slideshowIndex, setSlideshowIndex] = useState(0);
   const [slideshowPlaying, setSlideshowPlaying] = useState(false);
   const cameraRef = useRef<CameraView>(null);
+
+  // Animated shutter button
+  const shutterScale = useRef(new Animated.Value(1)).current;
+  const onShutterPressIn = () => Animated.spring(shutterScale, {
+    toValue: 0.88, useNativeDriver: true, speed: 40,
+  }).start();
+  const onShutterPressOut = () => Animated.spring(shutterScale, {
+    toValue: 1, useNativeDriver: true, speed: 40, bounciness: 14,
+  }).start();
 
   const today = new Date();
   const todayKey = formatDateKey(today);
@@ -271,12 +281,19 @@ export default function DailySelfie() {
             <TouchableOpacity style={styles.flipButton} onPress={flipCamera}>
               <Text style={styles.flipButtonText}>⟳</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.shutterButton, capturing && styles.shutterButtonCapturing]}
-              onPress={takeSelfie}
-              activeOpacity={0.8}>
-              <View style={styles.shutterInner} />
-            </TouchableOpacity>
+
+            {/* Animated shutter button */}
+            <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
+              <TouchableOpacity
+                style={[styles.shutterButton, capturing && styles.shutterButtonCapturing]}
+                onPress={takeSelfie}
+                onPressIn={onShutterPressIn}
+                onPressOut={onShutterPressOut}
+                activeOpacity={1}>
+                <View style={styles.shutterInner} />
+              </TouchableOpacity>
+            </Animated.View>
+
             <View style={styles.flipButton} />
           </View>
         </View>
@@ -301,7 +318,7 @@ const styles = StyleSheet.create({
   permissionButton: { backgroundColor: '#ffffff', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32 },
   permissionButtonText: { color: '#000000', fontWeight: '600', fontSize: 16 },
   header: { paddingTop: 70, paddingHorizontal: 24, paddingBottom: 24 },
-  headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
+  headerTitle: { fontSize: 34, fontWeight: '800', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
   headerDate: { fontSize: 16, color: '#888888', marginBottom: 8 },
   headerSubtitle: { fontSize: 14, color: '#555555', fontStyle: 'italic' },
   todayDoneCard: { marginHorizontal: 16, marginBottom: 24, borderRadius: 20, overflow: 'hidden', height: 280 },
@@ -319,7 +336,7 @@ const styles = StyleSheet.create({
   takeSelfieButtonSubtitle: { fontSize: 12, color: '#666666', textAlign: 'center' },
   section: { paddingHorizontal: 16, marginBottom: 40 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#ffffff' },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff' },
   viewToggleRow: { flexDirection: 'row', gap: 8 },
   sortToggle: { backgroundColor: '#1a1a1a', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: '#2a2a2a' },
   sortToggleText: { color: '#4a90d9', fontSize: 13, fontWeight: '600' },

@@ -1,13 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
+import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   Image,
   KeyboardAvoidingView,
@@ -115,6 +117,27 @@ const getWeatherInfo = (code: number, temp: number) => {
   else if (code <= 82) { emoji = '🌧️'; description = 'Showers'; }
   else if (code <= 99) { emoji = '⛈️'; description = 'Thunderstorm'; }
   return { emoji, description, temp: Math.round(temp) };
+};
+
+// ── ANIMATED CARD ────────────────────────────────────────────────────────────
+const AnimatedCard = ({ onPress, style, children }: {
+  onPress: () => void; style?: any; children: React.ReactNode;
+}) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const onPressIn = () => Animated.spring(scale, {
+    toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 4,
+  }).start();
+  const onPressOut = () => Animated.spring(scale, {
+    toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4,
+  }).start();
+  return (
+    <Animated.View style={[style, { transform: [{ scale }] }]}>
+      <TouchableOpacity onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}
+        activeOpacity={1} style={{ flex: 1 }}>
+        {children}
+      </TouchableOpacity>
+    </Animated.View>
+  );
 };
 
 export default function ThePresent() {
@@ -415,36 +438,29 @@ export default function ThePresent() {
     Alert.alert('Sealed! 🔒', `Opens on ${new Date(openDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.`);
   };
 
- const markCapsuleOpened = async (capsule: Capsule) => {
-  const updated = capsules.map(c => c.id === capsule.id ? { ...c, opened: true } : c);
-  await saveCapsules(updated);
-  const savedEntry = await AsyncStorage.getItem(`day_entry_${todayKey}`);
-  const existing = savedEntry ? JSON.parse(savedEntry) : emptyEntry;
-  const updatedEntry = {
-    ...emptyEntry, ...existing,
-    extraPhotos: existing.extraPhotos || [],
-    taggedPeople: existing.taggedPeople || [],
-    openedCapsules: [...(existing.openedCapsules || []), {
-      id: capsule.id,
-      message: capsule.message,
-      photoUri: capsule.photoUri,
-      createdDate: capsule.createdDate,
-    }],
+  const markCapsuleOpened = async (capsule: Capsule) => {
+    const updated = capsules.map(c => c.id === capsule.id ? { ...c, opened: true } : c);
+    await saveCapsules(updated);
+    const savedEntry = await AsyncStorage.getItem(`day_entry_${todayKey}`);
+    const existing = savedEntry ? JSON.parse(savedEntry) : emptyEntry;
+    const updatedEntry = {
+      ...emptyEntry, ...existing,
+      extraPhotos: existing.extraPhotos || [],
+      taggedPeople: existing.taggedPeople || [],
+      openedCapsules: [...(existing.openedCapsules || []), {
+        id: capsule.id,
+        message: capsule.message,
+        photoUri: capsule.photoUri,
+        createdDate: capsule.createdDate,
+      }],
+    };
+    await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(updatedEntry));
+    setRevealingCapsule(null);
   };
-  await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(updatedEntry));
-  setRevealingCapsule(null);
-};
 
   const checkNotificationStatus = async () => {
     const enabled = await AsyncStorage.getItem('notifications_enabled');
     setNotificationsEnabled(enabled === 'true');
-  };
-
-  const testNotification = async () => {
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') { alert('Need notification permission first.'); return; }
-    await Notifications.scheduleNotificationAsync({ content: { title: 'Chronicle 📷', body: 'Tell me about your day 🎙️' }, trigger: null });
-    alert('Notification sent!');
   };
 
   const enableNotifications = async () => {
@@ -518,14 +534,15 @@ export default function ThePresent() {
             <Text style={styles.headerSubtitle}>Today's entry becomes tomorrow's flashback.</Text>
           </View>
 
-          <TouchableOpacity style={styles.selfieCard} onPress={() => router.push('/(tabs)/selfie')}>
+          {/* Selfie card — animated */}
+          <AnimatedCard onPress={() => router.push('/(tabs)/selfie')} style={styles.selfieCard}>
             <Text style={styles.selfieEmoji}>🤳</Text>
             <View style={styles.selfieText}>
               <Text style={styles.selfieTitle}>Today's selfie</Text>
               <Text style={styles.selfieSubtitle}>See how much you change over a year</Text>
             </View>
             <Text style={styles.selfieArrow}>→</Text>
-          </TouchableOpacity>
+          </AnimatedCard>
 
           <View style={styles.photoSection}>
             <TouchableOpacity style={styles.photoCard} onPress={() => pickPhoto(false)}>
@@ -613,19 +630,20 @@ export default function ThePresent() {
             )}
           </View>
 
-          <TouchableOpacity style={styles.entryCard} onPress={() => openModal('highlight', entry.highlight)}>
+          {/* Entry cards — animated */}
+          <AnimatedCard onPress={() => openModal('highlight', entry.highlight)} style={styles.entryCard}>
             <Text style={styles.cardLabel}>TODAY'S HIGHLIGHT</Text>
             <Text style={styles.entryPrompt}>{highlightPrompt}</Text>
             {entry.highlight ? <Text style={styles.entryAnswer}>"{entry.highlight}"</Text> : <Text style={styles.entryAddText}>+ Write something</Text>}
-          </TouchableOpacity>
+          </AnimatedCard>
 
-          <TouchableOpacity style={styles.entryCard} onPress={() => openModal('learned', entry.learned)}>
+          <AnimatedCard onPress={() => openModal('learned', entry.learned)} style={styles.entryCard}>
             <Text style={styles.cardLabel}>WHAT I LEARNED</Text>
             <Text style={styles.entryPrompt}>{learnPrompt}</Text>
             {entry.learned ? <Text style={styles.entryAnswer}>"{entry.learned}"</Text> : <Text style={styles.entryAddText}>+ Write something</Text>}
-          </TouchableOpacity>
+          </AnimatedCard>
 
-          <TouchableOpacity style={styles.entryCard} onPress={() => openModal('song', entry.songName, entry.songRating)}>
+          <AnimatedCard onPress={() => openModal('song', entry.songName, entry.songRating)} style={styles.entryCard}>
             <Text style={styles.cardLabel}>TODAY'S SONG</Text>
             {entry.songName ? (
               <View>
@@ -643,9 +661,9 @@ export default function ThePresent() {
                 <Text style={styles.entryAddText}>+ Add a song</Text>
               </View>
             )}
-          </TouchableOpacity>
+          </AnimatedCard>
 
-          <TouchableOpacity style={styles.entryCard} onPress={() => setShowPeopleModal(true)}>
+          <AnimatedCard onPress={() => setShowPeopleModal(true)} style={styles.entryCard}>
             <Text style={styles.cardLabel}>WHO I WAS WITH</Text>
             {(entry.taggedPeople || []).length > 0 ? (
               <View>
@@ -669,7 +687,7 @@ export default function ThePresent() {
                 <Text style={styles.entryAddText}>+ Tag people</Text>
               </View>
             )}
-          </TouchableOpacity>
+          </AnimatedCard>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Daily reminders</Text>
@@ -683,9 +701,6 @@ export default function ThePresent() {
                 <Text style={styles.notificationToggleText}>{notificationsEnabled ? 'On' : 'Off'}</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.testButton} onPress={testNotification}>
-              <Text style={styles.testButtonText}>Send test notification</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.section}>
@@ -837,6 +852,7 @@ export default function ThePresent() {
         </View>
       )}
 
+      {/* YOUR DAYS — day detail modal */}
       <Modal visible={selectedDay !== null} animationType="slide">
         <View style={styles.dayModal}>
           <ScrollView showsVerticalScrollIndicator={false}>
@@ -923,8 +939,10 @@ export default function ThePresent() {
         </View>
       </Modal>
 
+      {/* Favourite detail modal */}
       <Modal visible={selectedFav !== null} animationType="slide" transparent>
         <TouchableOpacity style={styles.favDetailOverlay} activeOpacity={1} onPress={() => setSelectedFav(null)}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
           <View style={styles.favDetailBox}>
             {selectedFav?.photoUri ? <Image source={{ uri: selectedFav.photoUri }} style={styles.favDetailPhoto} />
               : <View style={styles.favDetailPhotoEmpty}><Text style={styles.favDetailEmoji}>{getCategoryEmoji(selectedFav?.category || '')}</Text></View>}
@@ -942,6 +960,7 @@ export default function ThePresent() {
         </TouchableOpacity>
       </Modal>
 
+      {/* Add favourite modal — full screen, no blur needed */}
       <Modal visible={showAddFav} animationType="slide">
         <View style={styles.addFavModal}>
           <ScrollView showsVerticalScrollIndicator={false}>
@@ -982,45 +1001,50 @@ export default function ThePresent() {
         </View>
       </Modal>
 
+      {/* People tagging modal — with blur */}
       <Modal visible={showPeopleModal} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Who were you with?</Text>
-            {(entry.taggedPeople || []).length > 0 && (
-              <View style={styles.peopleChipsRow}>
-                {(entry.taggedPeople || []).map(person => (
-                  <TouchableOpacity key={person} style={styles.personChipRemovable} onPress={() => removePersonTag(person)}>
-                    <Text style={styles.personChipText}>👤 {person}</Text>
-                    <Text style={styles.personChipRemove}> ✕</Text>
-                  </TouchableOpacity>
-                ))}
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>Who were you with?</Text>
+              {(entry.taggedPeople || []).length > 0 && (
+                <View style={styles.peopleChipsRow}>
+                  {(entry.taggedPeople || []).map(person => (
+                    <TouchableOpacity key={person} style={styles.personChipRemovable} onPress={() => removePersonTag(person)}>
+                      <Text style={styles.personChipText}>👤 {person}</Text>
+                      <Text style={styles.personChipRemove}> ✕</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              <View style={styles.peopleInputRow}>
+                <TextInput style={styles.peopleTextInput} placeholder="Type a name..." placeholderTextColor="#555555" value={peopleInput} onChangeText={setPeopleInput} autoFocus />
+                <TouchableOpacity style={styles.peopleAddButton} onPress={() => addPersonTag(peopleInput)}>
+                  <Text style={styles.peopleAddButtonText}>Add</Text>
+                </TouchableOpacity>
               </View>
-            )}
-            <View style={styles.peopleInputRow}>
-              <TextInput style={styles.peopleTextInput} placeholder="Type a name..." placeholderTextColor="#555555" value={peopleInput} onChangeText={setPeopleInput} autoFocus />
-              <TouchableOpacity style={styles.peopleAddButton} onPress={() => addPersonTag(peopleInput)}>
-                <Text style={styles.peopleAddButtonText}>Add</Text>
+              {peopleSuggestions.length > 0 && (
+                <View style={styles.peopleSuggestionsBox}>
+                  {peopleSuggestions.map(person => (
+                    <TouchableOpacity key={person} style={styles.peopleSuggestion} onPress={() => addPersonTag(person)}>
+                      <Text style={styles.peopleSuggestionText}>👤 {person}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              <TouchableOpacity style={styles.saveButton} onPress={() => { if (peopleInput.trim()) addPersonTag(peopleInput); setShowPeopleModal(false); setPeopleInput(''); }}>
+                <Text style={styles.saveButtonText}>Done</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => { setShowPeopleModal(false); setPeopleInput(''); }}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
-            {peopleSuggestions.length > 0 && (
-              <View style={styles.peopleSuggestionsBox}>
-                {peopleSuggestions.map(person => (
-                  <TouchableOpacity key={person} style={styles.peopleSuggestion} onPress={() => addPersonTag(person)}>
-                    <Text style={styles.peopleSuggestionText}>👤 {person}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-            <TouchableOpacity style={styles.saveButton} onPress={() => { if (peopleInput.trim()) addPersonTag(peopleInput); setShowPeopleModal(false); setPeopleInput(''); }}>
-              <Text style={styles.saveButtonText}>Done</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => { setShowPeopleModal(false); setPeopleInput(''); }}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
+      {/* Create capsule — full screen, no blur */}
       <Modal visible={showCreateCapsule} animationType="slide">
         <View style={styles.capsuleModal}>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -1060,8 +1084,10 @@ export default function ThePresent() {
         </View>
       </Modal>
 
+      {/* Capsule reveal modal — with blur */}
       <Modal visible={revealingCapsule !== null} animationType="fade" transparent>
         <View style={styles.capsuleRevealOverlay}>
+          <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFillObject} />
           <View style={styles.capsuleRevealBox}>
             <Text style={styles.capsuleRevealEmoji}>🎁</Text>
             <Text style={styles.capsuleRevealTitle}>A message from your past self</Text>
@@ -1082,41 +1108,50 @@ export default function ThePresent() {
         </View>
       </Modal>
 
+      {/* Text entry modals — with blur */}
       <Modal visible={activeModal !== null && activeModal !== 'song'} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>
-              {activeModal === 'highlight' && "Today's highlight"}
-              {activeModal === 'learned' && "What I learned"}
-              {activeModal === 'dayDescription' && "Describe your day"}
-              {activeModal === 'songMeaning' && "What it means to you"}
-            </Text>
-            <TextInput style={styles.textInput} placeholder="Write something for future you..." placeholderTextColor="#555555" multiline value={tempText} onChangeText={setTempText} autoFocus />
-            <TouchableOpacity style={styles.saveButton} onPress={saveModal}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setActiveModal(null)}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      <Modal visible={activeModal === 'song'} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Today's song</Text>
-            <TextInput style={styles.textInput} placeholder="Song name and artist..." placeholderTextColor="#555555" value={tempText} onChangeText={setTempText} autoFocus />
-            <Text style={styles.ratingLabel}>Rating: {tempRating > 0 ? `${tempRating}/10` : 'tap to rate'}</Text>
-            <View style={styles.ratingButtons}>
-              {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                <TouchableOpacity key={n} style={[styles.ratingNumberButton, n <= tempRating && styles.ratingNumberButtonActive]} onPress={() => setTempRating(n)}>
-                  <Text style={[styles.ratingNumberText, n <= tempRating && styles.ratingNumberTextActive]}>{n}</Text>
-                </TouchableOpacity>
-              ))}
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>
+                {activeModal === 'highlight' && "Today's highlight"}
+                {activeModal === 'learned' && "What I learned"}
+                {activeModal === 'dayDescription' && "Describe your day"}
+                {activeModal === 'songMeaning' && "What it means to you"}
+              </Text>
+              <TextInput style={styles.textInput} placeholder="Write something for future you..." placeholderTextColor="#555555" multiline value={tempText} onChangeText={setTempText} autoFocus />
+              <TouchableOpacity style={styles.saveButton} onPress={saveModal}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setActiveModal(null)}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.saveButton} onPress={saveModal}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setActiveModal(null)}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
 
+      {/* Song modal — with blur */}
+      <Modal visible={activeModal === 'song'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>Today's song</Text>
+              <TextInput style={styles.textInput} placeholder="Song name and artist..." placeholderTextColor="#555555" value={tempText} onChangeText={setTempText} autoFocus />
+              <Text style={styles.ratingLabel}>Rating: {tempRating > 0 ? `${tempRating}/10` : 'tap to rate'}</Text>
+              <View style={styles.ratingButtons}>
+                {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                  <TouchableOpacity key={n} style={[styles.ratingNumberButton, n <= tempRating && styles.ratingNumberButtonActive]} onPress={() => setTempRating(n)}>
+                    <Text style={[styles.ratingNumberText, n <= tempRating && styles.ratingNumberTextActive]}>{n}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity style={styles.saveButton} onPress={saveModal}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setActiveModal(null)}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Full screen image */}
       <Modal visible={fullScreenUri !== null && selectedDay === null} transparent animationType="fade">
         <TouchableOpacity style={styles.fullScreenOverlay} activeOpacity={1} onPress={() => setFullScreenUri(null)}>
           {fullScreenUri && <Image source={{ uri: fullScreenUri }} style={styles.fullScreenImage} resizeMode="contain" />}
@@ -1129,11 +1164,11 @@ export default function ThePresent() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#0d0d0d' },
+  outerContainer: { flex: 1, backgroundColor: '#090d14' },
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#0d0d0d' },
+  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#090d14' },
   headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 2 },
-  headerDate: { fontSize: 20, fontWeight: '700', color: '#ffffff', marginBottom: 16 },
+  headerDate: { fontSize: 20, fontWeight: '700', color: '#ffffff', marginBottom: 16, letterSpacing: -0.3 },
   tabSwitcher: { flexDirection: 'row', backgroundColor: '#1a1a1a', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   tabButtonActive: { backgroundColor: '#4a90d9' },
@@ -1164,7 +1199,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, gap: 12 },
   moodCard: { flex: 1, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#2a2a2a' },
   weatherCard: { width: 100, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#2a2a2a', alignItems: 'center' },
-  cardLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '700', letterSpacing: 1.5, marginBottom: 10 },
+  cardLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '800', letterSpacing: 2, marginBottom: 10 },
   moodRow: { flexDirection: 'row', gap: 4, marginBottom: 8 },
   moodButton: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: '#2a2a2a' },
   moodButtonActive: { backgroundColor: '#4a90d9' },
@@ -1212,7 +1247,7 @@ const styles = StyleSheet.create({
   peopleSuggestion: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#3a3a3a' },
   peopleSuggestionText: { color: '#cccccc', fontSize: 15 },
   section: { paddingHorizontal: 16, marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#ffffff', marginBottom: 4 },
+  sectionTitle: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
   sectionSubtitle: { fontSize: 12, color: '#555555', fontStyle: 'italic', marginBottom: 14 },
   notificationCard: { backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#2a2a2a' },
   notificationEmoji: { fontSize: 28, marginRight: 14 },
@@ -1222,8 +1257,6 @@ const styles = StyleSheet.create({
   notificationToggle: { backgroundColor: '#2a2a2a', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16 },
   notificationToggleOn: { backgroundColor: '#4a90d9' },
   notificationToggleText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
-  testButton: { borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 12, padding: 12, alignItems: 'center' },
-  testButtonText: { color: '#444444', fontSize: 13 },
   capsuleReadySection: { marginBottom: 12 },
   capsuleReadyLabel: { fontSize: 11, color: '#f5c842', fontWeight: '700', letterSpacing: 1, marginBottom: 8 },
   capsuleReadyCard: { backgroundColor: 'rgba(245,200,66,0.1)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
@@ -1239,8 +1272,8 @@ const styles = StyleSheet.create({
   createCapsuleButton: { borderWidth: 1, borderColor: '#2a2a2a', borderStyle: 'dashed', borderRadius: 14, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 4 },
   createCapsuleEmoji: { fontSize: 20 },
   createCapsuleText: { color: '#4a90d9', fontSize: 15, fontWeight: '600' },
-  capsuleModal: { flex: 1, backgroundColor: '#0d0d0d', padding: 24, paddingTop: 60 },
-  capsuleModalTitle: { fontSize: 28, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
+  capsuleModal: { flex: 1, backgroundColor: '#090d14', padding: 24, paddingTop: 60 },
+  capsuleModalTitle: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 8, letterSpacing: -0.5 },
   capsuleModalSubtitle: { fontSize: 14, color: '#555555', fontStyle: 'italic', marginBottom: 24 },
   capsuleDatePicker: { flexDirection: 'row', gap: 12, marginBottom: 8, backgroundColor: '#1a1a1a', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#2a2a2a' },
   capsuleDateColumn: { flex: 1, alignItems: 'center', gap: 8 },
@@ -1248,10 +1281,10 @@ const styles = StyleSheet.create({
   capsuleDateArrowText: { color: '#4a90d9', fontSize: 26, fontWeight: '300' },
   capsuleDateValue: { fontSize: 18, fontWeight: '700', color: '#ffffff', minWidth: 50, textAlign: 'center' },
   capsuleDatePreview: { fontSize: 13, color: '#4a90d9', textAlign: 'center', marginBottom: 24 },
-  capsuleRevealOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  capsuleRevealBox: { backgroundColor: '#1a1a1a', borderRadius: 24, padding: 28, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', alignItems: 'center', width: '100%', maxHeight: '85%' },
+  capsuleRevealOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  capsuleRevealBox: { backgroundColor: 'rgba(14,18,26,0.98)', borderRadius: 24, padding: 28, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', alignItems: 'center', width: '100%', maxHeight: '85%' },
   capsuleRevealEmoji: { fontSize: 48, marginBottom: 12 },
-  capsuleRevealTitle: { fontSize: 20, fontWeight: 'bold', color: '#f5c842', marginBottom: 4, textAlign: 'center' },
+  capsuleRevealTitle: { fontSize: 20, fontWeight: '800', color: '#f5c842', marginBottom: 4, textAlign: 'center' },
   capsuleRevealDate: { fontSize: 13, color: '#666666', marginBottom: 20 },
   capsuleRevealMessage: { width: '100%', marginBottom: 24, maxHeight: 260 },
   capsuleRevealPhoto: { width: '100%', height: 160, borderRadius: 14, marginBottom: 16 },
@@ -1302,21 +1335,21 @@ const styles = StyleSheet.create({
   favDate: { fontSize: 11, color: '#444444' },
   addFavButton: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#4a90d9', justifyContent: 'center', alignItems: 'center', shadowColor: '#4a90d9', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
   addFavButtonText: { color: '#ffffff', fontSize: 28, fontWeight: '300' },
-  favDetailOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  favDetailBox: { backgroundColor: '#1a1a1a', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 48 },
+  favDetailOverlay: { flex: 1, justifyContent: 'flex-end' },
+  favDetailBox: { backgroundColor: 'rgba(14,18,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 48, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)' },
   favDetailPhoto: { width: '100%', height: 220, borderRadius: 16, marginBottom: 16 },
   favDetailPhotoEmpty: { width: '100%', height: 120, backgroundColor: '#2a2a2a', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   favDetailEmoji: { fontSize: 48 },
   favDetailInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   favDetailCategory: { fontSize: 13, color: '#4a90d9', fontWeight: '700' },
   favDetailRating: { fontSize: 16, fontWeight: '800', color: '#4a90d9' },
-  favDetailName: { fontSize: 22, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
+  favDetailName: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 8, letterSpacing: -0.3 },
   favDetailNote: { fontSize: 15, color: '#cccccc', fontStyle: 'italic', lineHeight: 22, marginBottom: 8 },
   favDetailDate: { fontSize: 13, color: '#555555', marginBottom: 20 },
   favDetailDelete: { alignItems: 'center', padding: 12 },
   favDetailDeleteText: { color: '#ff4444', fontSize: 14 },
-  addFavModal: { flex: 1, backgroundColor: '#0d0d0d', padding: 24, paddingTop: 60 },
-  addFavTitle: { fontSize: 28, fontWeight: 'bold', color: '#ffffff', marginBottom: 24 },
+  addFavModal: { flex: 1, backgroundColor: '#090d14', padding: 24, paddingTop: 60 },
+  addFavTitle: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 24, letterSpacing: -0.5 },
   addFavLabel: { fontSize: 13, color: '#888888', fontWeight: '600', marginBottom: 10, marginTop: 16 },
   addFavCategoryRow: { gap: 8, paddingBottom: 4 },
   addFavCatPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a' },
@@ -1339,7 +1372,7 @@ const styles = StyleSheet.create({
   addFavSaveText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
   addFavCancel: { alignItems: 'center', padding: 12, marginBottom: 40 },
   addFavCancelText: { color: '#555555', fontSize: 15 },
-  dayModal: { flex: 1, backgroundColor: '#0d0d0d' },
+  dayModal: { flex: 1, backgroundColor: '#090d14' },
   dayModalPhoto: { width: '100%', height: 300 },
   photoTapHint: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.4)', padding: 8, alignItems: 'center' },
   photoTapHintText: { color: '#ffffff', fontSize: 12 },
@@ -1353,15 +1386,15 @@ const styles = StyleSheet.create({
   dayModalChipText: { fontSize: 14, color: '#ffffff' },
   dayModalDescription: { fontSize: 17, color: '#cccccc', fontStyle: 'italic', marginBottom: 20, lineHeight: 26 },
   dayModalSection: { marginBottom: 20 },
-  dayModalLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '700', letterSpacing: 1.5, marginBottom: 8 },
+  dayModalLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '800', letterSpacing: 2, marginBottom: 8 },
   dayModalText: { fontSize: 16, color: '#ffffff', lineHeight: 24 },
   dayModalSubtext: { fontSize: 13, color: '#666666', marginTop: 4 },
   dayModalExtraPhoto: { width: 120, height: 120, borderRadius: 10, marginRight: 8 },
   dayModalClose: { margin: 16, backgroundColor: '#1a1a1a', borderRadius: 14, padding: 16, alignItems: 'center' },
   dayModalCloseText: { color: '#ffffff', fontWeight: '600', fontSize: 16 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  modalBox: { backgroundColor: '#1a1a1a', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#ffffff', marginBottom: 16 },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalBox: { backgroundColor: 'rgba(10,14,22,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)' },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 16, letterSpacing: -0.3 },
   textInput: { backgroundColor: '#2a2a2a', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
   ratingLabel: { fontSize: 14, color: '#888888', marginBottom: 12 },
   ratingButtons: { flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' },
@@ -1370,7 +1403,7 @@ const styles = StyleSheet.create({
   ratingNumberText: { color: '#666666', fontWeight: '600', fontSize: 14 },
   ratingNumberTextActive: { color: '#ffffff' },
   saveButton: { backgroundColor: '#4a90d9', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
-  saveButtonText: { color: '#ffffff', fontWeight: '600', fontSize: 16 },
+  saveButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
   cancelButton: { alignItems: 'center', padding: 10 },
   cancelButtonText: { color: '#555555', fontSize: 15 },
   fullScreenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },

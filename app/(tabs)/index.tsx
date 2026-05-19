@@ -1,10 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as MediaLibrary from 'expo-media-library';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Clipboard,
   Dimensions,
   Image,
@@ -110,13 +113,33 @@ const formatDateKey = (date: Date) => {
   return `${y}-${m}-${d}`;
 };
 
+// ── ANIMATED CARD ────────────────────────────────────────────────────────────
+const AnimatedCard = ({ onPress, style, children }: {
+  onPress: () => void; style?: any; children: React.ReactNode;
+}) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const onPressIn = () => Animated.spring(scale, {
+    toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 4,
+  }).start();
+  const onPressOut = () => Animated.spring(scale, {
+    toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4,
+  }).start();
+  return (
+    <Animated.View style={[style, { transform: [{ scale }] }]}>
+      <TouchableOpacity onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}
+        activeOpacity={1} style={{ flex: 1 }}>
+        {children}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 export default function OnThisDay() {
   const [memoryList, setMemoryList] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [permission, requestPermission] = MediaLibrary.usePermissions();
   const [activeTab, setActiveTab] = useState<'today' | 'vault'>('today');
 
-  // Day detail
   const [selectedDayMemories, setSelectedDayMemories] = useState<Memory[] | null>(null);
   const [selectedDayYear, setSelectedDayYear] = useState('');
   const [selectedDayDate, setSelectedDayDate] = useState('');
@@ -125,30 +148,24 @@ export default function OnThisDay() {
   const [tempContextText, setTempContextText] = useState('');
   const [daySaved, setDaySaved] = useState(false);
 
-  // Caption
   const [captioningMemory, setCaptioningMemory] = useState<Memory | null>(null);
   const [captionText, setCaptionText] = useState('');
   const [peopleText, setPeopleText] = useState('');
 
-  // Three dot menu
   const [menuMemory, setMenuMemory] = useState<Memory | null>(null);
 
-  // Full screen
   const [fullScreenUri, setFullScreenUri] = useState<string | null>(null);
   const [fullScreenCaption, setFullScreenCaption] = useState('');
 
-  // Vault
   const [vaultDays, setVaultDays] = useState<VaultDay[]>([]);
   const [vaultLoading, setVaultLoading] = useState(false);
   const [selectedVaultDay, setSelectedVaultDay] = useState<VaultDay | null>(null);
   const [selectedCalYear, setSelectedCalYear] = useState('');
 
-  // Vault editing
   const [editingVaultDate, setEditingVaultDate] = useState('');
   const [editingVaultContext, setEditingVaultContext] = useState<string | null>(null);
   const [vaultEditText, setVaultEditText] = useState('');
 
-  // People profiles
   const [showPersonProfile, setShowPersonProfile] = useState<string | null>(null);
   const [personPhotos, setPersonPhotos] = useState<VaultPhoto[]>([]);
   const [personProfilePhotos, setPersonProfilePhotos] = useState<Record<string, string>>({});
@@ -293,7 +310,6 @@ export default function OnThisDay() {
     setVaultDays(days);
     if (days.length > 0) setSelectedCalYear(days[0].dateKey.split('-')[0]);
 
-    // Build person days count (deduplicated by dateKey)
     const personDaysSet: Record<string, Set<string>> = {};
     days.forEach(d => {
       const dayPeople = new Set(d.photos.flatMap(p => p.people));
@@ -318,7 +334,6 @@ export default function OnThisDay() {
     Object.entries(personDaysSet).forEach(([name, daysSet]) => { counts[name] = daysSet.size; });
     setPersonDaysCount(counts);
 
-    // Load profile photos
     const allPeople = [...new Set(days.flatMap(d => d.photos.flatMap(p => p.people)))].filter(Boolean);
     const photoMap: Record<string, string> = {};
     for (const person of allPeople) {
@@ -377,8 +392,6 @@ export default function OnThisDay() {
     setCaptioningMemory(null);
   };
 
-  // ── THREE DOT MENU ───────────────────────────────────────────────────────
-
   const hidePhoto = async (memory: Memory) => {
     const hiddenRaw = await AsyncStorage.getItem('hidden_photos');
     const hidden: string[] = hiddenRaw ? JSON.parse(hiddenRaw) : [];
@@ -389,7 +402,6 @@ export default function OnThisDay() {
     setMenuMemory(null);
   };
 
-  // FIXED: also updates memoryList so year card thumbnail updates immediately
   const setAsCover = async (memory: Memory) => {
     const coverRaw = await AsyncStorage.getItem('cover_photos');
     const coverMap = coverRaw ? JSON.parse(coverRaw) : {};
@@ -434,8 +446,6 @@ export default function OnThisDay() {
     setMenuMemory(null);
   };
 
-  // ── PEOPLE PROFILES ─────────────────────────────────────────────────────
-
   const openPersonProfile = (name: string) => {
     const photos = vaultDays.flatMap(d => d.photos.filter(p => p.people.includes(name)));
     setPersonPhotos(photos);
@@ -464,9 +474,6 @@ export default function OnThisDay() {
     ]);
   };
 
-  // ── VAULT CONTEXT EDIT (FIXED) ───────────────────────────────────────────
-
-  // Reloads fresh context from AsyncStorage before opening edit sheet
   const openVaultEditSheet = async () => {
     if (!selectedVaultDay) return;
     const contextRaw = await AsyncStorage.getItem(`day_context_${selectedVaultDay.dateKey}`);
@@ -547,11 +554,14 @@ export default function OnThisDay() {
                 const firstMemory = memories[0];
                 const prompt = getPromptForDate(memories[0].date);
                 return (
-                  <TouchableOpacity key={year} style={styles.yearCard} onPress={() => openDayDetail(memories, year, memories[0].date)} activeOpacity={0.92}>
+                  <AnimatedCard key={year} onPress={() => openDayDetail(memories, year, memories[0].date)} style={styles.yearCard}>
                     {firstMemory.uri && (
                       <Image source={{ uri: firstMemory.uri }} style={styles.yearCardBg} resizeMode="cover" />
                     )}
-                    <View style={styles.yearCardOverlay}>
+                    <LinearGradient
+                      colors={['transparent', 'rgba(155,114,255,0.25)', 'rgba(0,0,0,0.88)']}
+                      locations={[0, 0.45, 1]}
+                      style={styles.yearCardOverlay}>
                       <View style={styles.yearBadge}>
                         <Text style={styles.yearBadgeText}>{year}</Text>
                       </View>
@@ -574,8 +584,8 @@ export default function OnThisDay() {
                           )}
                         </View>
                       </View>
-                    </View>
-                  </TouchableOpacity>
+                    </LinearGradient>
+                  </AnimatedCard>
                 );
               })}
             </View>
@@ -751,6 +761,7 @@ export default function OnThisDay() {
           {/* Three dot menu — nested inside day detail */}
           <Modal visible={menuMemory !== null} animationType="slide" transparent>
             <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setMenuMemory(null)}>
+              <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
               <View style={styles.menuBox}>
                 <Text style={styles.menuTitle}>Photo options</Text>
                 <TouchableOpacity style={styles.menuItem} onPress={() => setAsCover(menuMemory!)}>
@@ -795,31 +806,37 @@ export default function OnThisDay() {
 
           {/* Caption modal — nested inside day detail */}
           <Modal visible={captioningMemory !== null} animationType="slide" transparent>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-              <View style={styles.modalBox}>
-                <Text style={styles.modalTitle}>Save photo to Vault</Text>
-                <Text style={styles.modalSubtitle}>What do you remember about this photo?</Text>
-                <TextInput style={styles.textInput} placeholder="Write something for future you..." placeholderTextColor="#555555" multiline value={captionText} onChangeText={setCaptionText} autoFocus />
-                <Text style={styles.modalSubtitle}>Who were you with?</Text>
-                <TextInput style={[styles.textInput, { minHeight: 44 }]} placeholder="Alex, Mum... (separate with commas)" placeholderTextColor="#555555" value={peopleText} onChangeText={setPeopleText} />
-                <TouchableOpacity style={styles.saveButton} onPress={saveCaption}><Text style={styles.saveButtonText}>Save to Vault</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => setCaptioningMemory(null)}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
+            <View style={styles.modalOverlay}>
+              <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+                <View style={styles.modalBox}>
+                  <Text style={styles.modalTitle}>Save photo to Vault</Text>
+                  <Text style={styles.modalSubtitle}>What do you remember about this photo?</Text>
+                  <TextInput style={styles.textInput} placeholder="Write something for future you..." placeholderTextColor="#555555" multiline value={captionText} onChangeText={setCaptionText} autoFocus />
+                  <Text style={styles.modalSubtitle}>Who were you with?</Text>
+                  <TextInput style={[styles.textInput, { minHeight: 44 }]} placeholder="Alex, Mum... (separate with commas)" placeholderTextColor="#555555" value={peopleText} onChangeText={setPeopleText} />
+                  <TouchableOpacity style={styles.saveButton} onPress={saveCaption}><Text style={styles.saveButtonText}>Save to Vault</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.cancelButton} onPress={() => setCaptioningMemory(null)}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+                </View>
+              </KeyboardAvoidingView>
+            </View>
           </Modal>
 
           {/* Context field modal — nested inside day detail */}
           <Modal visible={activeContextField !== null} animationType="slide" transparent>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-              <View style={styles.modalBox}>
-                <Text style={styles.modalTitle}>{contextFields.find(f => f.key === activeContextField)?.label || ''}</Text>
-                <TextInput style={styles.textInput} placeholder={contextFields.find(f => f.key === activeContextField)?.placeholder || ''} placeholderTextColor="#555555" multiline value={tempContextText} onChangeText={setTempContextText} autoFocus />
-                <TouchableOpacity style={styles.saveButton} onPress={() => saveDayContext(activeContextField!, tempContextText)}>
-                  <Text style={styles.saveButtonText}>Save</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => setActiveContextField(null)}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
+            <View style={styles.modalOverlay}>
+              <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+                <View style={styles.modalBox}>
+                  <Text style={styles.modalTitle}>{contextFields.find(f => f.key === activeContextField)?.label || ''}</Text>
+                  <TextInput style={styles.textInput} placeholder={contextFields.find(f => f.key === activeContextField)?.placeholder || ''} placeholderTextColor="#555555" multiline value={tempContextText} onChangeText={setTempContextText} autoFocus />
+                  <TouchableOpacity style={styles.saveButton} onPress={() => saveDayContext(activeContextField!, tempContextText)}>
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.cancelButton} onPress={() => setActiveContextField(null)}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+                </View>
+              </KeyboardAvoidingView>
+            </View>
           </Modal>
 
           {/* Full screen — nested inside day detail */}
@@ -936,6 +953,7 @@ export default function OnThisDay() {
       {/* VAULT CONTEXT EDIT MODAL */}
       <Modal visible={editingVaultDate !== ''} animationType="slide" transparent>
         <View style={styles.vaultEditOverlay}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
           <View style={styles.vaultEditBox}>
             <Text style={styles.vaultEditTitle}>Edit Context</Text>
             <Text style={styles.vaultEditSubtitle}>{selectedVaultDay?.displayDate}</Text>
@@ -963,28 +981,30 @@ export default function OnThisDay() {
 
         {/* Individual field editor — nested inside vault edit modal */}
         <Modal visible={editingVaultContext !== null} animationType="slide" transparent>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>{contextFields.find(f => f.key === editingVaultContext)?.label || ''}</Text>
-              <TextInput style={styles.textInput} placeholder={contextFields.find(f => f.key === editingVaultContext)?.placeholder || ''} placeholderTextColor="#555555" multiline value={vaultEditText} onChangeText={setVaultEditText} autoFocus />
-              <TouchableOpacity style={styles.saveButton} onPress={async () => {
-                if (!editingVaultContext || !selectedVaultDay) return;
-                // Read fresh from AsyncStorage to avoid stale state
-                const existingRaw = await AsyncStorage.getItem(`day_context_${selectedVaultDay.dateKey}`);
-                const existing = existingRaw ? JSON.parse(existingRaw) : { ...emptyContext };
-                const updated = { ...existing, [editingVaultContext]: vaultEditText };
-                await AsyncStorage.setItem(`day_context_${selectedVaultDay.dateKey}`, JSON.stringify(updated));
-                setSelectedVaultDay(prev => prev ? { ...prev, context: updated } : null);
-                setVaultDays(prev => prev.map(d => d.dateKey === selectedVaultDay.dateKey ? { ...d, context: updated } : d));
-                setEditingVaultContext(null);
-              }}>
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setEditingVaultContext(null)}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
+          <View style={styles.modalOverlay}>
+            <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+              <View style={styles.modalBox}>
+                <Text style={styles.modalTitle}>{contextFields.find(f => f.key === editingVaultContext)?.label || ''}</Text>
+                <TextInput style={styles.textInput} placeholder={contextFields.find(f => f.key === editingVaultContext)?.placeholder || ''} placeholderTextColor="#555555" multiline value={vaultEditText} onChangeText={setVaultEditText} autoFocus />
+                <TouchableOpacity style={styles.saveButton} onPress={async () => {
+                  if (!editingVaultContext || !selectedVaultDay) return;
+                  const existingRaw = await AsyncStorage.getItem(`day_context_${selectedVaultDay.dateKey}`);
+                  const existing = existingRaw ? JSON.parse(existingRaw) : { ...emptyContext };
+                  const updated = { ...existing, [editingVaultContext]: vaultEditText };
+                  await AsyncStorage.setItem(`day_context_${selectedVaultDay.dateKey}`, JSON.stringify(updated));
+                  setSelectedVaultDay(prev => prev ? { ...prev, context: updated } : null);
+                  setVaultDays(prev => prev.map(d => d.dateKey === selectedVaultDay.dateKey ? { ...d, context: updated } : d));
+                  setEditingVaultContext(null);
+                }}>
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => setEditingVaultContext(null)}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
         </Modal>
       </Modal>
 
@@ -1037,17 +1057,17 @@ export default function OnThisDay() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#0d0d0d' },
+  outerContainer: { flex: 1, backgroundColor: '#0d0a14' },
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#0d0d0d' },
+  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#0d0a14' },
   headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 2 },
-  headerDate: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 16 },
+  headerDate: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 16, letterSpacing: -0.5 },
   tabSwitcher: { flexDirection: 'row', backgroundColor: '#1a1a1a', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   tabButtonActive: { backgroundColor: '#9b72ff' },
   tabButtonText: { fontSize: 14, fontWeight: '600', color: '#555555' },
   tabButtonTextActive: { color: '#ffffff' },
-  centreScreen: { flex: 1, backgroundColor: '#0d0d0d', justifyContent: 'center', alignItems: 'center', padding: 32 },
+  centreScreen: { flex: 1, backgroundColor: '#0d0a14', justifyContent: 'center', alignItems: 'center', padding: 32 },
   permissionTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 16 },
   permissionSubtitle: { fontSize: 15, color: '#666666', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
   permissionButton: { backgroundColor: '#ffffff', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32 },
@@ -1061,14 +1081,14 @@ const styles = StyleSheet.create({
   yearCardsList: { padding: 16, gap: 16, paddingBottom: 40 },
   yearCard: { width: '100%', height: height * 0.45, borderRadius: 20, overflow: 'hidden', backgroundColor: '#1a1a1a', borderWidth: 1.5, borderColor: '#9b72ff' },
   yearCardBg: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
-  yearCardOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.38)', justifyContent: 'space-between', padding: 18 },
+  yearCardOverlay: { flex: 1, justifyContent: 'space-between', padding: 18 },
   yearBadge: { alignSelf: 'flex-start', backgroundColor: '#9b72ff', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 16 },
-  yearBadgeText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
+  yearBadgeText: { color: '#ffffff', fontWeight: '800', fontSize: 15, letterSpacing: 0.5 },
   yearCardBottom: { gap: 10 },
   yearCardBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   yearMemoryCount: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
   yearCardCta: { color: 'rgba(255,255,255,0.6)', fontSize: 13 },
-  yearPromptTeaser: { color: 'rgba(255,255,255,0.85)', fontSize: 15, fontStyle: 'italic', lineHeight: 22 },
+  yearPromptTeaser: { color: 'rgba(255,255,255,0.9)', fontSize: 16, fontStyle: 'italic', lineHeight: 22, fontWeight: '500' },
   yearPreviewStrip: { flexDirection: 'row', alignItems: 'center' },
   yearPreviewThumb: { width: 44, height: 44, borderRadius: 8, borderWidth: 2, borderColor: 'rgba(0,0,0,0.5)' },
   yearPreviewMore: { width: 44, height: 44, borderRadius: 8, backgroundColor: 'rgba(155,114,255,0.7)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(0,0,0,0.5)' },
@@ -1076,7 +1096,7 @@ const styles = StyleSheet.create({
 
   // People section
   peopleSection: { paddingHorizontal: 16, paddingTop: 16, marginBottom: 8 },
-  peopleSectionTitle: { fontSize: 18, fontWeight: '600', color: '#ffffff', marginBottom: 12 },
+  peopleSectionTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 12, letterSpacing: -0.3 },
   peopleSectionContent: { gap: 16 },
   personBubble: { alignItems: 'center', width: 60 },
   personBubbleAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#9b72ff', justifyContent: 'center', alignItems: 'center', marginBottom: 6, overflow: 'hidden' },
@@ -1104,20 +1124,20 @@ const styles = StyleSheet.create({
   calendarDayNumberEmpty: { fontSize: 11, color: '#2a2a2a' },
 
   // Day detail modal
-  dayModal: { flex: 1, backgroundColor: '#0d0d0d' },
+  dayModal: { flex: 1, backgroundColor: '#0d0a14' },
   dayHeroPhoto: { width: '100%', height: 280 },
   dayContent: { padding: 20, paddingBottom: 100 },
   dayTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   dayYearBadge: { backgroundColor: '#9b72ff', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 16 },
-  dayYearBadgeText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
+  dayYearBadgeText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
   dayDateText: { fontSize: 18, fontWeight: '700', color: '#ffffff', flex: 1, flexWrap: 'wrap' },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
+  sectionTitle: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
   sectionSubtitle: { fontSize: 13, color: '#555555', marginBottom: 16, fontStyle: 'italic' },
-  saveDayButton: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(155,114,255,0.4)', marginBottom: 20 },
+  saveDayButton: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(155,114,255,0.4)', marginBottom: 20 },
   saveDayButtonSaved: { backgroundColor: 'rgba(155,114,255,0.25)', borderColor: '#9b72ff' },
   saveDayButtonText: { color: '#9b72ff', fontWeight: '700', fontSize: 15 },
   contextCard: { backgroundColor: '#1a1a1a', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#2a2a2a' },
-  contextLabel: { fontSize: 10, color: '#9b72ff', fontWeight: '700', letterSpacing: 1.5, marginBottom: 6 },
+  contextLabel: { fontSize: 10, color: '#9b72ff', fontWeight: '800', letterSpacing: 2, marginBottom: 6 },
   contextAnswer: { fontSize: 15, color: '#ffffff', lineHeight: 22 },
   contextPlaceholder: { fontSize: 14, color: '#333333', fontStyle: 'italic' },
   dayPhotoCard: { marginBottom: 16, backgroundColor: '#1a1a1a', borderRadius: 16, overflow: 'hidden' },
@@ -1141,8 +1161,8 @@ const styles = StyleSheet.create({
   dayModalCloseText: { color: '#ffffff', fontWeight: '600', fontSize: 16 },
 
   // Three dot menu
-  menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  menuBox: { backgroundColor: '#1a1a1a', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  menuOverlay: { flex: 1, justifyContent: 'flex-end' },
+  menuBox: { backgroundColor: 'rgba(22,18,32,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(155,114,255,0.2)' },
   menuTitle: { fontSize: 16, color: '#666666', fontWeight: '600', marginBottom: 16, textAlign: 'center' },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' },
   menuItemDanger: { borderBottomWidth: 0 },
@@ -1153,14 +1173,14 @@ const styles = StyleSheet.create({
   menuCancel: { marginTop: 12, backgroundColor: '#2a2a2a', borderRadius: 12, padding: 14, alignItems: 'center' },
   menuCancelText: { color: '#ffffff', fontWeight: '600', fontSize: 15 },
 
-  // Modals
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-  modalBox: { backgroundColor: '#1a1a1a', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 6 },
+  // Modals — glass effect
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalBox: { backgroundColor: 'rgba(18,14,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(155,114,255,0.15)' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginBottom: 6, letterSpacing: -0.3 },
   modalSubtitle: { fontSize: 14, color: '#666666', marginBottom: 10 },
   textInput: { backgroundColor: '#2a2a2a', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
   saveButton: { backgroundColor: '#9b72ff', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
-  saveButtonText: { color: '#ffffff', fontWeight: '600', fontSize: 16 },
+  saveButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
   cancelButton: { alignItems: 'center', padding: 10 },
   cancelButtonText: { color: '#555555', fontSize: 15 },
   fullScreenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
@@ -1169,52 +1189,52 @@ const styles = StyleSheet.create({
   fullScreenDismiss: { color: '#555555', fontSize: 13, marginTop: 12 },
 
   // Vault day full view
-  vaultDayModal: { flex: 1, backgroundColor: '#0d0d0d' },
+  vaultDayModal: { flex: 1, backgroundColor: '#0d0a14' },
   vaultDayHero: { width: '100%', height: 280 },
   vaultDayContent: { padding: 20, paddingBottom: 160 },
-  vaultDayDate: { fontSize: 22, fontWeight: 'bold', color: '#ffffff', marginBottom: 12 },
+  vaultDayDate: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 12, letterSpacing: -0.5 },
   vaultDayChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   vaultDayChip: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(155,114,255,0.3)' },
   vaultDayChipText: { color: '#9b72ff', fontSize: 14, fontWeight: '600' },
   vaultDaySection: { marginBottom: 24, borderTopWidth: 1, borderTopColor: '#1a1a1a', paddingTop: 16 },
   vaultDaySectionTitle: { fontSize: 16, fontWeight: '700', color: '#ffffff', marginBottom: 12 },
   vaultDayContextRow: { marginBottom: 12 },
-  vaultDayContextLabel: { fontSize: 10, color: '#9b72ff', fontWeight: '700', letterSpacing: 1.5, marginBottom: 4 },
+  vaultDayContextLabel: { fontSize: 10, color: '#9b72ff', fontWeight: '800', letterSpacing: 2, marginBottom: 4 },
   vaultDayContextValue: { fontSize: 15, color: '#ffffff', lineHeight: 22 },
   vaultDayPhotoStrip: { gap: 12, paddingRight: 16 },
   vaultDayPhotoItem: { width: 220 },
   vaultDayPhotoThumb: { width: 220, height: 220, borderRadius: 14, marginBottom: 8 },
   vaultDayPhotoCaption: { fontSize: 13, color: '#cccccc', fontStyle: 'italic', lineHeight: 18 },
   vaultDayPhotoPeople: { fontSize: 12, color: '#9b72ff', marginTop: 4 },
-  vaultDayActions: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, gap: 10, backgroundColor: '#0d0d0d', borderTopWidth: 1, borderTopColor: '#1a1a1a' },
+  vaultDayActions: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, gap: 10, backgroundColor: '#0d0a14', borderTopWidth: 1, borderTopColor: '#1a1a1a' },
   vaultDayEditButton: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(155,114,255,0.4)' },
   vaultDayEditButtonText: { color: '#9b72ff', fontWeight: '700', fontSize: 15 },
 
   // Vault context editing
-  vaultEditOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  vaultEditBox: { backgroundColor: '#1a1a1a', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 48, maxHeight: '80%' },
-  vaultEditTitle: { fontSize: 22, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
+  vaultEditOverlay: { flex: 1, justifyContent: 'flex-end' },
+  vaultEditBox: { backgroundColor: 'rgba(18,14,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 48, maxHeight: '80%', borderWidth: 1, borderColor: 'rgba(155,114,255,0.2)' },
+  vaultEditTitle: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
   vaultEditSubtitle: { fontSize: 13, color: '#666666', marginBottom: 20 },
   vaultEditField: { backgroundColor: '#2a2a2a', borderRadius: 12, padding: 14, marginBottom: 10 },
-  vaultEditLabel: { fontSize: 10, color: '#9b72ff', fontWeight: '700', letterSpacing: 1.5, marginBottom: 6 },
+  vaultEditLabel: { fontSize: 10, color: '#9b72ff', fontWeight: '800', letterSpacing: 2, marginBottom: 6 },
   vaultEditValue: { fontSize: 15, color: '#ffffff', lineHeight: 22 },
   vaultEditPlaceholder: { fontSize: 14, color: '#333333', fontStyle: 'italic' },
   vaultEditClose: { backgroundColor: '#9b72ff', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
   vaultEditCloseText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
 
   // Person profile modal
-  personModal: { flex: 1, backgroundColor: '#0d0d0d' },
+  personModal: { flex: 1, backgroundColor: '#0d0a14' },
   personProfileHeader: { alignItems: 'center', paddingTop: 60, paddingBottom: 24, paddingHorizontal: 24 },
   personProfileAvatarWrap: { position: 'relative', marginBottom: 16 },
   personProfilePhoto: { width: 100, height: 100, borderRadius: 50 },
   personProfileAvatarInner: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#9b72ff', justifyContent: 'center', alignItems: 'center' },
   personProfileInitial: { color: '#ffffff', fontSize: 40, fontWeight: 'bold' },
-  personProfileEditBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 4, borderWidth: 2, borderColor: '#0d0d0d' },
+  personProfileEditBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 4, borderWidth: 2, borderColor: '#0d0a14' },
   personProfileEditText: { fontSize: 16 },
-  personProfileName: { fontSize: 26, fontWeight: 'bold', color: '#ffffff', marginBottom: 4 },
+  personProfileName: { fontSize: 26, fontWeight: '800', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
   personProfileDays: { fontSize: 14, color: '#666666' },
   personGallerySection: { paddingHorizontal: 16, paddingBottom: 100 },
-  personGalleryTitle: { fontSize: 18, fontWeight: '600', color: '#ffffff', marginBottom: 12 },
+  personGalleryTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 12 },
   personGalleryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   personGalleryItem: { width: '47%' },
   personGalleryThumb: { width: '100%', height: 160, borderRadius: 12, marginBottom: 4 },
