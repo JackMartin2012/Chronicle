@@ -760,6 +760,9 @@ export default function ThePresent() {
               </View>
             )}
 
+            {sealedCapsules.length > 0 && (
+              <Text style={styles.capsuleSealedLabel}>🔒 SEALED</Text>
+            )}
             {sealedCapsules.map(capsule => (
               <View key={capsule.id} style={styles.capsuleSealedCard}>
                 <Text style={styles.capsuleSealedEmoji}>🔒</Text>
@@ -1343,6 +1346,7 @@ const styles = StyleSheet.create({
   capsuleReadyTitle: { fontSize: 15, fontWeight: '600', color: '#f5c842', marginBottom: 2 },
   capsuleReadyDate: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
   capsuleArrow: { color: '#f5c842', fontSize: 16, marginLeft: 8 },
+  capsuleSealedLabel: { fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: '700', letterSpacing: 1, marginBottom: 8, marginTop: 4 },
   capsuleSealedCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   capsuleSealedEmoji: { fontSize: 24, marginRight: 12 },
   capsuleSealedTitle: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.6)', marginBottom: 2 },
