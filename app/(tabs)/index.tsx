@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -552,36 +553,31 @@ export default function OnThisDay() {
               {sortedYears.map((year) => {
                 const memories = groupedMemories[year];
                 const firstMemory = memories[0];
-                const prompt = getPromptForDate(memories[0].date);
+                const cardDate = new Date(memories[0].date + 'T12:00:00');
+                const dayName = cardDate.toLocaleDateString('en-GB', { weekday: 'long' });
+                const dayNum = cardDate.getDate();
+                const monthName = cardDate.toLocaleDateString('en-GB', { month: 'long' });
+                const dateLabel = `${dayName} ${dayNum} ${monthName}`;
                 return (
                   <AnimatedCard key={year} onPress={() => openDayDetail(memories, year, memories[0].date)} style={styles.yearCard}>
                     {firstMemory.uri && (
                       <Image source={{ uri: firstMemory.uri }} style={styles.yearCardBg} resizeMode="cover" />
                     )}
                     <LinearGradient
-                      colors={['transparent', 'rgba(155,114,255,0.25)', 'rgba(0,0,0,0.88)']}
-                      locations={[0, 0.45, 1]}
+                      colors={['transparent', 'rgba(0,0,0,0.75)']}
+                      locations={[0.3, 1]}
                       style={styles.yearCardOverlay}>
-                      <View style={styles.yearBadge}>
-                        <Text style={styles.yearBadgeText}>{year}</Text>
-                      </View>
-                      <View style={styles.yearCardBottom}>
-                        <View style={styles.yearCardBottomRow}>
-                          <Text style={styles.yearMemoryCount}>{memories.length} {memories.length === 1 ? 'photo' : 'photos'}</Text>
-                          <Text style={styles.yearCardCta}>Tap to explore →</Text>
+                      <View style={{ flex: 1, justifyContent: 'flex-start', alignItems: 'center', paddingTop: height * 0.45 * 0.28 }}>
+                        <View style={styles.yearBadge}>
+                          <Text style={styles.yearBadgeText}>{year}</Text>
                         </View>
-                        <Text style={styles.yearPromptTeaser}>{prompt}</Text>
-                        <View style={styles.yearPreviewStrip}>
-                          {memories.slice(0, 4).map((m, i) => (
-                            m.uri ? (
-                              <Image key={m.id} source={{ uri: m.uri }} style={[styles.yearPreviewThumb, { marginLeft: i > 0 ? -10 : 0, zIndex: 4 - i }]} />
-                            ) : null
-                          ))}
-                          {memories.length > 4 && (
-                            <View style={[styles.yearPreviewMore, { marginLeft: -10 }]}>
-                              <Text style={styles.yearPreviewMoreText}>+{memories.length - 4}</Text>
-                            </View>
-                          )}
+                      </View>
+                      <View style={styles.yearCardDivider} />
+                      <View style={styles.yearCardBottomRow}>
+                        <Text style={styles.yearDateLabel}>{dateLabel}</Text>
+                        <View style={styles.yearCardPhotoCount}>
+                          <Ionicons name="camera-outline" size={14} color="#ffffff" />
+                          <Text style={styles.yearMemoryCount}>{memories.length}</Text>
                         </View>
                       </View>
                     </LinearGradient>
@@ -638,11 +634,13 @@ export default function OnThisDay() {
               </ScrollView>
 
               <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+                {(() => { const todayStr = formatDateKey(new Date()); return null; })()}
                 {monthsInSelectedYear.map(month => {
                   const year = parseInt(selectedCalYear);
                   const daysInMonth = getDaysInMonth(year, month);
                   const firstDay = getFirstDayOfMonth(year, month);
-                  const monthName = new Date(year, month, 1).toLocaleDateString('en-GB', { month: 'long' });
+                  const monthName = new Date(year, month, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+                  const todayStr = formatDateKey(new Date());
                   return (
                     <View key={month} style={styles.calendarMonth}>
                       <Text style={styles.calendarMonthTitle}>{monthName}</Text>
@@ -655,16 +653,18 @@ export default function OnThisDay() {
                           const day = i + 1;
                           const dateKey = `${selectedCalYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                           const vaultDay = dayMap[dateKey];
+                          const isToday = dateKey === todayStr;
                           return (
                             <TouchableOpacity key={day} style={styles.calendarCell} onPress={() => vaultDay ? setSelectedVaultDay(vaultDay) : null} activeOpacity={vaultDay ? 0.8 : 1}>
                               {vaultDay ? (
                                 <View style={styles.calendarCellFilled}>
                                   {vaultDay.thumbUri && <Image source={{ uri: vaultDay.thumbUri }} style={styles.calendarThumb} />}
-                                  <Text style={styles.calendarDayNumber}>{day}</Text>
                                 </View>
                               ) : (
                                 <View style={styles.calendarCellEmpty}>
-                                  <Text style={styles.calendarDayNumberEmpty}>{day}</Text>
+                                  <View style={[styles.calendarEmptyCircle, isToday && styles.calendarTodayRing]}>
+                                    <Text style={styles.calendarDayNumberEmpty}>{day}</Text>
+                                  </View>
                                 </View>
                               )}
                             </TouchableOpacity>
@@ -674,7 +674,7 @@ export default function OnThisDay() {
                     </View>
                   );
                 })}
-                <View style={{ height: 40 }} />
+                <View style={{ height: 100 }} />
               </ScrollView>
             </>
           )}
@@ -1057,42 +1057,38 @@ export default function OnThisDay() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#0d0a14' },
+  outerContainer: { flex: 1, backgroundColor: '#6b35d4' },
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#0d0a14' },
-  headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 2 },
-  headerDate: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 16, letterSpacing: -0.5 },
-  tabSwitcher: { flexDirection: 'row', backgroundColor: '#1a1a1a', borderRadius: 12, padding: 4 },
+  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#6b35d4' },
+  headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 2, textAlign: 'center' },
+  headerDate: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 16, letterSpacing: -0.5, textAlign: 'center' },
+  tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  tabButtonActive: { backgroundColor: '#9b72ff' },
-  tabButtonText: { fontSize: 14, fontWeight: '600', color: '#555555' },
-  tabButtonTextActive: { color: '#ffffff' },
-  centreScreen: { flex: 1, backgroundColor: '#0d0a14', justifyContent: 'center', alignItems: 'center', padding: 32 },
+  tabButtonActive: { backgroundColor: '#ffffff' },
+  tabButtonText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
+  tabButtonTextActive: { color: '#6b35d4' },
+  centreScreen: { flex: 1, backgroundColor: '#6b35d4', justifyContent: 'center', alignItems: 'center', padding: 32 },
   permissionTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 16 },
-  permissionSubtitle: { fontSize: 15, color: '#666666', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
+  permissionSubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
   permissionButton: { backgroundColor: '#ffffff', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32 },
   permissionButtonText: { color: '#000000', fontWeight: '600', fontSize: 16 },
   loadingContainer: { paddingTop: 80, alignItems: 'center' },
-  loadingText: { color: '#666666', marginTop: 16, fontSize: 15 },
+  loadingText: { color: 'rgba(255,255,255,0.35)', marginTop: 16, fontSize: 15 },
   emptyState: { padding: 40, alignItems: 'center', marginTop: 40 },
   emptyEmoji: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
-  emptySubtitle: { fontSize: 15, color: '#666666', textAlign: 'center', lineHeight: 22 },
-  yearCardsList: { padding: 16, gap: 16, paddingBottom: 40 },
-  yearCard: { width: '100%', height: height * 0.45, borderRadius: 20, overflow: 'hidden', backgroundColor: '#1a1a1a', borderWidth: 1.5, borderColor: '#9b72ff' },
+  emptySubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
+  yearCardsList: { padding: 16, gap: 16, paddingBottom: 100 },
+  yearCard: { width: '100%', height: height * 0.45, borderRadius: 20, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)' },
   yearCardBg: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
-  yearCardOverlay: { flex: 1, justifyContent: 'space-between', padding: 18 },
-  yearBadge: { alignSelf: 'flex-start', backgroundColor: '#9b72ff', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 16 },
-  yearBadgeText: { color: '#ffffff', fontWeight: '800', fontSize: 15, letterSpacing: 0.5 },
-  yearCardBottom: { gap: 10 },
+  yearCardOverlay: { flex: 1, padding: 18 },
+  yearBadge: { backgroundColor: '#9b72ff', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 28, alignItems: 'center', justifyContent: 'center' },
+  yearBadgeText: { color: '#ffffff', fontWeight: '800', fontSize: 36, letterSpacing: -0.5 },
+  yearCardDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginBottom: 14 },
   yearCardBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  yearMemoryCount: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
-  yearCardCta: { color: 'rgba(255,255,255,0.6)', fontSize: 13 },
-  yearPromptTeaser: { color: 'rgba(255,255,255,0.9)', fontSize: 16, fontStyle: 'italic', lineHeight: 22, fontWeight: '500' },
-  yearPreviewStrip: { flexDirection: 'row', alignItems: 'center' },
-  yearPreviewThumb: { width: 44, height: 44, borderRadius: 8, borderWidth: 2, borderColor: 'rgba(0,0,0,0.5)' },
-  yearPreviewMore: { width: 44, height: 44, borderRadius: 8, backgroundColor: 'rgba(155,114,255,0.7)', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'rgba(0,0,0,0.5)' },
-  yearPreviewMoreText: { color: '#ffffff', fontWeight: '700', fontSize: 12 },
+  yearDateLabel: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
+  yearCardPhotoCount: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  yearMemoryCount: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
 
   // People section
   peopleSection: { paddingHorizontal: 16, paddingTop: 16, marginBottom: 8 },
@@ -1102,26 +1098,27 @@ const styles = StyleSheet.create({
   personBubbleAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#9b72ff', justifyContent: 'center', alignItems: 'center', marginBottom: 6, overflow: 'hidden' },
   personBubblePhoto: { width: 52, height: 52, borderRadius: 26 },
   personBubbleInitial: { color: '#ffffff', fontSize: 22, fontWeight: 'bold' },
-  personBubbleName: { color: '#cccccc', fontSize: 11, textAlign: 'center' },
+  personBubbleName: { color: 'rgba(255,255,255,0.6)', fontSize: 11, textAlign: 'center' },
 
   // Vault calendar
   yearPickerStrip: { maxHeight: 56 },
   yearPickerContent: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
-  yearPickerItem: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 20, backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a' },
-  yearPickerItemActive: { backgroundColor: '#9b72ff', borderColor: '#9b72ff' },
-  yearPickerText: { fontSize: 16, fontWeight: '700', color: '#555555' },
+  yearPickerItem: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  yearPickerItemActive: { backgroundColor: '#9b72ff', borderColor: 'rgba(255,255,255,0.4)' },
+  yearPickerText: { fontSize: 16, fontWeight: '700', color: 'rgba(255,255,255,0.35)' },
   yearPickerTextActive: { color: '#ffffff' },
   calendarMonth: { paddingHorizontal: 16, marginBottom: 32 },
-  calendarMonthTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 12 },
-  calendarDayHeaders: { flexDirection: 'row', marginBottom: 6 },
-  calendarDayHeader: { width: THUMB_SIZE, textAlign: 'center', fontSize: 11, color: '#555555', fontWeight: '600' },
+  calendarMonthTitle: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.7)', marginBottom: 12, letterSpacing: 0.5, textTransform: 'uppercase' },
+  calendarDayHeaders: { flexDirection: 'row', marginBottom: 4 },
+  calendarDayHeader: { width: THUMB_SIZE, textAlign: 'center', fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: '600' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calendarCell: { width: THUMB_SIZE, height: THUMB_SIZE, padding: 2 },
-  calendarCellFilled: { flex: 1, borderRadius: 6, overflow: 'hidden', backgroundColor: '#1a1a1a' },
-  calendarThumb: { width: '100%', height: '100%', position: 'absolute' },
-  calendarDayNumber: { position: 'absolute', bottom: 2, right: 3, fontSize: 11, color: '#9b72ff', fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 } },
-  calendarCellEmpty: { flex: 1, borderRadius: 6, backgroundColor: '#111111', justifyContent: 'center', alignItems: 'center' },
-  calendarDayNumberEmpty: { fontSize: 11, color: '#2a2a2a' },
+  calendarCellFilled: { flex: 1, borderRadius: 8, overflow: 'hidden' },
+  calendarThumb: { width: '100%', height: '100%' },
+  calendarCellEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  calendarEmptyCircle: { width: THUMB_SIZE * 0.68, height: THUMB_SIZE * 0.68, borderRadius: THUMB_SIZE * 0.34, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)' },
+  calendarTodayRing: { borderWidth: 1.5, borderColor: '#ffffff', backgroundColor: 'rgba(255,255,255,0.08)' },
+  calendarDayNumberEmpty: { fontSize: 10, color: 'rgba(255,255,255,0.3)' },
 
   // Day detail modal
   dayModal: { flex: 1, backgroundColor: '#0d0a14' },
@@ -1132,71 +1129,71 @@ const styles = StyleSheet.create({
   dayYearBadgeText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
   dayDateText: { fontSize: 18, fontWeight: '700', color: '#ffffff', flex: 1, flexWrap: 'wrap' },
   sectionTitle: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
-  sectionSubtitle: { fontSize: 13, color: '#555555', marginBottom: 16, fontStyle: 'italic' },
-  saveDayButton: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(155,114,255,0.4)', marginBottom: 20 },
-  saveDayButtonSaved: { backgroundColor: 'rgba(155,114,255,0.25)', borderColor: '#9b72ff' },
+  sectionSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 16, fontStyle: 'italic' },
+  saveDayButton: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', marginBottom: 20 },
+  saveDayButtonSaved: { backgroundColor: 'rgba(155,114,255,0.25)', borderColor: 'rgba(255,255,255,0.4)' },
   saveDayButtonText: { color: '#9b72ff', fontWeight: '700', fontSize: 15 },
-  contextCard: { backgroundColor: '#1a1a1a', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#2a2a2a' },
+  contextCard: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   contextLabel: { fontSize: 10, color: '#9b72ff', fontWeight: '800', letterSpacing: 2, marginBottom: 6 },
   contextAnswer: { fontSize: 15, color: '#ffffff', lineHeight: 22 },
-  contextPlaceholder: { fontSize: 14, color: '#333333', fontStyle: 'italic' },
-  dayPhotoCard: { marginBottom: 16, backgroundColor: '#1a1a1a', borderRadius: 16, overflow: 'hidden' },
+  contextPlaceholder: { fontSize: 14, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' },
+  dayPhotoCard: { marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, overflow: 'hidden' },
   photoMenuButton: { position: 'absolute', top: 10, right: 10, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 4 },
   photoMenuDots: { color: '#ffffff', fontSize: 16, fontWeight: '700', letterSpacing: 2 },
   coverBadge: { position: 'absolute', top: 10, left: 10, zIndex: 10, backgroundColor: 'rgba(155,114,255,0.8)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 },
   coverBadgeText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
   dayPhotoImage: { width: '100%', height: 220 },
-  videoPlaceholder: { backgroundColor: '#1a1a2e', justifyContent: 'center', alignItems: 'center' },
+  videoPlaceholder: { backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
   videoPlaceholderText: { color: '#ffffff', fontSize: 18 },
   dayPhotoInfo: { padding: 14 },
-  dayPhotoType: { fontSize: 12, color: '#666666', marginBottom: 6 },
+  dayPhotoType: { fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 6 },
   dayPhotoCaption: { fontSize: 15, color: '#ffffff', fontStyle: 'italic', marginBottom: 10, lineHeight: 22 },
   peopleTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  personTag: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 20, paddingVertical: 4, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(155,114,255,0.3)' },
+  personTag: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 20, paddingVertical: 4, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   personTagText: { color: '#9b72ff', fontSize: 12, fontWeight: '600' },
-  addCaptionButton: { borderWidth: 1, borderColor: '#333333', borderRadius: 10, padding: 10, alignItems: 'center' },
-  addCaptionButtonSaved: { borderColor: 'rgba(155,114,255,0.4)', backgroundColor: 'rgba(155,114,255,0.1)' },
-  addCaptionText: { color: '#666666', fontSize: 14 },
-  dayModalClose: { margin: 16, backgroundColor: '#1a1a1a', borderRadius: 14, padding: 16, alignItems: 'center' },
+  addCaptionButton: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 10, padding: 10, alignItems: 'center' },
+  addCaptionButtonSaved: { borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(155,114,255,0.1)' },
+  addCaptionText: { color: 'rgba(255,255,255,0.35)', fontSize: 14 },
+  dayModalClose: { margin: 16, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 16, alignItems: 'center' },
   dayModalCloseText: { color: '#ffffff', fontWeight: '600', fontSize: 16 },
 
   // Three dot menu
   menuOverlay: { flex: 1, justifyContent: 'flex-end' },
-  menuBox: { backgroundColor: 'rgba(22,18,32,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(155,114,255,0.2)' },
-  menuTitle: { fontSize: 16, color: '#666666', fontWeight: '600', marginBottom: 16, textAlign: 'center' },
-  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#2a2a2a' },
+  menuBox: { backgroundColor: 'rgba(22,18,32,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  menuTitle: { fontSize: 16, color: 'rgba(255,255,255,0.35)', fontWeight: '600', marginBottom: 16, textAlign: 'center' },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.4)' },
   menuItemDanger: { borderBottomWidth: 0 },
   menuItemEmoji: { fontSize: 22 },
   menuItemText: { fontSize: 16, color: '#ffffff', fontWeight: '600', marginBottom: 2 },
   menuItemTextDanger: { color: '#ff4444' },
-  menuItemSub: { fontSize: 12, color: '#555555' },
-  menuCancel: { marginTop: 12, backgroundColor: '#2a2a2a', borderRadius: 12, padding: 14, alignItems: 'center' },
+  menuItemSub: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
+  menuCancel: { marginTop: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, alignItems: 'center' },
   menuCancelText: { color: '#ffffff', fontWeight: '600', fontSize: 15 },
 
   // Modals — glass effect
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalBox: { backgroundColor: 'rgba(18,14,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(155,114,255,0.15)' },
+  modalBox: { backgroundColor: 'rgba(18,14,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginBottom: 6, letterSpacing: -0.3 },
-  modalSubtitle: { fontSize: 14, color: '#666666', marginBottom: 10 },
-  textInput: { backgroundColor: '#2a2a2a', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
+  modalSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.35)', marginBottom: 10 },
+  textInput: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
   saveButton: { backgroundColor: '#9b72ff', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
   saveButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
   cancelButton: { alignItems: 'center', padding: 10 },
-  cancelButtonText: { color: '#555555', fontSize: 15 },
+  cancelButtonText: { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
   fullScreenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   fullScreenImage: { width: '100%', height: '72%' },
   fullScreenCaption: { color: '#ffffff', fontSize: 15, fontStyle: 'italic', textAlign: 'center', lineHeight: 22, marginTop: 8, paddingHorizontal: 32 },
-  fullScreenDismiss: { color: '#555555', fontSize: 13, marginTop: 12 },
+  fullScreenDismiss: { color: 'rgba(255,255,255,0.35)', fontSize: 13, marginTop: 12 },
 
   // Vault day full view
-  vaultDayModal: { flex: 1, backgroundColor: '#0d0a14' },
+  vaultDayModal: { flex: 1, backgroundColor: '#6b35d4' },
   vaultDayHero: { width: '100%', height: 280 },
   vaultDayContent: { padding: 20, paddingBottom: 160 },
   vaultDayDate: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 12, letterSpacing: -0.5 },
   vaultDayChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  vaultDayChip: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(155,114,255,0.3)' },
+  vaultDayChip: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   vaultDayChipText: { color: '#9b72ff', fontSize: 14, fontWeight: '600' },
-  vaultDaySection: { marginBottom: 24, borderTopWidth: 1, borderTopColor: '#1a1a1a', paddingTop: 16 },
+  vaultDaySection: { marginBottom: 24, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.4)', paddingTop: 16 },
   vaultDaySectionTitle: { fontSize: 16, fontWeight: '700', color: '#ffffff', marginBottom: 12 },
   vaultDayContextRow: { marginBottom: 12 },
   vaultDayContextLabel: { fontSize: 10, color: '#9b72ff', fontWeight: '800', letterSpacing: 2, marginBottom: 4 },
@@ -1204,39 +1201,39 @@ const styles = StyleSheet.create({
   vaultDayPhotoStrip: { gap: 12, paddingRight: 16 },
   vaultDayPhotoItem: { width: 220 },
   vaultDayPhotoThumb: { width: 220, height: 220, borderRadius: 14, marginBottom: 8 },
-  vaultDayPhotoCaption: { fontSize: 13, color: '#cccccc', fontStyle: 'italic', lineHeight: 18 },
+  vaultDayPhotoCaption: { fontSize: 13, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', lineHeight: 18 },
   vaultDayPhotoPeople: { fontSize: 12, color: '#9b72ff', marginTop: 4 },
-  vaultDayActions: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, gap: 10, backgroundColor: '#0d0a14', borderTopWidth: 1, borderTopColor: '#1a1a1a' },
-  vaultDayEditButton: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(155,114,255,0.4)' },
+  vaultDayActions: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, gap: 10, backgroundColor: '#6b35d4', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.4)' },
+  vaultDayEditButton: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   vaultDayEditButtonText: { color: '#9b72ff', fontWeight: '700', fontSize: 15 },
 
   // Vault context editing
   vaultEditOverlay: { flex: 1, justifyContent: 'flex-end' },
-  vaultEditBox: { backgroundColor: 'rgba(18,14,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 48, maxHeight: '80%', borderWidth: 1, borderColor: 'rgba(155,114,255,0.2)' },
+  vaultEditBox: { backgroundColor: 'rgba(18,14,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 48, maxHeight: '80%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   vaultEditTitle: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
-  vaultEditSubtitle: { fontSize: 13, color: '#666666', marginBottom: 20 },
-  vaultEditField: { backgroundColor: '#2a2a2a', borderRadius: 12, padding: 14, marginBottom: 10 },
+  vaultEditSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 20 },
+  vaultEditField: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, marginBottom: 10 },
   vaultEditLabel: { fontSize: 10, color: '#9b72ff', fontWeight: '800', letterSpacing: 2, marginBottom: 6 },
   vaultEditValue: { fontSize: 15, color: '#ffffff', lineHeight: 22 },
-  vaultEditPlaceholder: { fontSize: 14, color: '#333333', fontStyle: 'italic' },
+  vaultEditPlaceholder: { fontSize: 14, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' },
   vaultEditClose: { backgroundColor: '#9b72ff', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 8 },
   vaultEditCloseText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
 
   // Person profile modal
-  personModal: { flex: 1, backgroundColor: '#0d0a14' },
+  personModal: { flex: 1, backgroundColor: '#6b35d4' },
   personProfileHeader: { alignItems: 'center', paddingTop: 60, paddingBottom: 24, paddingHorizontal: 24 },
   personProfileAvatarWrap: { position: 'relative', marginBottom: 16 },
   personProfilePhoto: { width: 100, height: 100, borderRadius: 50 },
   personProfileAvatarInner: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#9b72ff', justifyContent: 'center', alignItems: 'center' },
   personProfileInitial: { color: '#ffffff', fontSize: 40, fontWeight: 'bold' },
-  personProfileEditBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 4, borderWidth: 2, borderColor: '#0d0a14' },
+  personProfileEditBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, padding: 4, borderWidth: 2, borderColor: '#110a1f' },
   personProfileEditText: { fontSize: 16 },
   personProfileName: { fontSize: 26, fontWeight: '800', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
-  personProfileDays: { fontSize: 14, color: '#666666' },
+  personProfileDays: { fontSize: 14, color: 'rgba(255,255,255,0.35)' },
   personGallerySection: { paddingHorizontal: 16, paddingBottom: 100 },
   personGalleryTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 12 },
   personGalleryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   personGalleryItem: { width: '47%' },
   personGalleryThumb: { width: '100%', height: 160, borderRadius: 12, marginBottom: 4 },
-  personGalleryCaption: { fontSize: 11, color: '#888888', textAlign: 'center', fontStyle: 'italic' },
+  personGalleryCaption: { fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center', fontStyle: 'italic' },
 });

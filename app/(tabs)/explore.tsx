@@ -17,6 +17,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -49,6 +50,7 @@ type DayEntry = {
   songName: string; songRating: number; songMeaning: string;
   withWho: string; taggedPeople: string[]; voiceMemoUri: string;
   openedCapsules: { id: string; message: string; photoUri: string; createdDate: string }[];
+  sealedCapsules: { id: string; openDate: string; context: string }[];
 };
 
 type Favourite = {
@@ -64,7 +66,7 @@ type Capsule = {
 const emptyEntry: DayEntry = {
   mood: '', dayDescription: '', weatherEmoji: '', weatherDescription: '',
   weatherTemp: 0, photoUri: '', extraPhotos: [], highlight: '', learned: '',
-  songName: '', songRating: 0, songMeaning: '', withWho: '', taggedPeople: [], voiceMemoUri: '', openedCapsules: [],
+  songName: '', songRating: 0, songMeaning: '', withWho: '', taggedPeople: [], voiceMemoUri: '', openedCapsules: [], sealedCapsules: [],
 };
 
 const moods = [
@@ -180,6 +182,10 @@ export default function ThePresent() {
   const [capsuleDay, setCapsuleDay] = useState(new Date().getDate());
   const [capsuleMonth, setCapsuleMonth] = useState(new Date().getMonth() + 1);
   const [capsuleYear, setCapsuleYear] = useState(new Date().getFullYear() + 1);
+  const [capsuleAddToDay, setCapsuleAddToDay] = useState(false);
+  const [capsuleContext, setCapsuleContext] = useState('');
+  const [todaySelfieUri, setTodaySelfieUri] = useState<string | null>(null);
+  const [selectedDaySelfieUri, setSelectedDaySelfieUri] = useState<string | null>(null);
 
   const today = new Date();
   const dateString = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -225,7 +231,17 @@ export default function ThePresent() {
       const parsed = JSON.parse(saved);
       setEntry({ ...emptyEntry, ...parsed, extraPhotos: parsed.extraPhotos || [], taggedPeople: parsed.taggedPeople || [] });
     }
+    const selfieUri = await AsyncStorage.getItem(`selfie_${todayKey}`);
+    if (selfieUri) setTodaySelfieUri(selfieUri);
   };
+
+  useEffect(() => {
+    if (selectedDay?.key) {
+      AsyncStorage.getItem(`selfie_${selectedDay.key}`).then(uri => setSelectedDaySelfieUri(uri || null));
+    } else {
+      setSelectedDaySelfieUri(null);
+    }
+  }, [selectedDay]);
 
   const saveEntry = async (updated: DayEntry) => {
     setEntry(updated);
@@ -243,7 +259,7 @@ export default function ThePresent() {
         if (parsed.photoUri || parsed.mood || parsed.highlight || parsed.learned || parsed.songName) {
           days.push({
             key: key.replace('day_entry_', ''),
-            entry: { ...emptyEntry, ...parsed, extraPhotos: parsed.extraPhotos || [], taggedPeople: parsed.taggedPeople || [], openedCapsules: parsed.openedCapsules || [] }
+            entry: { ...emptyEntry, ...parsed, extraPhotos: parsed.extraPhotos || [], taggedPeople: parsed.taggedPeople || [], openedCapsules: parsed.openedCapsules || [], sealedCapsules: parsed.sealedCapsules || [] }
           });
         }
       }
@@ -434,11 +450,26 @@ export default function ThePresent() {
       photoUri: newCapsulePhoto, createdDate: todayKey, openDate, opened: false,
     };
     await saveCapsules([...capsules, capsule]);
-    setNewCapsuleMessage(''); setNewCapsulePhoto(''); setShowCreateCapsule(false);
+    if (capsuleAddToDay) {
+      const savedEntry = await AsyncStorage.getItem(`day_entry_${todayKey}`);
+      const existing = savedEntry ? JSON.parse(savedEntry) : emptyEntry;
+      const updatedEntry = {
+        ...emptyEntry, ...existing,
+        extraPhotos: existing.extraPhotos || [],
+        taggedPeople: existing.taggedPeople || [],
+        openedCapsules: existing.openedCapsules || [],
+        sealedCapsules: [...(existing.sealedCapsules || []), {
+          id: capsule.id, openDate: capsule.openDate, context: capsuleContext.trim(),
+        }],
+      };
+      await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(updatedEntry));
+    }
+    setNewCapsuleMessage(''); setNewCapsulePhoto(''); setCapsuleAddToDay(false); setCapsuleContext('');
+    setShowCreateCapsule(false);
     Alert.alert('Sealed! 🔒', `Opens on ${new Date(openDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.`);
   };
 
-  const markCapsuleOpened = async (capsule: Capsule) => {
+  const addCapsuleToDay = async (capsule: Capsule) => {
     const updated = capsules.map(c => c.id === capsule.id ? { ...c, opened: true } : c);
     await saveCapsules(updated);
     const savedEntry = await AsyncStorage.getItem(`day_entry_${todayKey}`);
@@ -447,11 +478,10 @@ export default function ThePresent() {
       ...emptyEntry, ...existing,
       extraPhotos: existing.extraPhotos || [],
       taggedPeople: existing.taggedPeople || [],
+      sealedCapsules: existing.sealedCapsules || [],
       openedCapsules: [...(existing.openedCapsules || []), {
-        id: capsule.id,
-        message: capsule.message,
-        photoUri: capsule.photoUri,
-        createdDate: capsule.createdDate,
+        id: capsule.id, message: capsule.message,
+        photoUri: capsule.photoUri, createdDate: capsule.createdDate,
       }],
     };
     await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(updatedEntry));
@@ -534,15 +564,17 @@ export default function ThePresent() {
             <Text style={styles.headerSubtitle}>Today's entry becomes tomorrow's flashback.</Text>
           </View>
 
-          {/* Selfie card — animated */}
-          <AnimatedCard onPress={() => router.push('/(tabs)/selfie')} style={styles.selfieCard}>
-            <Text style={styles.selfieEmoji}>🤳</Text>
-            <View style={styles.selfieText}>
-              <Text style={styles.selfieTitle}>Today's selfie</Text>
-              <Text style={styles.selfieSubtitle}>See how much you change over a year</Text>
-            </View>
-            <Text style={styles.selfieArrow}>→</Text>
-          </AnimatedCard>
+          {/* Selfie section */}
+          <TouchableOpacity style={styles.selfieSectionToday} onPress={() => router.push('/(tabs)/selfie')} activeOpacity={0.85}>
+            {todaySelfieUri ? (
+              <Image source={{ uri: todaySelfieUri }} style={styles.selfiePhotoToday} resizeMode="cover" />
+            ) : (
+              <View style={styles.selfiePlaceholderToday}>
+                <Text style={styles.selfiePlaceholderEmoji}>🤳</Text>
+                <Text style={styles.selfiePlaceholderText}>Add today's selfie</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
           <View style={styles.photoSection}>
             <TouchableOpacity style={styles.photoCard} onPress={() => pickPhoto(false)}>
@@ -609,7 +641,7 @@ export default function ThePresent() {
             </View>
           </View>
 
-          <View style={styles.voiceCard}>
+          <View style={styles.compactCard}>
             <Text style={styles.cardLabel}>VOICE MEMO</Text>
             <Text style={styles.voicePrompt}>Tell me about your day...</Text>
             {entry.voiceMemoUri ? (
@@ -630,20 +662,23 @@ export default function ThePresent() {
             )}
           </View>
 
-          {/* Entry cards — animated */}
-          <AnimatedCard onPress={() => openModal('highlight', entry.highlight)} style={styles.entryCard}>
-            <Text style={styles.cardLabel}>TODAY'S HIGHLIGHT</Text>
-            <Text style={styles.entryPrompt}>{highlightPrompt}</Text>
-            {entry.highlight ? <Text style={styles.entryAnswer}>"{entry.highlight}"</Text> : <Text style={styles.entryAddText}>+ Write something</Text>}
+          {/* Featured daily prompt */}
+          <AnimatedCard onPress={() => openModal('highlight', entry.highlight)} style={styles.featuredCard}>
+            <Text style={styles.featuredCardLabel}>TODAY'S PROMPT</Text>
+            <Text style={styles.featuredPromptText}>{highlightPrompt}</Text>
+            {entry.highlight
+              ? <Text style={styles.featuredAnswer}>"{entry.highlight}"</Text>
+              : <Text style={styles.featuredAddText}>Write your answer →</Text>}
           </AnimatedCard>
 
-          <AnimatedCard onPress={() => openModal('learned', entry.learned)} style={styles.entryCard}>
+          {/* Compact entry cards */}
+          <AnimatedCard onPress={() => openModal('learned', entry.learned)} style={styles.compactCard}>
             <Text style={styles.cardLabel}>WHAT I LEARNED</Text>
             <Text style={styles.entryPrompt}>{learnPrompt}</Text>
             {entry.learned ? <Text style={styles.entryAnswer}>"{entry.learned}"</Text> : <Text style={styles.entryAddText}>+ Write something</Text>}
           </AnimatedCard>
 
-          <AnimatedCard onPress={() => openModal('song', entry.songName, entry.songRating)} style={styles.entryCard}>
+          <AnimatedCard onPress={() => openModal('song', entry.songName, entry.songRating)} style={styles.compactCard}>
             <Text style={styles.cardLabel}>TODAY'S SONG</Text>
             {entry.songName ? (
               <View>
@@ -663,7 +698,7 @@ export default function ThePresent() {
             )}
           </AnimatedCard>
 
-          <AnimatedCard onPress={() => setShowPeopleModal(true)} style={styles.entryCard}>
+          <AnimatedCard onPress={() => setShowPeopleModal(true)} style={styles.compactCard}>
             <Text style={styles.cardLabel}>WHO I WAS WITH</Text>
             {(entry.taggedPeople || []).length > 0 ? (
               <View>
@@ -739,7 +774,7 @@ export default function ThePresent() {
             </TouchableOpacity>
           </View>
 
-          <View style={{ height: 40 }} />
+          <View style={{ height: 100 }} />
         </ScrollView>
       )}
 
@@ -856,6 +891,9 @@ export default function ThePresent() {
       <Modal visible={selectedDay !== null} animationType="slide">
         <View style={styles.dayModal}>
           <ScrollView showsVerticalScrollIndicator={false}>
+            {selectedDaySelfieUri && (
+              <Image source={{ uri: selectedDaySelfieUri }} style={styles.daySelfiePhoto} resizeMode="cover" />
+            )}
             {selectedDay?.entry.photoUri ? (
               <TouchableOpacity onPress={() => setFullScreenUri(selectedDay.entry.photoUri)}>
                 <Image source={{ uri: selectedDay.entry.photoUri }} style={styles.dayModalPhoto} />
@@ -911,14 +949,18 @@ export default function ThePresent() {
                   </TouchableOpacity>
                 </View>
               ) : null}
-              {(selectedDay?.entry.openedCapsules?.length ?? 0) > 0 && (
+              {((selectedDay?.entry.sealedCapsules?.length ?? 0) > 0 || (selectedDay?.entry.openedCapsules?.length ?? 0) > 0) && (
                 <View style={styles.dayModalSection}>
-                  <Text style={styles.dayModalLabel}>🎁 CAPSULE OPENED</Text>
+                  <Text style={styles.dayModalLabel}>📬 CAPSULES</Text>
+                  {(selectedDay?.entry.sealedCapsules ?? []).map((cap, i) => (
+                    <View key={`sealed-${i}`} style={styles.capsuleSealedRecord}>
+                      <Text style={styles.capsuleRecordMeta}>Capsule sealed · Opens {new Date(cap.openDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+                      {cap.context ? <Text style={styles.capsuleRecordContext}>{cap.context}</Text> : null}
+                    </View>
+                  ))}
                   {(selectedDay?.entry.openedCapsules ?? []).map((cap, i) => (
-                    <View key={i} style={styles.capsuleOpenedRecord}>
-                      <Text style={styles.capsuleOpenedMeta}>
-                        Sealed {new Date(cap.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </Text>
+                    <View key={`opened-${i}`} style={styles.capsuleOpenedRecord}>
+                      <Text style={styles.capsuleRecordMeta}>Capsule opened · Written on {new Date(cap.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
                       <Text style={styles.capsuleOpenedMessage}>"{cap.message}"</Text>
                       {cap.photoUri ? <Image source={{ uri: cap.photoUri }} style={styles.capsuleOpenedPhoto} /> : null}
                     </View>
@@ -1076,8 +1118,27 @@ export default function ThePresent() {
               </View>
             </View>
             <Text style={styles.capsuleDatePreview}>Opens on {MONTH_NAMES[capsuleMonth - 1]} {Math.min(capsuleDay, capsuleMaxDay)}, {capsuleYear}</Text>
+            <View style={styles.capsuleToggleRow}>
+              <Text style={styles.capsuleToggleLabel}>Add to today's entry</Text>
+              <Switch
+                value={capsuleAddToDay}
+                onValueChange={setCapsuleAddToDay}
+                trackColor={{ false: 'rgba(255,255,255,0.2)', true: '#4a90d9' }}
+                thumbColor="#ffffff"
+              />
+            </View>
+            {capsuleAddToDay && (
+              <TextInput
+                style={styles.addFavInput}
+                placeholder="Why are you writing this today? (optional)"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                multiline
+                value={capsuleContext}
+                onChangeText={setCapsuleContext}
+              />
+            )}
             <TouchableOpacity style={styles.addFavSave} onPress={createCapsule}><Text style={styles.addFavSaveText}>🔒 Seal Capsule</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.addFavCancel} onPress={() => { setNewCapsuleMessage(''); setNewCapsulePhoto(''); setShowCreateCapsule(false); }}>
+            <TouchableOpacity style={styles.addFavCancel} onPress={() => { setNewCapsuleMessage(''); setNewCapsulePhoto(''); setCapsuleAddToDay(false); setCapsuleContext(''); setShowCreateCapsule(false); }}>
               <Text style={styles.addFavCancelText}>Cancel</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -1098,12 +1159,14 @@ export default function ThePresent() {
               {revealingCapsule?.photoUri ? <Image source={{ uri: revealingCapsule.photoUri }} style={styles.capsuleRevealPhoto} /> : null}
               <Text style={styles.capsuleRevealText}>{revealingCapsule?.message}</Text>
             </ScrollView>
-            <TouchableOpacity style={styles.addFavSave} onPress={() => revealingCapsule && markCapsuleOpened(revealingCapsule)}>
-              <Text style={styles.addFavSaveText}>Mark as opened ✓</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.addFavCancel} onPress={() => setRevealingCapsule(null)}>
-              <Text style={styles.addFavCancelText}>Close</Text>
-            </TouchableOpacity>
+            <View style={styles.capsuleRevealButtons}>
+              <TouchableOpacity style={[styles.addFavSave, { flex: 1 }]} onPress={() => revealingCapsule && addCapsuleToDay(revealingCapsule)}>
+                <Text style={styles.addFavSaveText}>Add to today's day</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.addFavCancel, { flex: 1 }]} onPress={() => setRevealingCapsule(null)}>
+                <Text style={styles.addFavCancelText}>Close</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1164,97 +1227,103 @@ export default function ThePresent() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#090d14' },
+  outerContainer: { flex: 1, backgroundColor: '#1a4fd4' },
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#090d14' },
-  headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 2 },
-  headerDate: { fontSize: 20, fontWeight: '700', color: '#ffffff', marginBottom: 16, letterSpacing: -0.3 },
-  tabSwitcher: { flexDirection: 'row', backgroundColor: '#1a1a1a', borderRadius: 12, padding: 4 },
+  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#1a4fd4' },
+  headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 2, textAlign: 'center' },
+  headerDate: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 16, letterSpacing: -0.5, textAlign: 'center' },
+  tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  tabButtonActive: { backgroundColor: '#4a90d9' },
-  tabButtonText: { fontSize: 13, fontWeight: '600', color: '#555555' },
-  tabButtonTextActive: { color: '#ffffff' },
+  tabButtonActive: { backgroundColor: '#ffffff' },
+  tabButtonText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
+  tabButtonTextActive: { color: '#1a4fd4' },
   subHeader: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 },
-  headerSubtitle: { fontSize: 13, color: '#555555', fontStyle: 'italic' },
-  selfieCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 18, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#2a2a2a' },
-  selfieEmoji: { fontSize: 28, marginRight: 14 },
-  selfieText: { flex: 1 },
-  selfieTitle: { fontSize: 16, fontWeight: '600', color: '#ffffff', marginBottom: 2 },
-  selfieSubtitle: { fontSize: 12, color: '#666666' },
-  selfieArrow: { color: '#555555', fontSize: 16 },
+  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' },
   photoSection: { marginHorizontal: 16, marginBottom: 16 },
-  photoCard: { borderRadius: 16, overflow: 'hidden', backgroundColor: '#1a1a1a' },
+  photoCard: { borderRadius: 16, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.05)' },
   todayPhoto: { width: '100%', height: 240 },
   photoEditOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', padding: 10, alignItems: 'center' },
   photoEditText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
-  photoPlaceholder: { padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 16, borderStyle: 'dashed' },
+  photoPlaceholder: { padding: 32, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 16, borderStyle: 'dashed' },
   photoPlaceholderEmoji: { fontSize: 36, marginBottom: 10 },
   photoPlaceholderTitle: { fontSize: 16, fontWeight: '600', color: '#ffffff', marginBottom: 6 },
-  photoPlaceholderSubtitle: { fontSize: 13, color: '#555555', textAlign: 'center' },
+  photoPlaceholderSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
   extraStrip: { marginTop: 10 },
   extraStripContent: { gap: 8, paddingRight: 8 },
   extraPhoto: { width: 80, height: 80, borderRadius: 10 },
-  addExtraButton: { width: 80, height: 80, borderRadius: 10, backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' },
+  addExtraButton: { width: 80, height: 80, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center' },
   addExtraText: { color: '#4a90d9', fontSize: 28, fontWeight: '300' },
   row: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, gap: 12 },
-  moodCard: { flex: 1, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#2a2a2a' },
-  weatherCard: { width: 100, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#2a2a2a', alignItems: 'center' },
+  moodCard: { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  weatherCard: { width: 100, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center' },
   cardLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '800', letterSpacing: 2, marginBottom: 10 },
   moodRow: { flexDirection: 'row', gap: 4, marginBottom: 8 },
-  moodButton: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: '#2a2a2a' },
+  moodButton: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)' },
   moodButtonActive: { backgroundColor: '#4a90d9' },
   moodEmoji: { fontSize: 17 },
   moodSelected: { fontSize: 11, color: '#4a90d9', fontWeight: '600', marginBottom: 8 },
-  moodPrompt: { fontSize: 11, color: '#555555', marginBottom: 8 },
-  dayDescButton: { marginTop: 4, padding: 8, backgroundColor: '#2a2a2a', borderRadius: 8 },
-  dayDescText: { fontSize: 12, color: '#cccccc', fontStyle: 'italic', lineHeight: 18 },
-  dayDescPlaceholder: { fontSize: 12, color: '#444444' },
+  moodPrompt: { fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 8 },
+  dayDescButton: { marginTop: 4, padding: 8, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 8 },
+  dayDescText: { fontSize: 12, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', lineHeight: 18 },
+  dayDescPlaceholder: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
   weatherContent: { alignItems: 'center' },
   weatherEmoji: { fontSize: 28, marginBottom: 4 },
   weatherTemp: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', marginBottom: 2 },
-  weatherDesc: { fontSize: 10, color: '#666666', textAlign: 'center' },
-  voiceCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: '#2a2a2a' },
-  voicePrompt: { fontSize: 15, color: '#cccccc', marginBottom: 14 },
-  voiceRecordButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2a2a2a', borderRadius: 12, padding: 14, gap: 10 },
+  weatherDesc: { fontSize: 10, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
+  voiceCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  voicePrompt: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 14 },
+  selfieSectionToday: { marginHorizontal: 16, marginBottom: 16, borderRadius: 16, overflow: 'hidden', height: 200 },
+  selfiePhotoToday: { width: '100%', height: '100%' },
+  selfiePlaceholderToday: { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 16, justifyContent: 'center', alignItems: 'center', gap: 8, height: 200 },
+  selfiePlaceholderEmoji: { fontSize: 32 },
+  selfiePlaceholderText: { color: 'rgba(255,255,255,0.5)', fontSize: 15, fontWeight: '500' },
+  daySelfiePhoto: { width: '100%', height: 240, marginBottom: 2 },
+  featuredCard: { marginHorizontal: 16, marginBottom: 24, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 20, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', minHeight: 140 },
+  featuredCardLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '800', letterSpacing: 2, marginBottom: 14 },
+  featuredPromptText: { fontSize: 22, fontWeight: '700', color: '#ffffff', lineHeight: 30, marginBottom: 16, letterSpacing: -0.3 },
+  featuredAnswer: { fontSize: 16, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 24 },
+  featuredAddText: { color: 'rgba(255,255,255,0.4)', fontSize: 15, fontWeight: '500' },
+  compactCard: { marginHorizontal: 16, marginBottom: 22, paddingVertical: 16, paddingHorizontal: 18, borderLeftWidth: 3, borderLeftColor: 'rgba(74,144,217,0.6)', borderTopRightRadius: 8, borderBottomRightRadius: 8, backgroundColor: 'rgba(255,255,255,0.03)' },
+  voiceRecordButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14, gap: 10 },
   voiceRecordButtonActive: { backgroundColor: '#3a1a1a', borderWidth: 1, borderColor: '#ff4444' },
   voiceRecordEmoji: { fontSize: 22 },
-  voiceRecordText: { flex: 1, fontSize: 14, color: '#cccccc' },
+  voiceRecordText: { flex: 1, fontSize: 14, color: 'rgba(255,255,255,0.6)' },
   recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ff4444' },
   voiceControls: { gap: 10 },
   voicePlayButton: { backgroundColor: '#4a90d9', borderRadius: 12, padding: 12, alignItems: 'center' },
   voicePlayText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
-  voiceRerecordButton: { borderWidth: 1, borderColor: '#2a2a2a', borderRadius: 12, padding: 12, alignItems: 'center' },
-  voiceRerecordText: { color: '#666666', fontSize: 14 },
-  entryCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: '#1a1a1a', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: '#2a2a2a' },
-  entryPrompt: { fontSize: 15, color: '#cccccc', marginBottom: 10, lineHeight: 22 },
+  voiceRerecordButton: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 12, padding: 12, alignItems: 'center' },
+  voiceRerecordText: { color: 'rgba(255,255,255,0.35)', fontSize: 14 },
+  entryCard: { marginHorizontal: 16, marginBottom: 22, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  entryPrompt: { fontSize: 15, color: 'rgba(255,255,255,0.6)', marginBottom: 10, lineHeight: 22 },
   entryAnswer: { fontSize: 15, color: '#ffffff', fontStyle: 'italic', lineHeight: 22, marginTop: 4 },
   entryAddText: { color: '#4a90d9', fontSize: 14, fontWeight: '600', marginTop: 4 },
   songName: { fontSize: 16, color: '#ffffff', fontWeight: '600', marginBottom: 10 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
-  ratingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2a2a2a' },
+  ratingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.15)' },
   ratingDotFilled: { backgroundColor: '#4a90d9' },
   ratingNumber: { fontSize: 13, color: '#4a90d9', fontWeight: '600', marginLeft: 4 },
   peopleChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-  personChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 4, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)' },
-  personChipRemovable: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 4, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)' },
+  personChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 4, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  personChipRemovable: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 4, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   personChipText: { color: '#4a90d9', fontSize: 13, fontWeight: '600' },
   personChipRemove: { color: '#4a90d9', fontSize: 12, fontWeight: '600' },
   peopleInputRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  peopleTextInput: { flex: 1, backgroundColor: '#2a2a2a', borderRadius: 10, padding: 12, color: '#ffffff', fontSize: 16 },
+  peopleTextInput: { flex: 1, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 12, color: '#ffffff', fontSize: 16 },
   peopleAddButton: { backgroundColor: '#4a90d9', borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center' },
   peopleAddButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
-  peopleSuggestionsBox: { backgroundColor: '#2a2a2a', borderRadius: 10, marginBottom: 12, overflow: 'hidden' },
-  peopleSuggestion: { padding: 12, borderBottomWidth: 1, borderBottomColor: '#3a3a3a' },
-  peopleSuggestionText: { color: '#cccccc', fontSize: 15 },
+  peopleSuggestionsBox: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, marginBottom: 12, overflow: 'hidden' },
+  peopleSuggestion: { padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.4)' },
+  peopleSuggestionText: { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
   section: { paddingHorizontal: 16, marginBottom: 24 },
   sectionTitle: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
-  sectionSubtitle: { fontSize: 12, color: '#555555', fontStyle: 'italic', marginBottom: 14 },
-  notificationCard: { backgroundColor: '#1a1a1a', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#2a2a2a' },
+  sectionSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', marginBottom: 14 },
+  notificationCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   notificationEmoji: { fontSize: 28, marginRight: 14 },
   notificationText: { flex: 1 },
   notificationTitle: { fontSize: 16, fontWeight: '600', color: '#ffffff', marginBottom: 4 },
-  notificationSubtitle: { fontSize: 13, color: '#666666', lineHeight: 18 },
-  notificationToggle: { backgroundColor: '#2a2a2a', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16 },
+  notificationSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 18 },
+  notificationToggle: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16 },
   notificationToggleOn: { backgroundColor: '#4a90d9' },
   notificationToggleText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
   capsuleReadySection: { marginBottom: 12 },
@@ -1263,116 +1332,116 @@ const styles = StyleSheet.create({
   capsuleReadyEmoji: { fontSize: 28, marginRight: 12 },
   capsuleCardInfo: { flex: 1 },
   capsuleReadyTitle: { fontSize: 15, fontWeight: '600', color: '#f5c842', marginBottom: 2 },
-  capsuleReadyDate: { fontSize: 12, color: '#888888' },
+  capsuleReadyDate: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
   capsuleArrow: { color: '#f5c842', fontSize: 16, marginLeft: 8 },
-  capsuleSealedCard: { backgroundColor: '#1a1a1a', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#2a2a2a', flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  capsuleSealedCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   capsuleSealedEmoji: { fontSize: 24, marginRight: 12 },
-  capsuleSealedTitle: { fontSize: 14, fontWeight: '600', color: '#cccccc', marginBottom: 2 },
-  capsuleSealedDate: { fontSize: 12, color: '#555555' },
-  createCapsuleButton: { borderWidth: 1, borderColor: '#2a2a2a', borderStyle: 'dashed', borderRadius: 14, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 4 },
+  capsuleSealedTitle: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.6)', marginBottom: 2 },
+  capsuleSealedDate: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
+  createCapsuleButton: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderStyle: 'dashed', borderRadius: 14, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 4 },
   createCapsuleEmoji: { fontSize: 20 },
   createCapsuleText: { color: '#4a90d9', fontSize: 15, fontWeight: '600' },
-  capsuleModal: { flex: 1, backgroundColor: '#090d14', padding: 24, paddingTop: 60 },
+  capsuleModal: { flex: 1, backgroundColor: '#1a4fd4', padding: 24, paddingTop: 60 },
   capsuleModalTitle: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 8, letterSpacing: -0.5 },
-  capsuleModalSubtitle: { fontSize: 14, color: '#555555', fontStyle: 'italic', marginBottom: 24 },
-  capsuleDatePicker: { flexDirection: 'row', gap: 12, marginBottom: 8, backgroundColor: '#1a1a1a', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: '#2a2a2a' },
+  capsuleModalSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', marginBottom: 24 },
+  capsuleDatePicker: { flexDirection: 'row', gap: 12, marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   capsuleDateColumn: { flex: 1, alignItems: 'center', gap: 8 },
   capsuleDateArrow: { padding: 4 },
   capsuleDateArrowText: { color: '#4a90d9', fontSize: 26, fontWeight: '300' },
   capsuleDateValue: { fontSize: 18, fontWeight: '700', color: '#ffffff', minWidth: 50, textAlign: 'center' },
   capsuleDatePreview: { fontSize: 13, color: '#4a90d9', textAlign: 'center', marginBottom: 24 },
   capsuleRevealOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  capsuleRevealBox: { backgroundColor: 'rgba(14,18,26,0.98)', borderRadius: 24, padding: 28, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', alignItems: 'center', width: '100%', maxHeight: '85%' },
+  capsuleRevealBox: { backgroundColor: 'rgba(14,18,26,0.98)', borderRadius: 24, padding: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center', width: '100%', maxHeight: '85%' },
   capsuleRevealEmoji: { fontSize: 48, marginBottom: 12 },
   capsuleRevealTitle: { fontSize: 20, fontWeight: '800', color: '#f5c842', marginBottom: 4, textAlign: 'center' },
-  capsuleRevealDate: { fontSize: 13, color: '#666666', marginBottom: 20 },
+  capsuleRevealDate: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 20 },
   capsuleRevealMessage: { width: '100%', marginBottom: 24, maxHeight: 260 },
   capsuleRevealPhoto: { width: '100%', height: 160, borderRadius: 14, marginBottom: 16 },
   capsuleRevealText: { fontSize: 16, color: '#ffffff', lineHeight: 26, fontStyle: 'italic', textAlign: 'center' },
   yearPickerStrip: { maxHeight: 56 },
   yearPickerContent: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
-  yearPickerItem: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 20, backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a' },
-  yearPickerItemActive: { backgroundColor: '#4a90d9', borderColor: '#4a90d9' },
-  yearPickerText: { fontSize: 16, fontWeight: '700', color: '#555555' },
+  yearPickerItem: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  yearPickerItemActive: { backgroundColor: '#4a90d9', borderColor: 'rgba(255,255,255,0.4)' },
+  yearPickerText: { fontSize: 16, fontWeight: '700', color: 'rgba(255,255,255,0.35)' },
   yearPickerTextActive: { color: '#ffffff' },
   archiveCalSubtitle: { paddingHorizontal: 16, paddingVertical: 8 },
-  archiveCalSubtitleText: { fontSize: 13, color: '#555555', fontStyle: 'italic' },
+  archiveCalSubtitleText: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' },
   calendarMonth: { paddingHorizontal: 16, marginBottom: 32 },
   calendarMonthTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 12 },
   calendarDayHeaders: { flexDirection: 'row', marginBottom: 6 },
-  calendarDayHeader: { width: THUMB_SIZE, textAlign: 'center', fontSize: 11, color: '#555555', fontWeight: '600' },
+  calendarDayHeader: { width: THUMB_SIZE, textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: '600' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calendarCell: { width: THUMB_SIZE, height: THUMB_SIZE, padding: 2 },
-  calendarCellFilled: { flex: 1, borderRadius: 6, overflow: 'hidden', backgroundColor: '#1a1a1a' },
+  calendarCellFilled: { flex: 1, borderRadius: 6, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.05)' },
   calendarThumb: { width: '100%', height: '100%', position: 'absolute' },
-  calendarMoodCell: { backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center' },
+  calendarMoodCell: { backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
   calendarMoodEmoji: { fontSize: 18 },
   calendarDayNumber: { position: 'absolute', bottom: 2, right: 3, fontSize: 11, color: '#4a90d9', fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 } },
-  calendarCellEmpty: { flex: 1, borderRadius: 6, backgroundColor: '#111111', justifyContent: 'center', alignItems: 'center' },
-  calendarDayNumberEmpty: { fontSize: 11, color: '#2a2a2a' },
+  calendarCellEmpty: { flex: 1, borderRadius: 6, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
+  calendarDayNumberEmpty: { fontSize: 11, color: 'rgba(255,255,255,0.2)' },
   emptyState: { padding: 40, alignItems: 'center', marginTop: 40 },
   emptyEmoji: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
-  emptySubtitle: { fontSize: 15, color: '#666666', textAlign: 'center', lineHeight: 22 },
+  emptySubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
   favFilterStrip: { maxHeight: 56 },
   favFilterContent: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
-  favFilterPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a' },
-  favFilterPillActive: { backgroundColor: '#4a90d9', borderColor: '#4a90d9' },
+  favFilterPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  favFilterPillActive: { backgroundColor: '#4a90d9', borderColor: 'rgba(255,255,255,0.4)' },
   favFilterEmoji: { fontSize: 14 },
-  favFilterText: { fontSize: 13, fontWeight: '600', color: '#555555' },
+  favFilterText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
   favFilterTextActive: { color: '#ffffff' },
   favGrid: { paddingHorizontal: 16, paddingBottom: 100, gap: 12 },
-  favCard: { backgroundColor: '#1a1a1a', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#2a2a2a', flexDirection: 'row' },
+  favCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', flexDirection: 'row' },
   favPhoto: { width: 100, height: 100 },
-  favPhotoEmpty: { width: 100, height: 100, backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' },
+  favPhotoEmpty: { width: 100, height: 100, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
   favCategoryEmoji: { fontSize: 32 },
   favInfo: { flex: 1, padding: 14, justifyContent: 'center' },
   favInfoTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   favCategoryTag: { fontSize: 11, color: '#4a90d9', fontWeight: '700' },
   favRatingTag: { fontSize: 12, color: '#4a90d9', fontWeight: '700' },
   favName: { fontSize: 16, fontWeight: '700', color: '#ffffff', marginBottom: 4 },
-  favNote: { fontSize: 13, color: '#888888', fontStyle: 'italic', marginBottom: 4, lineHeight: 18 },
-  favDate: { fontSize: 11, color: '#444444' },
+  favNote: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', marginBottom: 4, lineHeight: 18 },
+  favDate: { fontSize: 11, color: 'rgba(255,255,255,0.35)' },
   addFavButton: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#4a90d9', justifyContent: 'center', alignItems: 'center', shadowColor: '#4a90d9', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
   addFavButtonText: { color: '#ffffff', fontSize: 28, fontWeight: '300' },
   favDetailOverlay: { flex: 1, justifyContent: 'flex-end' },
-  favDetailBox: { backgroundColor: 'rgba(14,18,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 48, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)' },
+  favDetailBox: { backgroundColor: 'rgba(14,18,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 48, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   favDetailPhoto: { width: '100%', height: 220, borderRadius: 16, marginBottom: 16 },
-  favDetailPhotoEmpty: { width: '100%', height: 120, backgroundColor: '#2a2a2a', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  favDetailPhotoEmpty: { width: '100%', height: 120, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   favDetailEmoji: { fontSize: 48 },
   favDetailInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   favDetailCategory: { fontSize: 13, color: '#4a90d9', fontWeight: '700' },
   favDetailRating: { fontSize: 16, fontWeight: '800', color: '#4a90d9' },
   favDetailName: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 8, letterSpacing: -0.3 },
-  favDetailNote: { fontSize: 15, color: '#cccccc', fontStyle: 'italic', lineHeight: 22, marginBottom: 8 },
-  favDetailDate: { fontSize: 13, color: '#555555', marginBottom: 20 },
+  favDetailNote: { fontSize: 15, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', lineHeight: 22, marginBottom: 8 },
+  favDetailDate: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 20 },
   favDetailDelete: { alignItems: 'center', padding: 12 },
   favDetailDeleteText: { color: '#ff4444', fontSize: 14 },
-  addFavModal: { flex: 1, backgroundColor: '#090d14', padding: 24, paddingTop: 60 },
+  addFavModal: { flex: 1, backgroundColor: '#1a4fd4', padding: 24, paddingTop: 60 },
   addFavTitle: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 24, letterSpacing: -0.5 },
-  addFavLabel: { fontSize: 13, color: '#888888', fontWeight: '600', marginBottom: 10, marginTop: 16 },
+  addFavLabel: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontWeight: '600', marginBottom: 10, marginTop: 16 },
   addFavCategoryRow: { gap: 8, paddingBottom: 4 },
-  addFavCatPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: '#1a1a1a', borderWidth: 1, borderColor: '#2a2a2a' },
-  addFavCatPillActive: { backgroundColor: '#4a90d9', borderColor: '#4a90d9' },
+  addFavCatPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  addFavCatPillActive: { backgroundColor: '#4a90d9', borderColor: 'rgba(255,255,255,0.4)' },
   addFavCatEmoji: { fontSize: 16 },
-  addFavCatText: { fontSize: 13, fontWeight: '600', color: '#555555' },
+  addFavCatText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
   addFavCatTextActive: { color: '#ffffff' },
   addFavPhotoButton: { borderRadius: 16, overflow: 'hidden', marginBottom: 4 },
   addFavPhotoPreview: { width: '100%', height: 180, borderRadius: 16 },
-  addFavPhotoEmpty: { width: '100%', height: 100, backgroundColor: '#1a1a1a', borderRadius: 16, borderWidth: 1, borderColor: '#2a2a2a', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  addFavPhotoEmpty: { width: '100%', height: 100, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 8 },
   addFavPhotoEmoji: { fontSize: 28 },
-  addFavPhotoText: { color: '#555555', fontSize: 14 },
-  addFavInput: { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, borderWidth: 1, borderColor: '#2a2a2a' },
+  addFavPhotoText: { color: 'rgba(255,255,255,0.35)', fontSize: 14 },
+  addFavInput: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   addFavRatingRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  addFavRatingButton: { width: 40, height: 40, borderRadius: 8, backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#2a2a2a' },
-  addFavRatingButtonActive: { backgroundColor: '#4a90d9', borderColor: '#4a90d9' },
-  addFavRatingText: { color: '#555555', fontWeight: '600', fontSize: 14 },
+  addFavRatingButton: { width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  addFavRatingButtonActive: { backgroundColor: '#4a90d9', borderColor: 'rgba(255,255,255,0.4)' },
+  addFavRatingText: { color: 'rgba(255,255,255,0.35)', fontWeight: '600', fontSize: 14 },
   addFavRatingTextActive: { color: '#ffffff' },
   addFavSave: { backgroundColor: '#4a90d9', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 24, marginBottom: 12 },
   addFavSaveText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
   addFavCancel: { alignItems: 'center', padding: 12, marginBottom: 40 },
-  addFavCancelText: { color: '#555555', fontSize: 15 },
-  dayModal: { flex: 1, backgroundColor: '#090d14' },
+  addFavCancelText: { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
+  dayModal: { flex: 1, backgroundColor: '#1a4fd4' },
   dayModalPhoto: { width: '100%', height: 300 },
   photoTapHint: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.4)', padding: 8, alignItems: 'center' },
   photoTapHintText: { color: '#ffffff', fontSize: 12 },
@@ -1382,35 +1451,40 @@ const styles = StyleSheet.create({
   dayYearBadgeText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
   dayDateText: { fontSize: 16, fontWeight: '700', color: '#ffffff', flex: 1, flexWrap: 'wrap' },
   dayModalRow: { flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
-  dayModalChip: { backgroundColor: '#1a1a1a', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: '#2a2a2a' },
+  dayModalChip: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   dayModalChipText: { fontSize: 14, color: '#ffffff' },
-  dayModalDescription: { fontSize: 17, color: '#cccccc', fontStyle: 'italic', marginBottom: 20, lineHeight: 26 },
+  dayModalDescription: { fontSize: 17, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', marginBottom: 20, lineHeight: 26 },
   dayModalSection: { marginBottom: 20 },
   dayModalLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '800', letterSpacing: 2, marginBottom: 8 },
   dayModalText: { fontSize: 16, color: '#ffffff', lineHeight: 24 },
-  dayModalSubtext: { fontSize: 13, color: '#666666', marginTop: 4 },
+  dayModalSubtext: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginTop: 4 },
   dayModalExtraPhoto: { width: 120, height: 120, borderRadius: 10, marginRight: 8 },
-  dayModalClose: { margin: 16, backgroundColor: '#1a1a1a', borderRadius: 14, padding: 16, alignItems: 'center' },
+  dayModalClose: { margin: 16, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 16, alignItems: 'center' },
   dayModalCloseText: { color: '#ffffff', fontWeight: '600', fontSize: 16 },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalBox: { backgroundColor: 'rgba(10,14,22,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)' },
+  modalBox: { backgroundColor: 'rgba(10,14,22,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   modalTitle: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 16, letterSpacing: -0.3 },
-  textInput: { backgroundColor: '#2a2a2a', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
-  ratingLabel: { fontSize: 14, color: '#888888', marginBottom: 12 },
+  textInput: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
+  ratingLabel: { fontSize: 14, color: 'rgba(255,255,255,0.35)', marginBottom: 12 },
   ratingButtons: { flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' },
-  ratingNumberButton: { width: 40, height: 40, borderRadius: 8, backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center' },
+  ratingNumberButton: { width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
   ratingNumberButtonActive: { backgroundColor: '#4a90d9' },
-  ratingNumberText: { color: '#666666', fontWeight: '600', fontSize: 14 },
+  ratingNumberText: { color: 'rgba(255,255,255,0.35)', fontWeight: '600', fontSize: 14 },
   ratingNumberTextActive: { color: '#ffffff' },
   saveButton: { backgroundColor: '#4a90d9', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
   saveButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
   cancelButton: { alignItems: 'center', padding: 10 },
-  cancelButtonText: { color: '#555555', fontSize: 15 },
+  cancelButtonText: { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
   fullScreenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   fullScreenImage: { width: '100%', height: '85%' },
-  fullScreenDismiss: { color: '#555555', fontSize: 13, marginTop: 16 },
+  fullScreenDismiss: { color: 'rgba(255,255,255,0.35)', fontSize: 13, marginTop: 16 },
   capsuleOpenedRecord: { backgroundColor: 'rgba(245,200,66,0.08)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(245,200,66,0.3)', marginBottom: 8 },
-  capsuleOpenedMeta: { fontSize: 12, color: '#888888', marginBottom: 6 },
+  capsuleSealedRecord: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', marginBottom: 8 },
+  capsuleRecordMeta: { fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 6 },
+  capsuleRecordContext: { fontSize: 14, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', lineHeight: 20 },
   capsuleOpenedMessage: { fontSize: 15, color: '#ffffff', fontStyle: 'italic', lineHeight: 22 },
   capsuleOpenedPhoto: { width: '100%', height: 160, borderRadius: 10, marginTop: 10 },
+  capsuleToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, marginTop: 8 },
+  capsuleToggleLabel: { fontSize: 15, color: '#ffffff', fontWeight: '600' },
+  capsuleRevealButtons: { flexDirection: 'row', gap: 12, marginTop: 4 },
 });
