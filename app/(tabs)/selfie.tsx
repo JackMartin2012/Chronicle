@@ -147,7 +147,7 @@ export default function DailySelfie() {
 
         {hasTodaySelfie ? (
           <View style={styles.todayDoneCard}>
-            <Image source={{ uri: todaySelfieUri }} style={styles.todayDoneImage} />
+            <Image source={{ uri: todaySelfieUri }} style={[styles.todayDoneImage, { transform: [{ scaleX: -1 }] }]} />
             <View style={styles.todayDoneOverlay}>
               <Text style={styles.todayDoneEmoji}>✅</Text>
               <Text style={styles.todayDoneTitle}>Today's selfie saved!</Text>
@@ -205,7 +205,7 @@ export default function DailySelfie() {
                       activeOpacity={0.95}>
                       <Image
                         source={{ uri: slideshowSelfies[slideshowIndex]?.uri }}
-                        style={styles.slideshowPhoto}
+                        style={[styles.slideshowPhoto, { transform: [{ scaleX: -1 }] }]}
                         resizeMode="cover"
                       />
                       <View style={styles.slideshowDateBadge}>
@@ -249,7 +249,7 @@ export default function DailySelfie() {
               <View style={styles.grid}>
                 {displaySelfies.map(selfie => (
                   <TouchableOpacity key={selfie.date} style={styles.gridItem} onPress={() => setFullScreenUri(selfie.uri)}>
-                    <Image source={{ uri: selfie.uri }} style={styles.gridImage} />
+                    <Image source={{ uri: selfie.uri }} style={[styles.gridImage, { transform: [{ scaleX: -1 }] }]} />
                     <Text style={styles.gridDate}>
                       {new Date(selfie.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                     </Text>
@@ -302,7 +302,7 @@ export default function DailySelfie() {
       {/* Full screen viewer */}
       <Modal visible={fullScreenUri !== null} transparent animationType="fade">
         <TouchableOpacity style={styles.fullScreenOverlay} activeOpacity={1} onPress={() => setFullScreenUri(null)}>
-          {fullScreenUri ? <Image source={{ uri: fullScreenUri }} style={styles.fullScreenImage} resizeMode="contain" /> : null}
+          {fullScreenUri ? <Image source={{ uri: fullScreenUri }} style={[styles.fullScreenImage, { transform: [{ scaleX: -1 }] }]} resizeMode="contain" /> : null}
           <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
         </TouchableOpacity>
       </Modal>

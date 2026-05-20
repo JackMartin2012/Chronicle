@@ -564,34 +564,36 @@ export default function ThePresent() {
             <Text style={styles.headerSubtitle}>Today's entry becomes tomorrow's flashback.</Text>
           </View>
 
-          {/* Selfie section */}
-          <TouchableOpacity style={styles.selfieSectionToday} onPress={() => router.push('/(tabs)/selfie')} activeOpacity={0.85}>
-            {todaySelfieUri ? (
-              <Image source={{ uri: todaySelfieUri }} style={styles.selfiePhotoToday} resizeMode="cover" />
-            ) : (
-              <View style={styles.selfiePlaceholderToday}>
-                <Text style={styles.selfiePlaceholderEmoji}>🤳</Text>
-                <Text style={styles.selfiePlaceholderText}>Add today's selfie</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.photoSection}>
-            <TouchableOpacity style={styles.photoCard} onPress={() => pickPhoto(false)}>
-              {entry.photoUri ? (
-                <View>
-                  <Image source={{ uri: entry.photoUri }} style={styles.todayPhoto} />
-                  <View style={styles.photoEditOverlay}><Text style={styles.photoEditText}>Change photo</Text></View>
-                </View>
+          {/* BeReal-style top row: selfie left, main photo right */}
+          <View style={styles.beRealRow}>
+            <TouchableOpacity style={styles.beRealSelfie} onPress={() => router.push('/(tabs)/selfie')} activeOpacity={0.85}>
+              {todaySelfieUri ? (
+                <Image source={{ uri: todaySelfieUri }} style={[styles.beRealSelfiePhoto, { transform: [{ scaleX: -1 }] }]} resizeMode="cover" />
               ) : (
-                <View style={styles.photoPlaceholder}>
-                  <Text style={styles.photoPlaceholderEmoji}>🖼️</Text>
-                  <Text style={styles.photoPlaceholderTitle}>Add today's photo</Text>
-                  <Text style={styles.photoPlaceholderSubtitle}>Take one or choose from camera roll</Text>
+                <View style={styles.beRealSelfiePlaceholder}>
+                  <Text style={styles.selfiePlaceholderEmoji}>🤳</Text>
+                  <Text style={styles.selfiePlaceholderText}>Selfie</Text>
                 </View>
               )}
             </TouchableOpacity>
-            {(entry.photoUri || entry.extraPhotos.length > 0) && (
+            <TouchableOpacity style={styles.beRealMain} onPress={() => pickPhoto(false)} activeOpacity={0.85}>
+              {entry.photoUri ? (
+                <View style={{ flex: 1 }}>
+                  <Image source={{ uri: entry.photoUri }} style={styles.beRealMainPhoto} resizeMode="cover" />
+                  <View style={styles.photoEditOverlay}><Text style={styles.photoEditText}>Change photo</Text></View>
+                </View>
+              ) : (
+                <View style={styles.beRealMainPlaceholder}>
+                  <Text style={styles.photoPlaceholderEmoji}>🖼️</Text>
+                  <Text style={styles.photoPlaceholderTitle}>Add today's photo</Text>
+                  <Text style={styles.photoPlaceholderSubtitle}>Tap to add</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {(entry.photoUri || entry.extraPhotos.length > 0) && (
+            <View style={styles.photoSection}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.extraStrip} contentContainerStyle={styles.extraStripContent}>
                 {entry.extraPhotos.map((uri, index) => (
                   <TouchableOpacity key={index} onPress={() => setFullScreenUri(uri)}>
@@ -602,8 +604,8 @@ export default function ThePresent() {
                   <Text style={styles.addExtraText}>+</Text>
                 </TouchableOpacity>
               </ScrollView>
-            )}
-          </View>
+            </View>
+          )}
 
           <View style={styles.row}>
             <View style={styles.moodCard}>
@@ -892,7 +894,7 @@ export default function ThePresent() {
         <View style={styles.dayModal}>
           <ScrollView showsVerticalScrollIndicator={false}>
             {selectedDaySelfieUri && (
-              <Image source={{ uri: selectedDaySelfieUri }} style={styles.daySelfiePhoto} resizeMode="cover" />
+              <Image source={{ uri: selectedDaySelfieUri }} style={[styles.daySelfiePhoto, { transform: [{ scaleX: -1 }] }]} resizeMode="cover" />
             )}
             {selectedDay?.entry.photoUri ? (
               <TouchableOpacity onPress={() => setFullScreenUri(selectedDay.entry.photoUri)}>
@@ -1156,7 +1158,7 @@ export default function ThePresent() {
               <Text style={styles.capsuleRevealDate}>Sealed {new Date(revealingCapsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
             )}
             <ScrollView style={styles.capsuleRevealMessage} showsVerticalScrollIndicator={false}>
-              {revealingCapsule?.photoUri ? <Image source={{ uri: revealingCapsule.photoUri }} style={styles.capsuleRevealPhoto} /> : null}
+              {revealingCapsule?.photoUri ? <Image source={{ uri: revealingCapsule.photoUri }} style={[styles.capsuleRevealPhoto, { transform: [{ scaleX: -1 }] }]} /> : null}
               <Text style={styles.capsuleRevealText}>{revealingCapsule?.message}</Text>
             </ScrollView>
             <View style={styles.capsuleRevealButtons}>
@@ -1230,8 +1232,8 @@ const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#1a4fd4' },
   container: { flex: 1 },
   header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#1a4fd4' },
-  headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 2, textAlign: 'center' },
-  headerDate: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 16, letterSpacing: -0.5, textAlign: 'center' },
+  headerTitle: { fontSize: 28, fontWeight: '300', color: '#ffffff', marginBottom: 2, textAlign: 'center', letterSpacing: 2 },
+  headerDate: { fontSize: 16, fontWeight: '400', color: 'rgba(255,255,255,0.7)', marginBottom: 16, letterSpacing: 1, textAlign: 'center' },
   tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   tabButtonActive: { backgroundColor: '#ffffff' },
@@ -1272,6 +1274,13 @@ const styles = StyleSheet.create({
   weatherDesc: { fontSize: 10, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
   voiceCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   voicePrompt: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 14 },
+  beRealRow: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, gap: 8, height: 220 },
+  beRealSelfie: { flex: 1, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(255,255,255,0.05)' },
+  beRealSelfiePhoto: { width: '100%', height: '100%' },
+  beRealSelfiePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 6 },
+  beRealMain: { flex: 2, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(255,255,255,0.05)' },
+  beRealMainPhoto: { width: '100%', height: '100%' },
+  beRealMainPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 6, padding: 16 },
   selfieSectionToday: { marginHorizontal: 16, marginBottom: 16, borderRadius: 16, overflow: 'hidden', height: 200 },
   selfiePhotoToday: { width: '100%', height: '100%' },
   selfiePlaceholderToday: { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 16, justifyContent: 'center', alignItems: 'center', gap: 8, height: 200 },
@@ -1283,7 +1292,7 @@ const styles = StyleSheet.create({
   featuredPromptText: { fontSize: 22, fontWeight: '700', color: '#ffffff', lineHeight: 30, marginBottom: 16, letterSpacing: -0.3 },
   featuredAnswer: { fontSize: 16, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 24 },
   featuredAddText: { color: 'rgba(255,255,255,0.4)', fontSize: 15, fontWeight: '500' },
-  compactCard: { marginHorizontal: 16, marginBottom: 22, paddingVertical: 16, paddingHorizontal: 18, borderLeftWidth: 3, borderLeftColor: 'rgba(74,144,217,0.6)', borderTopRightRadius: 8, borderBottomRightRadius: 8, backgroundColor: 'rgba(255,255,255,0.03)' },
+  compactCard: { marginHorizontal: 16, marginBottom: 22, paddingVertical: 16, paddingHorizontal: 18, borderLeftWidth: 3, borderLeftColor: 'rgba(74,144,217,0.6)', borderTopRightRadius: 8, borderBottomRightRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)' },
   voiceRecordButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14, gap: 10 },
   voiceRecordButtonActive: { backgroundColor: '#3a1a1a', borderWidth: 1, borderColor: '#ff4444' },
   voiceRecordEmoji: { fontSize: 22 },

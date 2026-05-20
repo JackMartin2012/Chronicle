@@ -567,11 +567,6 @@ export default function OnThisDay() {
                       colors={['transparent', 'rgba(0,0,0,0.75)']}
                       locations={[0.3, 1]}
                       style={styles.yearCardOverlay}>
-                      <View style={{ flex: 1, justifyContent: 'flex-start', alignItems: 'center', paddingTop: height * 0.45 * 0.28 }}>
-                        <View style={styles.yearBadge}>
-                          <Text style={styles.yearBadgeText}>{year}</Text>
-                        </View>
-                      </View>
                       <View style={styles.yearCardDivider} />
                       <View style={styles.yearCardBottomRow}>
                         <Text style={styles.yearDateLabel}>{dateLabel}</Text>
@@ -581,6 +576,11 @@ export default function OnThisDay() {
                         </View>
                       </View>
                     </LinearGradient>
+                    <View style={styles.yearBadgeAbsolute}>
+                      <View style={styles.yearBadge}>
+                        <Text style={styles.yearBadgeText}>{year}</Text>
+                      </View>
+                    </View>
                   </AnimatedCard>
                 );
               })}
@@ -1060,8 +1060,8 @@ const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#6b35d4' },
   container: { flex: 1 },
   header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#6b35d4' },
-  headerTitle: { fontSize: 34, fontWeight: 'bold', color: '#ffffff', marginBottom: 2, textAlign: 'center' },
-  headerDate: { fontSize: 28, fontWeight: '800', color: '#ffffff', marginBottom: 16, letterSpacing: -0.5, textAlign: 'center' },
+  headerTitle: { fontSize: 28, fontWeight: '300', color: '#ffffff', marginBottom: 2, textAlign: 'center', letterSpacing: 2 },
+  headerDate: { fontSize: 16, fontWeight: '400', color: 'rgba(255,255,255,0.7)', marginBottom: 16, letterSpacing: 1, textAlign: 'center' },
   tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   tabButtonActive: { backgroundColor: '#ffffff' },
@@ -1081,7 +1081,8 @@ const styles = StyleSheet.create({
   yearCardsList: { padding: 16, gap: 16, paddingBottom: 100 },
   yearCard: { width: '100%', height: height * 0.45, borderRadius: 20, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)' },
   yearCardBg: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
-  yearCardOverlay: { flex: 1, padding: 18 },
+  yearCardOverlay: { flex: 1, padding: 18, justifyContent: 'flex-end' },
+  yearBadgeAbsolute: { position: 'absolute', top: 16, left: 0, right: 0, alignItems: 'center' },
   yearBadge: { backgroundColor: '#9b72ff', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 28, alignItems: 'center', justifyContent: 'center' },
   yearBadgeText: { color: '#ffffff', fontWeight: '800', fontSize: 36, letterSpacing: -0.5 },
   yearCardDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginBottom: 14 },
@@ -1095,7 +1096,7 @@ const styles = StyleSheet.create({
   peopleSectionTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 12, letterSpacing: -0.3 },
   peopleSectionContent: { gap: 16 },
   personBubble: { alignItems: 'center', width: 60 },
-  personBubbleAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#9b72ff', justifyContent: 'center', alignItems: 'center', marginBottom: 6, overflow: 'hidden' },
+  personBubbleAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#9b72ff', justifyContent: 'center', alignItems: 'center', marginBottom: 6, overflow: 'hidden', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)' },
   personBubblePhoto: { width: 52, height: 52, borderRadius: 26 },
   personBubbleInitial: { color: '#ffffff', fontSize: 22, fontWeight: 'bold' },
   personBubbleName: { color: 'rgba(255,255,255,0.6)', fontSize: 11, textAlign: 'center' },
@@ -1172,10 +1173,10 @@ const styles = StyleSheet.create({
 
   // Modals — glass effect
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalBox: { backgroundColor: 'rgba(18,14,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  modalBox: { backgroundColor: 'rgba(0,0,0,0.85)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginBottom: 6, letterSpacing: -0.3 },
   modalSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.35)', marginBottom: 10 },
-  textInput: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
+  textInput: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
   saveButton: { backgroundColor: '#9b72ff', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
   saveButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
   cancelButton: { alignItems: 'center', padding: 10 },
