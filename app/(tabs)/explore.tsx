@@ -1415,7 +1415,7 @@ const styles = StyleSheet.create({
   favName: { fontSize: 16, fontWeight: '700', color: '#ffffff', marginBottom: 4 },
   favNote: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', marginBottom: 4, lineHeight: 18 },
   favDate: { fontSize: 11, color: 'rgba(255,255,255,0.35)' },
-  addFavButton: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#4a90d9', justifyContent: 'center', alignItems: 'center', shadowColor: '#4a90d9', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+  addFavButton: { position: 'absolute', bottom: 80, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#4a90d9', justifyContent: 'center', alignItems: 'center', shadowColor: '#4a90d9', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
   addFavButtonText: { color: '#ffffff', fontSize: 28, fontWeight: '300' },
   favDetailOverlay: { flex: 1, justifyContent: 'flex-end' },
   favDetailBox: { backgroundColor: 'rgba(14,18,26,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 48, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
