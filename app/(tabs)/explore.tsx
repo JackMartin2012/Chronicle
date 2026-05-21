@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import { BlurView } from 'expo-blur';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
@@ -186,6 +187,12 @@ export default function ThePresent() {
   const [capsuleContext, setCapsuleContext] = useState('');
   const [todaySelfieUri, setTodaySelfieUri] = useState<string | null>(null);
   const [selectedDaySelfieUri, setSelectedDaySelfieUri] = useState<string | null>(null);
+  const [selfieCameraOpen, setSelfieCameraOpen] = useState(false);
+  const [selfieCapturing, setSelfieCapturing] = useState(false);
+  const [selfieFacing, setSelfieFacing] = useState<'front' | 'back'>('front');
+  const selfieCameraRef = useRef<CameraView>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const selfieShutterScale = useRef(new Animated.Value(1)).current;
 
   const today = new Date();
   const dateString = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -224,6 +231,38 @@ export default function ThePresent() {
   }, [archivedDays]);
 
   useEffect(() => { return () => { if (sound) sound.unloadAsync(); }; }, [sound]);
+
+  const onSelfieShutterPressIn = () => Animated.spring(selfieShutterScale, {
+    toValue: 0.88, useNativeDriver: true, speed: 40,
+  }).start();
+  const onSelfieShutterPressOut = () => Animated.spring(selfieShutterScale, {
+    toValue: 1, useNativeDriver: true, speed: 40, bounciness: 14,
+  }).start();
+
+  const openSelfieCamera = async () => {
+    if (!cameraPermission?.granted) {
+      const { granted } = await requestCameraPermission();
+      if (!granted) {
+        Alert.alert('Camera access needed', 'Allow camera access in Settings to take your selfie.');
+        return;
+      }
+    }
+    setSelfieCameraOpen(true);
+  };
+
+  const takeSelfie = async () => {
+    if (!selfieCameraRef.current || selfieCapturing) return;
+    setSelfieCapturing(true);
+    try {
+      const photo = await selfieCameraRef.current.takePictureAsync({ quality: 0.85, base64: false, mirror: true });
+      if (photo?.uri) {
+        await AsyncStorage.setItem(`selfie_${todayKey}`, photo.uri);
+        setTodaySelfieUri(photo.uri);
+        setSelfieCameraOpen(false);
+      }
+    } catch (e) { console.log('Camera error:', e); }
+    finally { setSelfieCapturing(false); }
+  };
 
   const loadEntry = async () => {
     const saved = await AsyncStorage.getItem(`day_entry_${todayKey}`);
@@ -566,16 +605,21 @@ export default function ThePresent() {
 
           {/* BeReal-style top row: selfie left, main photo right */}
           <View style={styles.beRealRow}>
-            <TouchableOpacity style={styles.beRealSelfie} onPress={() => router.push('/(tabs)/selfie')} activeOpacity={0.85}>
-              {todaySelfieUri ? (
-                <Image source={{ uri: todaySelfieUri }} style={[styles.beRealSelfiePhoto, { transform: [{ scaleX: -1 }] }]} resizeMode="cover" />
-              ) : (
-                <View style={styles.beRealSelfiePlaceholder}>
-                  <Text style={styles.selfiePlaceholderEmoji}>🤳</Text>
-                  <Text style={styles.selfiePlaceholderText}>Selfie</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <View style={styles.beRealSelfie}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={openSelfieCamera} activeOpacity={0.85}>
+                {todaySelfieUri ? (
+                  <Image source={{ uri: todaySelfieUri }} style={[styles.beRealSelfiePhoto, { transform: [{ scaleX: -1 }] }]} resizeMode="cover" />
+                ) : (
+                  <View style={styles.beRealSelfiePlaceholder}>
+                    <Text style={styles.selfiePlaceholderEmoji}>🤳</Text>
+                    <Text style={styles.selfiePlaceholderText}>Take selfie</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.viewAllSelfiesButton} onPress={() => router.push('/(tabs)/selfie')}>
+                <Text style={styles.viewAllSelfiesText}>View all selfies →</Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity style={styles.beRealMain} onPress={() => pickPhoto(false)} activeOpacity={0.85}>
               {entry.photoUri ? (
                 <View style={{ flex: 1 }}>
@@ -1227,6 +1271,34 @@ export default function ThePresent() {
         </TouchableOpacity>
       </Modal>
 
+      {/* Selfie camera modal */}
+      <Modal visible={selfieCameraOpen} animationType="slide" statusBarTranslucent>
+        <View style={styles.selfieCameraContainer}>
+          <CameraView ref={selfieCameraRef} style={StyleSheet.absoluteFillObject} facing={selfieFacing} />
+          <View style={styles.selfieCameraTop}>
+            <TouchableOpacity style={styles.selfieCameraTopButton} onPress={() => setSelfieCameraOpen(false)}>
+              <Text style={styles.selfieCameraTopButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.selfieCameraBottom}>
+            <TouchableOpacity style={styles.selfieFlipButton} onPress={() => setSelfieFacing(f => f === 'front' ? 'back' : 'front')}>
+              <Text style={styles.selfieFlipButtonText}>⟳</Text>
+            </TouchableOpacity>
+            <Animated.View style={{ transform: [{ scale: selfieShutterScale }] }}>
+              <TouchableOpacity
+                style={[styles.selfieShutterButton, selfieCapturing && { opacity: 0.6 }]}
+                onPress={takeSelfie}
+                onPressIn={onSelfieShutterPressIn}
+                onPressOut={onSelfieShutterPressOut}
+                activeOpacity={1}>
+                <View style={styles.selfieShutterInner} />
+              </TouchableOpacity>
+            </Animated.View>
+            <View style={styles.selfieFlipButton} />
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -1281,6 +1353,17 @@ const styles = StyleSheet.create({
   beRealSelfie: { flex: 1, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(255,255,255,0.05)' },
   beRealSelfiePhoto: { width: '100%', height: '100%' },
   beRealSelfiePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 6 },
+  viewAllSelfiesButton: { backgroundColor: 'rgba(0,0,0,0.55)', paddingVertical: 7, alignItems: 'center' },
+  viewAllSelfiesText: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '500' },
+  selfieCameraContainer: { flex: 1, backgroundColor: '#000000' },
+  selfieCameraTop: { position: 'absolute', top: 60, left: 0, right: 0, paddingHorizontal: 24 },
+  selfieCameraTopButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  selfieCameraTopButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '600' },
+  selfieCameraBottom: { position: 'absolute', bottom: 60, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 48 },
+  selfieFlipButton: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  selfieFlipButtonText: { color: '#ffffff', fontSize: 26, fontWeight: '300' },
+  selfieShutterButton: { width: 84, height: 84, borderRadius: 42, borderWidth: 4, borderColor: '#ffffff', justifyContent: 'center', alignItems: 'center' },
+  selfieShutterInner: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#ffffff' },
   beRealMain: { flex: 2, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(255,255,255,0.05)' },
   beRealMainPhoto: { width: '100%', height: '100%' },
   beRealMainPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 6, padding: 16 },

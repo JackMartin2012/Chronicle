@@ -563,24 +563,46 @@ export default function OnThisDay() {
                     {firstMemory.uri && (
                       <Image source={{ uri: firstMemory.uri }} style={styles.yearCardBg} resizeMode="cover" />
                     )}
-                    <LinearGradient
-                      colors={['transparent', 'rgba(0,0,0,0.75)']}
-                      locations={[0.3, 1]}
-                      style={styles.yearCardOverlay}>
-                      <View style={styles.yearCardDivider} />
-                      <View style={styles.yearCardBottomRow}>
-                        <Text style={styles.yearDateLabel}>{dateLabel}</Text>
-                        <View style={styles.yearCardPhotoCount}>
-                          <Ionicons name="camera-outline" size={14} color="#ffffff" />
-                          <Text style={styles.yearMemoryCount}>{memories.length}</Text>
+                    {firstMemory.uri ? (
+                      <LinearGradient
+                        colors={['rgba(0,0,0,0.35)', 'transparent', 'rgba(0,0,0,0.75)']}
+                        locations={[0, 0.4, 1]}
+                        style={styles.yearCardOverlay}>
+                        <View style={{ alignItems: 'center' }}>
+                          <View style={styles.yearBadge}>
+                            <Text style={styles.yearBadgeText}>{year}</Text>
+                          </View>
+                        </View>
+                        <View>
+                          <View style={styles.yearCardDivider} />
+                          <View style={styles.yearCardBottomRow}>
+                            <Text style={styles.yearDateLabel}>{dateLabel}</Text>
+                            <View style={styles.yearCardPhotoCount}>
+                              <Ionicons name="camera-outline" size={14} color="#ffffff" />
+                              <Text style={styles.yearMemoryCount}>{memories.length}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.yearCardOverlay}>
+                        <View style={{ alignItems: 'center' }}>
+                          <View style={styles.yearBadge}>
+                            <Text style={styles.yearBadgeText}>{year}</Text>
+                          </View>
+                        </View>
+                        <View>
+                          <View style={styles.yearCardDivider} />
+                          <View style={styles.yearCardBottomRow}>
+                            <Text style={styles.yearDateLabel}>{dateLabel}</Text>
+                            <View style={styles.yearCardPhotoCount}>
+                              <Ionicons name="camera-outline" size={14} color="#ffffff" />
+                              <Text style={styles.yearMemoryCount}>{memories.length}</Text>
+                            </View>
+                          </View>
                         </View>
                       </View>
-                    </LinearGradient>
-                    <View style={styles.yearBadgeAbsolute}>
-                      <View style={styles.yearBadge}>
-                        <Text style={styles.yearBadgeText}>{year}</Text>
-                      </View>
-                    </View>
+                    )}
                   </AnimatedCard>
                 );
               })}
@@ -1079,10 +1101,9 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
   emptySubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
   yearCardsList: { padding: 16, gap: 16, paddingBottom: 100 },
-  yearCard: { width: '100%', height: height * 0.45, borderRadius: 20, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)' },
+  yearCard: { width: '100%', height: height * 0.45, borderRadius: 20, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)' },
   yearCardBg: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
-  yearCardOverlay: { flex: 1, padding: 18, justifyContent: 'flex-end' },
-  yearBadgeAbsolute: { position: 'absolute', top: 16, left: 0, right: 0, alignItems: 'center' },
+  yearCardOverlay: { flex: 1, padding: 18, justifyContent: 'space-between' },
   yearBadge: { backgroundColor: '#9b72ff', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 28, alignItems: 'center', justifyContent: 'center' },
   yearBadgeText: { color: '#ffffff', fontWeight: '800', fontSize: 36, letterSpacing: -0.5 },
   yearCardDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginBottom: 14 },
