@@ -1203,7 +1203,21 @@ export default function ThePresent() {
             <Text style={styles.addFavLabel}>Your message</Text>
             <TextInput style={[styles.addFavInput, { minHeight: 120, color: 'rgba(255,255,255,0.9)' }]} placeholder="Dear future me... What do you want to remember? What are you hoping for?" placeholderTextColor="rgba(255,255,255,0.5)" multiline value={newCapsuleMessage} onChangeText={setNewCapsuleMessage} />
             <Text style={styles.addFavLabel}>Photo (optional)</Text>
-            <TouchableOpacity style={styles.addFavPhotoButton} onPress={pickCapsulePhoto}>
+            <TouchableOpacity
+              style={styles.addFavPhotoButton}
+              onPress={() => {
+                if (newCapsulePhoto) {
+                  Alert.alert('Capsule photo', '', [
+                    { text: 'View photo', onPress: () => setFullScreenUri(newCapsulePhoto) },
+                    { text: 'Change photo', onPress: pickCapsulePhoto },
+                    { text: 'Remove photo', onPress: () => setNewCapsulePhoto(''), style: 'destructive' },
+                    { text: 'Cancel', style: 'cancel' },
+                  ]);
+                } else {
+                  pickCapsulePhoto();
+                }
+              }}
+            >
               {newCapsulePhoto ? <Image source={{ uri: newCapsulePhoto }} style={styles.addFavPhotoPreview} />
                 : <View style={styles.addFavPhotoEmpty}><Text style={styles.addFavPhotoEmoji}>📷</Text><Text style={styles.addFavPhotoText}>Add a photo</Text></View>}
             </TouchableOpacity>
