@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 export default function TabLayout() {
   return (
@@ -14,7 +14,6 @@ export default function TabLayout() {
           backgroundColor: 'transparent',
           borderTopColor: 'rgba(255,255,255,0.1)',
           elevation: 0,
-          height: 64,
           paddingBottom: 0,
           paddingTop: 0,
         },
@@ -29,9 +28,9 @@ export default function TabLayout() {
         options={{
           title: 'The Past',
           tabBarActiveTintColor: '#9b72ff',
-          tabBarIcon: ({ focused, color, size }) => (
+          tabBarIcon: ({ focused, color }) => (
             <View style={[styles.pill, focused && styles.pillActive]}>
-              <Text style={{ fontSize: 24, color }}>🕐</Text>
+              <Ionicons name="time-outline" size={24} color={color} />
             </View>
           ),
         }}
@@ -41,9 +40,9 @@ export default function TabLayout() {
         options={{
           title: 'The Present',
           tabBarActiveTintColor: '#4a90d9',
-          tabBarIcon: ({ focused, color, size }) => (
+          tabBarIcon: ({ focused, color }) => (
             <View style={[styles.pill, focused && styles.pillActive]}>
-              <Text style={{ fontSize: 24, color }}>📅</Text>
+              <Ionicons name="today-outline" size={24} color={color} />
             </View>
           ),
         }}
@@ -65,6 +64,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 36,
+    minWidth: 36,
   },
   pillActive: {
     backgroundColor: 'rgba(0,0,0,0.55)',
