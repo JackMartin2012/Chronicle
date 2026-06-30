@@ -412,7 +412,14 @@ export default function ThePresent() {
     Alert.alert('Add a photo', 'Attach a photo to your capsule', [
       { text: 'Take a photo', onPress: async () => {
         const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-        if (!result.canceled && result.assets[0]) setNewCapsulePhoto(result.assets[0].uri);
+        if (!result.canceled && result.assets[0]) {
+          const flipped = await ImageManipulator.manipulateAsync(
+            result.assets[0].uri,
+            [{ flip: ImageManipulator.FlipType.Horizontal }],
+            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          setNewCapsulePhoto(flipped.uri);
+        }
       }},
       { text: 'Choose from camera roll', onPress: async () => {
         const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
