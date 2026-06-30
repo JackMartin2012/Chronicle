@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { Fraunces_300Light, Fraunces_400Regular, Fraunces_800ExtraBold, useFonts } from '@expo-google-fonts/fraunces';
+import { Fraunces_300Light, Fraunces_400Regular, Fraunces_600SemiBold, Fraunces_800ExtraBold, useFonts } from '@expo-google-fonts/fraunces';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as MediaLibrary from 'expo-media-library';
@@ -138,7 +138,7 @@ const AnimatedCard = ({ onPress, style, children }: {
 };
 
 export default function OnThisDay() {
-  const [fontsLoaded] = useFonts({ Fraunces_300Light, Fraunces_400Regular, Fraunces_800ExtraBold });
+  const [fontsLoaded] = useFonts({ Fraunces_300Light, Fraunces_400Regular, Fraunces_600SemiBold, Fraunces_800ExtraBold });
   const { height: windowHeight } = useWindowDimensions();
   const [memoryList, setMemoryList] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1088,8 +1088,8 @@ const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#6b35d4' },
   container: { flex: 1 },
   header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#6b35d4' },
-  headerTitle: { fontSize: 28, fontFamily: 'Fraunces_300Light', color: '#ffffff', marginBottom: 2, textAlign: 'center', letterSpacing: 2 },
-  headerDate: { fontSize: 16, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.7)', marginBottom: 16, letterSpacing: 1, textAlign: 'center' },
+  headerTitle: { fontSize: 28, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', marginBottom: 2, textAlign: 'center', letterSpacing: 2 },
+  headerDate: { fontSize: 16, fontFamily: 'Fraunces_600SemiBold', color: 'rgba(255,255,255,0.7)', marginBottom: 16, letterSpacing: 1, textAlign: 'center' },
   tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   tabButtonActive: { backgroundColor: '#ffffff' },

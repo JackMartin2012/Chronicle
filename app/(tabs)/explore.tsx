@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_700Bold, useFonts } from '@expo-google-fonts/space-grotesk';
+import { SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold, useFonts } from '@expo-google-fonts/space-grotesk';
 import { Audio } from 'expo-av';
 import { BlurView } from 'expo-blur';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -146,7 +146,7 @@ const AnimatedCard = ({ onPress, style, children }: {
 };
 
 export default function ThePresent() {
-  const [fontsLoaded] = useFonts({ SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_700Bold });
+  const [fontsLoaded] = useFonts({ SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold });
   const [activeTab, setActiveTab] = useState<'today' | 'archive' | 'favourites'>('today');
   const router = useRouter();
 
@@ -1194,10 +1194,10 @@ export default function ThePresent() {
             <Text style={styles.capsuleModalTitle}>Seal a Capsule ✉️</Text>
             <Text style={styles.capsuleModalSubtitle}>Write something for future you. It'll be waiting.</Text>
             <Text style={styles.addFavLabel}>Your message</Text>
-            <TextInput style={[styles.addFavInput, { minHeight: 120 }]} placeholder="Dear future me... What do you want to remember? What are you hoping for?" placeholderTextColor="#555555" multiline value={newCapsuleMessage} onChangeText={setNewCapsuleMessage} />
+            <TextInput style={[styles.addFavInput, { minHeight: 120, color: 'rgba(255,255,255,0.9)' }]} placeholder="Dear future me... What do you want to remember? What are you hoping for?" placeholderTextColor="rgba(255,255,255,0.5)" multiline value={newCapsuleMessage} onChangeText={setNewCapsuleMessage} />
             <Text style={styles.addFavLabel}>Photo (optional)</Text>
             <TouchableOpacity style={styles.addFavPhotoButton} onPress={pickCapsulePhoto}>
-              {newCapsulePhoto ? <Image source={{ uri: newCapsulePhoto }} style={[styles.addFavPhotoPreview, { transform: [{ scaleX: -1 }] }]} />
+              {newCapsulePhoto ? <Image source={{ uri: newCapsulePhoto }} style={styles.addFavPhotoPreview} />
                 : <View style={styles.addFavPhotoEmpty}><Text style={styles.addFavPhotoEmoji}>📷</Text><Text style={styles.addFavPhotoText}>Add a photo</Text></View>}
             </TouchableOpacity>
             <Text style={styles.addFavLabel}>Open on</Text>
@@ -1359,8 +1359,8 @@ const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#1a4fd4' },
   container: { flex: 1 },
   header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#1a4fd4' },
-  headerTitle: { fontSize: 28, fontFamily: 'SpaceGrotesk_300Light', color: '#ffffff', marginBottom: 2, textAlign: 'center', letterSpacing: 2 },
-  headerDate: { fontSize: 16, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.7)', marginBottom: 16, letterSpacing: 1, textAlign: 'center' },
+  headerTitle: { fontSize: 28, fontFamily: 'SpaceGrotesk_600SemiBold', color: '#ffffff', marginBottom: 2, textAlign: 'center', letterSpacing: 2 },
+  headerDate: { fontSize: 16, fontFamily: 'SpaceGrotesk_600SemiBold', color: 'rgba(255,255,255,0.7)', marginBottom: 16, letterSpacing: 1, textAlign: 'center' },
   tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   tabButtonActive: { backgroundColor: '#ffffff' },
