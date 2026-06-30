@@ -32,6 +32,10 @@ export default function TabLayout() {
               paddingHorizontal: 16,
               paddingVertical: 6,
               borderRadius: 20,
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 36,
+              minWidth: 36,
             }}>
               <Ionicons name="time-outline" size={size} color={color} />
             </View>
@@ -49,6 +53,10 @@ export default function TabLayout() {
               paddingHorizontal: 16,
               paddingVertical: 6,
               borderRadius: 20,
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 36,
+              minWidth: 36,
             }}>
               <Ionicons name="today-outline" size={size} color={color} />
             </View>
