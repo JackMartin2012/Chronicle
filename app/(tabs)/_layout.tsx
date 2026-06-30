@@ -15,7 +15,9 @@ export default function TabLayout() {
           backgroundColor: 'transparent',
           borderTopColor: 'rgba(255,255,255,0.1)',
           elevation: 0,
-          paddingTop: 4,
+          height: 88,
+          paddingTop: 12,
+          paddingBottom: 28,
         },
         tabBarBackground: () => (
           <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
