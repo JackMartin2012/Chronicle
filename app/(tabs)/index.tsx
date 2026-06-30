@@ -27,7 +27,7 @@ import {
 } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
-const THUMB_SIZE = Math.floor((width - 32 - 12) / 7);
+const CARD_WIDTH = Math.floor((width - 48) / 7);
 
 type Memory = {
   id: string;
@@ -143,7 +143,7 @@ export default function OnThisDay() {
   const [memoryList, setMemoryList] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [permission, requestPermission] = MediaLibrary.usePermissions();
-  const [activeTab, setActiveTab] = useState<'today' | 'vault'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'vault' | 'friends'>('today');
 
   const [selectedDayMemories, setSelectedDayMemories] = useState<Memory[] | null>(null);
   const [selectedDayYear, setSelectedDayYear] = useState('');
@@ -190,7 +190,7 @@ export default function OnThisDay() {
   }, [permission]);
 
   useEffect(() => {
-    if (activeTab === 'vault') loadVault();
+    if (activeTab === 'vault' || activeTab === 'friends') loadVault();
   }, [activeTab]);
 
   const loadMemories = async () => {
@@ -537,6 +537,9 @@ export default function OnThisDay() {
           <TouchableOpacity style={[styles.tabButton, activeTab === 'vault' && styles.tabButtonActive]} onPress={() => setActiveTab('vault')}>
             <Text style={[styles.tabButtonText, activeTab === 'vault' && styles.tabButtonTextActive]}>Your Vault</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.tabButton, activeTab === 'friends' && styles.tabButtonActive]} onPress={() => setActiveTab('friends')}>
+            <Text style={[styles.tabButtonText, activeTab === 'friends' && styles.tabButtonTextActive]}>Your Friends</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -633,26 +636,6 @@ export default function OnThisDay() {
             </View>
           ) : (
             <>
-              {allPeople.length > 0 && (
-                <View style={styles.peopleSection}>
-                  <Text style={styles.peopleSectionTitle}>People</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.peopleSectionContent}>
-                    {allPeople.map(person => (
-                      <TouchableOpacity key={person} style={styles.personBubble} onPress={() => openPersonProfile(person)}>
-                        <View style={styles.personBubbleAvatar}>
-                          {personProfilePhotos[person] ? (
-                            <Image source={{ uri: personProfilePhotos[person] }} style={styles.personBubblePhoto} />
-                          ) : (
-                            <Text style={styles.personBubbleInitial}>{person.charAt(0).toUpperCase()}</Text>
-                          )}
-                        </View>
-                        <Text style={styles.personBubbleName}>{person}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.yearPickerStrip} contentContainerStyle={styles.yearPickerContent}>
                 {vaultYears.map(year => (
                   <TouchableOpacity key={year} style={[styles.yearPickerItem, selectedCalYear === year && styles.yearPickerItemActive]} onPress={() => setSelectedCalYear(year)}>
@@ -676,25 +659,30 @@ export default function OnThisDay() {
                         {WEEK_DAYS.map((d, i) => <Text key={i} style={styles.calendarDayHeader}>{d}</Text>)}
                       </View>
                       <View style={styles.calendarGrid}>
-                        {Array.from({ length: firstDay }).map((_, i) => <View key={`empty-${i}`} style={styles.calendarCell} />)}
+                        {Array.from({ length: firstDay }).map((_, i) => <View key={`empty-${i}`} style={styles.calPortraitEmpty} />)}
                         {Array.from({ length: daysInMonth }).map((_, i) => {
                           const day = i + 1;
                           const dateKey = `${selectedCalYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                           const vaultDay = dayMap[dateKey];
                           const isToday = dateKey === todayStr;
                           return (
-                            <TouchableOpacity key={day} style={styles.calendarCell} onPress={() => vaultDay ? setSelectedVaultDay(vaultDay) : null} activeOpacity={vaultDay ? 0.8 : 1}>
-                              {vaultDay ? (
-                                <View style={styles.calendarCellFilled}>
-                                  {vaultDay.thumbUri && <Image source={{ uri: vaultDay.thumbUri }} style={styles.calendarThumb} />}
-                                </View>
-                              ) : (
-                                <View style={styles.calendarCellEmpty}>
-                                  <View style={[styles.calendarEmptyCircle, isToday && styles.calendarTodayRing]}>
-                                    <Text style={styles.calendarDayNumberEmpty}>{day}</Text>
-                                  </View>
-                                </View>
+                            <TouchableOpacity
+                              key={day}
+                              style={[styles.calPortraitCard, isToday && styles.calPortraitCardToday]}
+                              onPress={() => vaultDay ? setSelectedVaultDay(vaultDay) : null}
+                              activeOpacity={vaultDay ? 0.75 : 1}
+                            >
+                              {vaultDay?.thumbUri && (
+                                <Image source={{ uri: vaultDay.thumbUri }} style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]} resizeMode="cover" />
                               )}
+                              {vaultDay?.thumbUri && (
+                                <LinearGradient
+                                  colors={['rgba(0,0,0,0.55)', 'transparent']}
+                                  locations={[0, 0.5]}
+                                  style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]}
+                                />
+                              )}
+                              <Text style={styles.calPortraitDayNum}>{day}</Text>
                             </TouchableOpacity>
                           );
                         })}
@@ -705,6 +693,45 @@ export default function OnThisDay() {
                 <View style={{ height: 100 }} />
               </ScrollView>
             </>
+          )}
+        </View>
+      )}
+
+      {/* YOUR FRIENDS */}
+      {activeTab === 'friends' && (
+        <View style={styles.container}>
+          {vaultLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#9b72ff" />
+              <Text style={styles.loadingText}>Loading your people...</Text>
+            </View>
+          ) : allPeople.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>👥</Text>
+              <Text style={styles.emptyTitle}>Your People</Text>
+              <Text style={styles.emptySubtitle}>People you tag in your photos will appear here.</Text>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
+              <Text style={[styles.sectionTitle, { marginBottom: 16 }]}>Your People</Text>
+              <View style={styles.friendsGrid}>
+                {allPeople.map(person => (
+                  <TouchableOpacity key={person} style={styles.friendCard} onPress={() => openPersonProfile(person)}>
+                    <View style={styles.friendAvatarWrap}>
+                      {personProfilePhotos[person] ? (
+                        <Image source={{ uri: personProfilePhotos[person] }} style={styles.friendAvatarPhoto} />
+                      ) : (
+                        <View style={styles.friendAvatarInner}>
+                          <Text style={styles.friendAvatarInitial}>{person.charAt(0).toUpperCase()}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.friendName} numberOfLines={1}>{person}</Text>
+                    <Text style={styles.friendDays}>{personDaysCount[person] || 0} days</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
           )}
         </View>
       )}
@@ -1138,15 +1165,22 @@ const styles = StyleSheet.create({
   calendarMonth: { paddingHorizontal: 16, marginBottom: 32 },
   calendarMonthTitle: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.7)', marginBottom: 12, letterSpacing: 0.5, textTransform: 'uppercase' },
   calendarDayHeaders: { flexDirection: 'row', marginBottom: 4 },
-  calendarDayHeader: { width: THUMB_SIZE, textAlign: 'center', fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: '600' },
+  calendarDayHeader: { width: CARD_WIDTH + 4, textAlign: 'center', fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: '600' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calendarCell: { width: THUMB_SIZE, height: THUMB_SIZE, padding: 2 },
-  calendarCellFilled: { flex: 1, borderRadius: 8, overflow: 'hidden' },
-  calendarThumb: { width: '100%', height: '100%' },
-  calendarCellEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  calendarEmptyCircle: { width: THUMB_SIZE * 0.68, height: THUMB_SIZE * 0.68, borderRadius: THUMB_SIZE * 0.34, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)' },
-  calendarTodayRing: { borderWidth: 1.5, borderColor: '#ffffff', backgroundColor: 'rgba(255,255,255,0.08)' },
-  calendarDayNumberEmpty: { fontSize: 10, color: 'rgba(255,255,255,0.3)' },
+  calPortraitCard: { width: CARD_WIDTH, aspectRatio: 3 / 4, borderRadius: 10, margin: 2, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden', justifyContent: 'flex-start', alignItems: 'flex-start' },
+  calPortraitCardToday: { borderWidth: 1.5, borderColor: '#ffffff' },
+  calPortraitEmpty: { width: CARD_WIDTH, aspectRatio: 3 / 4, margin: 2 },
+  calPortraitDayNum: { fontSize: 9, fontWeight: '700', color: '#ffffff', margin: 4 },
+
+  // Your Friends tab
+  friendsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  friendCard: { width: '30%', alignItems: 'center', paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  friendAvatarWrap: { marginBottom: 8 },
+  friendAvatarPhoto: { width: 56, height: 56, borderRadius: 28 },
+  friendAvatarInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#9b72ff', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' },
+  friendAvatarInitial: { color: '#ffffff', fontSize: 24, fontWeight: 'bold' },
+  friendName: { fontSize: 13, fontWeight: '700', color: '#ffffff', marginBottom: 2, textAlign: 'center', paddingHorizontal: 4 },
+  friendDays: { fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
 
   // Day detail modal
   dayModal: { flex: 1, backgroundColor: '#0d0a14' },
