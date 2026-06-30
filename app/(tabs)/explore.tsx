@@ -197,6 +197,14 @@ export default function ThePresent() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const selfieShutterScale = useRef(new Animated.Value(1)).current;
 
+  const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
+  const [photoCameraMode, setPhotoCameraMode] = useState<'today' | 'extra' | 'capsule'>('today');
+  const [photoCameraFacing, setPhotoCameraFacing] = useState<'front' | 'back'>('back');
+  const [photoCaptured, setPhotoCaptured] = useState<string | null>(null);
+  const [photoCapturing, setPhotoCapturing] = useState(false);
+  const photoCameraRef = useRef<CameraView>(null);
+  const photoShutterScale = useRef(new Animated.Value(1)).current;
+
   const today = new Date();
   const dateString = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const todayKey = formatDateKey(today);
@@ -251,6 +259,53 @@ export default function ThePresent() {
       }
     }
     setSelfieCameraOpen(true);
+  };
+
+  const onPhotoShutterPressIn = () => Animated.spring(photoShutterScale, { toValue: 0.88, useNativeDriver: true, speed: 40 }).start();
+  const onPhotoShutterPressOut = () => Animated.spring(photoShutterScale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 14 }).start();
+
+  const openPhotoCamera = async (mode: 'today' | 'extra' | 'capsule') => {
+    if (!cameraPermission?.granted) {
+      const { granted } = await requestCameraPermission();
+      if (!granted) {
+        Alert.alert('Camera access needed', 'Allow camera access in Settings to take a photo.');
+        return;
+      }
+    }
+    setPhotoCameraMode(mode);
+    setPhotoCameraFacing('back');
+    setPhotoCaptured(null);
+    setPhotoCameraOpen(true);
+  };
+
+  const capturePhoto = async () => {
+    if (!photoCameraRef.current || photoCapturing) return;
+    setPhotoCapturing(true);
+    try {
+      const photo = await photoCameraRef.current.takePictureAsync({ quality: 0.85, base64: false });
+      if (photo?.uri) {
+        let uri = photo.uri;
+        if (photoCameraFacing === 'front') {
+          const flipped = await ImageManipulator.manipulateAsync(
+            photo.uri,
+            [{ flip: ImageManipulator.FlipType.Horizontal }],
+            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          uri = flipped.uri;
+        }
+        setPhotoCaptured(uri);
+      }
+    } catch (e) { console.log('Camera error:', e); }
+    finally { setPhotoCapturing(false); }
+  };
+
+  const usePhotoCaptured = () => {
+    if (!photoCaptured) return;
+    if (photoCameraMode === 'today') saveEntry({ ...entry, photoUri: photoCaptured });
+    else if (photoCameraMode === 'extra') saveEntry({ ...entry, extraPhotos: [...entry.extraPhotos, photoCaptured] });
+    else if (photoCameraMode === 'capsule') setNewCapsulePhoto(photoCaptured);
+    setPhotoCameraOpen(false);
+    setPhotoCaptured(null);
   };
 
   const takeSelfie = async () => {
@@ -376,13 +431,7 @@ export default function ThePresent() {
 
   const pickPhoto = (isExtra = false) => {
     Alert.alert(isExtra ? 'Add a photo' : "Today's photo", 'Choose a photo', [
-      { text: 'Take a photo', onPress: async () => {
-        const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-        if (!result.canceled && result.assets[0]) {
-          if (isExtra) saveEntry({ ...entry, extraPhotos: [...entry.extraPhotos, result.assets[0].uri] });
-          else saveEntry({ ...entry, photoUri: result.assets[0].uri });
-        }
-      }},
+      { text: 'Take a photo', onPress: () => openPhotoCamera(isExtra ? 'extra' : 'today') },
       { text: 'Choose from camera roll', onPress: async () => {
         const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
         if (!result.canceled && result.assets[0]) {
@@ -410,17 +459,7 @@ export default function ThePresent() {
 
   const pickCapsulePhoto = () => {
     Alert.alert('Add a photo', 'Attach a photo to your capsule', [
-      { text: 'Take a photo', onPress: async () => {
-        const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-        if (!result.canceled && result.assets[0]) {
-          const flipped = await ImageManipulator.manipulateAsync(
-            result.assets[0].uri,
-            [{ flip: ImageManipulator.FlipType.Horizontal }],
-            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-          );
-          setNewCapsulePhoto(flipped.uri);
-        }
-      }},
+      { text: 'Take a photo', onPress: () => openPhotoCamera('capsule') },
       { text: 'Choose from camera roll', onPress: async () => {
         const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
         if (!result.canceled && result.assets[0]) setNewCapsulePhoto(result.assets[0].uri);
@@ -663,11 +702,25 @@ export default function ThePresent() {
                 <Text style={styles.viewAllSelfiesText}>View all selfies →</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.beRealMain} onPress={() => pickPhoto(false)} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={styles.beRealMain}
+              onPress={() => {
+                if (entry.photoUri) {
+                  Alert.alert("Today's photo", '', [
+                    { text: 'View photo', onPress: () => setFullScreenUri(entry.photoUri) },
+                    { text: 'Retake', onPress: () => openPhotoCamera('today') },
+                    { text: 'Remove photo', onPress: () => saveEntry({ ...entry, photoUri: '' }), style: 'destructive' },
+                    { text: 'Cancel', style: 'cancel' },
+                  ]);
+                } else {
+                  pickPhoto(false);
+                }
+              }}
+              activeOpacity={0.85}>
               {entry.photoUri ? (
                 <View style={{ flex: 1 }}>
                   <Image source={{ uri: entry.photoUri }} style={styles.beRealMainPhoto} resizeMode="cover" />
-                  <View style={styles.photoEditOverlay}><Text style={styles.photoEditText}>Change photo</Text></View>
+                  <View style={styles.photoEditOverlay}><Text style={styles.photoEditText}>Tap to manage</Text></View>
                 </View>
               ) : (
                 <View style={styles.beRealMainPlaceholder}>
@@ -683,7 +736,13 @@ export default function ThePresent() {
             <View style={styles.photoSection}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.extraStrip} contentContainerStyle={styles.extraStripContent}>
                 {entry.extraPhotos.map((uri, index) => (
-                  <TouchableOpacity key={index} onPress={() => setFullScreenUri(uri)}>
+                  <TouchableOpacity key={index} onPress={() => {
+                    Alert.alert('Photo', '', [
+                      { text: 'View photo', onPress: () => setFullScreenUri(uri) },
+                      { text: 'Remove photo', onPress: () => saveEntry({ ...entry, extraPhotos: entry.extraPhotos.filter((_, i) => i !== index) }), style: 'destructive' },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]);
+                  }}>
                     <Image source={{ uri }} style={styles.extraPhoto} />
                   </TouchableOpacity>
                 ))}
@@ -1344,6 +1403,50 @@ export default function ThePresent() {
         </TouchableOpacity>
       </Modal>
 
+      {/* In-app photo camera modal */}
+      <Modal visible={photoCameraOpen} animationType="slide" statusBarTranslucent>
+        <View style={styles.selfieCameraContainer}>
+          {!photoCaptured ? (
+            <>
+              <CameraView ref={photoCameraRef} style={StyleSheet.absoluteFillObject} facing={photoCameraFacing} />
+              <View style={styles.selfieCameraTop}>
+                <TouchableOpacity style={styles.selfieCameraTopButton} onPress={() => setPhotoCameraOpen(false)}>
+                  <Text style={styles.selfieCameraTopButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.selfieCameraBottom}>
+                <TouchableOpacity style={styles.selfieFlipButton} onPress={() => setPhotoCameraFacing(f => f === 'front' ? 'back' : 'front')}>
+                  <Text style={styles.selfieFlipButtonText}>⟳</Text>
+                </TouchableOpacity>
+                <Animated.View style={{ transform: [{ scale: photoShutterScale }] }}>
+                  <TouchableOpacity
+                    style={[styles.selfieShutterButton, photoCapturing && { opacity: 0.6 }]}
+                    onPress={capturePhoto}
+                    onPressIn={onPhotoShutterPressIn}
+                    onPressOut={onPhotoShutterPressOut}
+                    activeOpacity={1}>
+                    <View style={styles.selfieShutterInner} />
+                  </TouchableOpacity>
+                </Animated.View>
+                <View style={styles.selfieFlipButton} />
+              </View>
+            </>
+          ) : (
+            <>
+              <Image source={{ uri: photoCaptured }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+              <View style={styles.photoCaptureActions}>
+                <TouchableOpacity style={styles.photoCaptureBtn} onPress={() => setPhotoCaptured(null)}>
+                  <Text style={styles.photoCaptureBtnText}>Retake</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.photoCaptureBtn, styles.photoCaptureBtnPrimary]} onPress={usePhotoCaptured}>
+                  <Text style={[styles.photoCaptureBtnText, styles.photoCaptureBtnTextPrimary]}>Use Photo</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </Modal>
+
       {/* Selfie camera modal */}
       <Modal visible={selfieCameraOpen} animationType="slide" statusBarTranslucent>
         <View style={styles.selfieCameraContainer}>
@@ -1649,6 +1752,11 @@ const styles = StyleSheet.create({
   saveButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
   cancelButton: { alignItems: 'center', padding: 10 },
   cancelButtonText: { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
+  photoCaptureActions: { position: 'absolute', bottom: 60, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 16, paddingHorizontal: 32 },
+  photoCaptureBtn: { flex: 1, paddingVertical: 16, borderRadius: 14, borderWidth: 1.5, borderColor: '#ffffff', alignItems: 'center' },
+  photoCaptureBtnPrimary: { backgroundColor: '#ffffff', borderColor: '#ffffff' },
+  photoCaptureBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  photoCaptureBtnTextPrimary: { color: '#000000' },
   fullScreenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   fullScreenImage: { width: '100%', height: '85%' },
   fullScreenDismiss: { color: 'rgba(255,255,255,0.35)', fontSize: 13, marginTop: 16 },

@@ -27,7 +27,7 @@ export default function TabLayout() {
           title: 'The Past',
           tabBarActiveTintColor: '#9b72ff',
           tabBarIcon: ({ focused, color, size }) => (
-            <View style={[styles.pill, focused && styles.pillActive]}>
+            <View style={[styles.pill, focused && styles.pillPast]}>
               <Ionicons name="time-outline" size={size} color={color} />
             </View>
           ),
@@ -39,7 +39,7 @@ export default function TabLayout() {
           title: 'The Present',
           tabBarActiveTintColor: '#4a90d9',
           tabBarIcon: ({ focused, color, size }) => (
-            <View style={[styles.pill, focused && styles.pillActive]}>
+            <View style={[styles.pill, focused && styles.pillPresent]}>
               <Ionicons name="today-outline" size={size} color={color} />
             </View>
           ),
@@ -57,13 +57,16 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 7,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pillActive: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
+  pillPast: {
+    backgroundColor: 'rgba(155,114,255,0.28)',
+  },
+  pillPresent: {
+    backgroundColor: 'rgba(74,144,217,0.28)',
   },
 });
