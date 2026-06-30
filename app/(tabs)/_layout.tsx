@@ -14,6 +14,9 @@ export default function TabLayout() {
           backgroundColor: 'transparent',
           borderTopColor: 'rgba(255,255,255,0.1)',
           elevation: 0,
+          height: 64,
+          paddingBottom: 0,
+          paddingTop: 0,
         },
         tabBarBackground: () => (
           <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
@@ -27,7 +30,7 @@ export default function TabLayout() {
           title: 'The Past',
           tabBarActiveTintColor: '#9b72ff',
           tabBarIcon: ({ focused, color, size }) => (
-            <View style={[styles.pill, focused && styles.pillPast]}>
+            <View style={[styles.pill, focused && styles.pillActive]}>
               <Ionicons name="time-outline" size={size} color={color} />
             </View>
           ),
@@ -39,7 +42,7 @@ export default function TabLayout() {
           title: 'The Present',
           tabBarActiveTintColor: '#4a90d9',
           tabBarIcon: ({ focused, color, size }) => (
-            <View style={[styles.pill, focused && styles.pillPresent]}>
+            <View style={[styles.pill, focused && styles.pillActive]}>
               <Ionicons name="today-outline" size={size} color={color} />
             </View>
           ),
@@ -57,16 +60,13 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   pill: {
-    paddingHorizontal: 22,
-    paddingVertical: 9,
+    paddingHorizontal: 16,
+    paddingVertical: 5,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pillPast: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  pillPresent: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
+  pillActive: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
 });
