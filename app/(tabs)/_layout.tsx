@@ -57,16 +57,16 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   pill: {
-    paddingHorizontal: 20,
-    paddingVertical: 7,
+    paddingHorizontal: 22,
+    paddingVertical: 9,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pillPast: {
-    backgroundColor: 'rgba(155,114,255,0.28)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   pillPresent: {
-    backgroundColor: 'rgba(74,144,217,0.28)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
 });

@@ -198,12 +198,18 @@ export default function ThePresent() {
   const selfieShutterScale = useRef(new Animated.Value(1)).current;
 
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
-  const [photoCameraMode, setPhotoCameraMode] = useState<'today' | 'extra' | 'capsule'>('today');
+  const [photoCameraMode, setPhotoCameraMode] = useState<'today' | 'extra'>('today');
   const [photoCameraFacing, setPhotoCameraFacing] = useState<'front' | 'back'>('back');
   const [photoCaptured, setPhotoCaptured] = useState<string | null>(null);
   const [photoCapturing, setPhotoCapturing] = useState(false);
   const photoCameraRef = useRef<CameraView>(null);
   const photoShutterScale = useRef(new Animated.Value(1)).current;
+
+  const [capsuleCameraOpen, setCapsuleCameraOpen] = useState(false);
+  const [capsuleCameraPreview, setCapsuleCameraPreview] = useState<string | null>(null);
+  const [capsuleCameraFacing, setCapsuleCameraFacing] = useState<'front' | 'back'>('back');
+  const [capsuleCameraCapturing, setCapsuleCameraCapturing] = useState(false);
+  const capsuleCameraRef = useRef<CameraView>(null);
 
   const today = new Date();
   const dateString = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -264,7 +270,7 @@ export default function ThePresent() {
   const onPhotoShutterPressIn = () => Animated.spring(photoShutterScale, { toValue: 0.88, useNativeDriver: true, speed: 40 }).start();
   const onPhotoShutterPressOut = () => Animated.spring(photoShutterScale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 14 }).start();
 
-  const openPhotoCamera = async (mode: 'today' | 'extra' | 'capsule') => {
+  const openPhotoCamera = async (mode: 'today' | 'extra') => {
     if (!cameraPermission?.granted) {
       const { granted } = await requestCameraPermission();
       if (!granted) {
@@ -303,9 +309,29 @@ export default function ThePresent() {
     if (!photoCaptured) return;
     if (photoCameraMode === 'today') saveEntry({ ...entry, photoUri: photoCaptured });
     else if (photoCameraMode === 'extra') saveEntry({ ...entry, extraPhotos: [...entry.extraPhotos, photoCaptured] });
-    else if (photoCameraMode === 'capsule') setNewCapsulePhoto(photoCaptured);
     setPhotoCameraOpen(false);
     setPhotoCaptured(null);
+  };
+
+  const takeCapsulePhoto = async () => {
+    if (!capsuleCameraRef.current || capsuleCameraCapturing) return;
+    setCapsuleCameraCapturing(true);
+    try {
+      const photo = await capsuleCameraRef.current.takePictureAsync({ quality: 0.85, base64: false });
+      if (photo?.uri) {
+        let uri = photo.uri;
+        if (capsuleCameraFacing === 'front') {
+          const flipped = await ImageManipulator.manipulateAsync(
+            photo.uri,
+            [{ flip: ImageManipulator.FlipType.Horizontal }],
+            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          uri = flipped.uri;
+        }
+        setCapsuleCameraPreview(uri);
+      }
+    } catch (e) { console.log('Camera error:', e); }
+    finally { setCapsuleCameraCapturing(false); }
   };
 
   const takeSelfie = async () => {
@@ -459,7 +485,15 @@ export default function ThePresent() {
 
   const pickCapsulePhoto = () => {
     Alert.alert('Add a photo', 'Attach a photo to your capsule', [
-      { text: 'Take a photo', onPress: () => openPhotoCamera('capsule') },
+      { text: 'Take a photo', onPress: async () => {
+        if (!cameraPermission?.granted) {
+          const { granted } = await requestCameraPermission();
+          if (!granted) { Alert.alert('Camera access needed', 'Allow camera access in Settings.'); return; }
+        }
+        setCapsuleCameraFacing('back');
+        setCapsuleCameraPreview(null);
+        setCapsuleCameraOpen(true);
+      }},
       { text: 'Choose from camera roll', onPress: async () => {
         const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
         if (!result.canceled && result.assets[0]) setNewCapsulePhoto(result.assets[0].uri);
@@ -1256,6 +1290,53 @@ export default function ThePresent() {
       {/* Create capsule — full screen, no blur */}
       <Modal visible={showCreateCapsule} animationType="slide">
         <View style={styles.capsuleModal}>
+          {/* Capsule in-app camera — nested here so it layers above the open modal */}
+          {capsuleCameraOpen && (
+            <View style={[StyleSheet.absoluteFillObject, { zIndex: 10, backgroundColor: '#000000' }]}>
+              {!capsuleCameraPreview ? (
+                <>
+                  <CameraView ref={capsuleCameraRef} style={StyleSheet.absoluteFillObject} facing={capsuleCameraFacing} />
+                  <View style={styles.selfieCameraTop}>
+                    <TouchableOpacity style={styles.selfieCameraTopButton} onPress={() => setCapsuleCameraOpen(false)}>
+                      <Text style={styles.selfieCameraTopButtonText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.selfieCameraBottom}>
+                    <TouchableOpacity style={styles.selfieFlipButton} onPress={() => setCapsuleCameraFacing(f => f === 'front' ? 'back' : 'front')}>
+                      <Text style={styles.selfieFlipButtonText}>⟳</Text>
+                    </TouchableOpacity>
+                    <Animated.View style={{ transform: [{ scale: photoShutterScale }] }}>
+                      <TouchableOpacity
+                        style={[styles.selfieShutterButton, capsuleCameraCapturing && { opacity: 0.6 }]}
+                        onPress={takeCapsulePhoto}
+                        onPressIn={onPhotoShutterPressIn}
+                        onPressOut={onPhotoShutterPressOut}
+                        activeOpacity={1}>
+                        <View style={styles.selfieShutterInner} />
+                      </TouchableOpacity>
+                    </Animated.View>
+                    <View style={styles.selfieFlipButton} />
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Image source={{ uri: capsuleCameraPreview }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                  <View style={styles.photoCaptureActions}>
+                    <TouchableOpacity style={styles.photoCaptureBtn} onPress={() => setCapsuleCameraPreview(null)}>
+                      <Text style={styles.photoCaptureBtnText}>Retake</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.photoCaptureBtn, styles.photoCaptureBtnPrimary]} onPress={() => {
+                      setNewCapsulePhoto(capsuleCameraPreview!);
+                      setCapsuleCameraOpen(false);
+                      setCapsuleCameraPreview(null);
+                    }}>
+                      <Text style={[styles.photoCaptureBtnText, styles.photoCaptureBtnTextPrimary]}>Use Photo</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          )}
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.capsuleModalTitle}>Seal a Capsule ✉️</Text>
             <Text style={styles.capsuleModalSubtitle}>Write something for future you. It'll be waiting.</Text>
