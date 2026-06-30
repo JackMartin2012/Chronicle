@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function CustomTabBar() {
@@ -18,11 +18,13 @@ function CustomTabBar() {
         <View style={[styles.pill, isPast && styles.pillActive]}>
           <Ionicons name="time-outline" size={26} color={isPast ? '#9b72ff' : 'rgba(255,255,255,0.4)'} />
         </View>
+        <Text style={{ color: isPast ? '#9b72ff' : 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600', marginTop: 2 }}>The Past</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.tab} onPress={() => router.push('/explore')}>
         <View style={[styles.pill, isPresent && styles.pillActive]}>
           <Ionicons name="today-outline" size={26} color={isPresent ? '#4a90d9' : 'rgba(255,255,255,0.4)'} />
         </View>
+        <Text style={{ color: isPresent ? '#4a90d9' : 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600', marginTop: 2 }}>The Present</Text>
       </TouchableOpacity>
     </View>
   );
