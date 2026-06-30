@@ -37,7 +37,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingTop: 14,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.1)',
   },
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   },
   pill: {
     paddingHorizontal: 18,
-    paddingVertical: 8,
+    paddingVertical: 5,
     borderRadius: 20,
   },
   pillActive: {
