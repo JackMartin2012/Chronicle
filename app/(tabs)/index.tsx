@@ -27,7 +27,7 @@ import {
 } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
-const CARD_WIDTH = Math.floor((width - 48) / 7);
+const CARD_WIDTH = Math.floor((width - 32) / 7);
 
 type Memory = {
   id: string;
@@ -99,7 +99,7 @@ const contextFields = [
   { key: 'thinking', label: 'WHAT I WAS THINKING ABOUT', placeholder: 'Worried about / excited about...', emoji: '💭' },
 ];
 
-const WEEK_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const WEEK_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 const getDaysInMonth = (year: number, month: number) =>
   new Date(year, month + 1, 0).getDate();
@@ -665,6 +665,7 @@ export default function OnThisDay() {
                           const dateKey = `${selectedCalYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                           const vaultDay = dayMap[dateKey];
                           const isToday = dateKey === todayStr;
+                          const hasPhoto = !!vaultDay?.thumbUri;
                           return (
                             <TouchableOpacity
                               key={day}
@@ -672,17 +673,17 @@ export default function OnThisDay() {
                               onPress={() => vaultDay ? setSelectedVaultDay(vaultDay) : null}
                               activeOpacity={vaultDay ? 0.75 : 1}
                             >
-                              {vaultDay?.thumbUri && (
-                                <Image source={{ uri: vaultDay.thumbUri }} style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]} resizeMode="cover" />
+                              {hasPhoto && (
+                                <Image source={{ uri: vaultDay!.thumbUri! }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
                               )}
-                              {vaultDay?.thumbUri && (
+                              {hasPhoto && (
                                 <LinearGradient
-                                  colors={['rgba(0,0,0,0.55)', 'transparent']}
-                                  locations={[0, 0.5]}
-                                  style={[StyleSheet.absoluteFillObject, { borderRadius: 10 }]}
+                                  colors={['transparent', 'rgba(0,0,0,0.6)']}
+                                  locations={[0.4, 1]}
+                                  style={StyleSheet.absoluteFillObject}
                                 />
                               )}
-                              <Text style={styles.calPortraitDayNum}>{day}</Text>
+                              <Text style={[styles.calPortraitDayNum, !hasPhoto && styles.calPortraitDayNumEmpty]}>{day}</Text>
                             </TouchableOpacity>
                           );
                         })}
@@ -1162,15 +1163,16 @@ const styles = StyleSheet.create({
   yearPickerItemActive: { backgroundColor: '#9b72ff', borderColor: 'rgba(255,255,255,0.4)' },
   yearPickerText: { fontSize: 16, fontWeight: '700', color: 'rgba(255,255,255,0.35)' },
   yearPickerTextActive: { color: '#ffffff' },
-  calendarMonth: { paddingHorizontal: 16, marginBottom: 32 },
-  calendarMonthTitle: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.7)', marginBottom: 12, letterSpacing: 0.5, textTransform: 'uppercase' },
+  calendarMonth: { paddingHorizontal: 16, marginBottom: 28 },
+  calendarMonthTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 8, letterSpacing: -0.3 },
   calendarDayHeaders: { flexDirection: 'row', marginBottom: 4 },
-  calendarDayHeader: { width: CARD_WIDTH + 4, textAlign: 'center', fontSize: 10, color: 'rgba(255,255,255,0.25)', fontWeight: '600' },
+  calendarDayHeader: { width: CARD_WIDTH, textAlign: 'center', fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: '600', letterSpacing: 0.3 },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calPortraitCard: { width: CARD_WIDTH, aspectRatio: 3 / 4, borderRadius: 10, margin: 2, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden', justifyContent: 'flex-start', alignItems: 'flex-start' },
+  calPortraitCard: { width: CARD_WIDTH, height: CARD_WIDTH, borderRadius: 6, overflow: 'hidden', backgroundColor: 'transparent', justifyContent: 'flex-end', alignItems: 'flex-start' },
   calPortraitCardToday: { borderWidth: 1.5, borderColor: '#ffffff' },
-  calPortraitEmpty: { width: CARD_WIDTH, aspectRatio: 3 / 4, margin: 2 },
-  calPortraitDayNum: { fontSize: 9, fontWeight: '700', color: '#ffffff', margin: 4 },
+  calPortraitEmpty: { width: CARD_WIDTH, height: CARD_WIDTH },
+  calPortraitDayNum: { margin: 3, fontSize: 11, fontWeight: '700', color: '#ffffff' },
+  calPortraitDayNumEmpty: { color: 'rgba(255,255,255,0.45)' },
 
   // Your Friends tab
   friendsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
