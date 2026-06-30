@@ -2,11 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
-  const insets = useSafeAreaInsets();
-
   return (
     <Tabs
       screenOptions={{
@@ -17,9 +14,6 @@ export default function TabLayout() {
           backgroundColor: 'transparent',
           borderTopColor: 'rgba(255,255,255,0.1)',
           elevation: 0,
-          height: 56 + insets.bottom,
-          paddingBottom: insets.bottom,
-          paddingTop: 0,
         },
         tabBarBackground: () => (
           <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
