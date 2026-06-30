@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 export default function TabLayout() {
   return (
@@ -31,7 +31,7 @@ export default function TabLayout() {
           tabBarActiveTintColor: '#9b72ff',
           tabBarIcon: ({ focused, color, size }) => (
             <View style={[styles.pill, focused && styles.pillActive]}>
-              <Ionicons name="time-outline" size={size} color={color} />
+              <Text style={{ fontSize: 24, color }}>🕐</Text>
             </View>
           ),
         }}
@@ -43,7 +43,7 @@ export default function TabLayout() {
           tabBarActiveTintColor: '#4a90d9',
           tabBarIcon: ({ focused, color, size }) => (
             <View style={[styles.pill, focused && styles.pillActive]}>
-              <Ionicons name="today-outline" size={size} color={color} />
+              <Text style={{ fontSize: 24, color }}>📅</Text>
             </View>
           ),
         }}
