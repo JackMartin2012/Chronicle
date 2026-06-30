@@ -19,6 +19,8 @@ export default function TabLayout() {
         ),
         tabBarActiveTintColor: '#ffffff',
         tabBarInactiveTintColor: 'rgba(255,255,255,0.35)',
+        tabBarActiveBackgroundColor: 'rgba(255,255,255,0.12)',
+        tabBarItemStyle: { borderRadius: 10, marginHorizontal: 4, marginVertical: 6 },
       }}>
       <Tabs.Screen
         name="index"

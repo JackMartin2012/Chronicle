@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { Fraunces_300Light, Fraunces_400Regular, Fraunces_800ExtraBold, useFonts } from '@expo-google-fonts/fraunces';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as MediaLibrary from 'expo-media-library';
@@ -21,6 +22,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -126,9 +128,9 @@ const AnimatedCard = ({ onPress, style, children }: {
     toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4,
   }).start();
   return (
-    <Animated.View style={[style, { transform: [{ scale }] }]}>
+    <Animated.View style={{ transform: [{ scale }] }}>
       <TouchableOpacity onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}
-        activeOpacity={1} style={{ flex: 1 }}>
+        activeOpacity={1} style={style}>
         {children}
       </TouchableOpacity>
     </Animated.View>
@@ -136,6 +138,8 @@ const AnimatedCard = ({ onPress, style, children }: {
 };
 
 export default function OnThisDay() {
+  const [fontsLoaded] = useFonts({ Fraunces_300Light, Fraunces_400Regular, Fraunces_800ExtraBold });
+  const { height: windowHeight } = useWindowDimensions();
   const [memoryList, setMemoryList] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [permission, requestPermission] = MediaLibrary.usePermissions();
@@ -518,6 +522,8 @@ export default function OnThisDay() {
     );
   }
 
+  if (!fontsLoaded) return null;
+
   return (
     <View style={styles.outerContainer}>
 
@@ -559,7 +565,7 @@ export default function OnThisDay() {
                 const monthName = cardDate.toLocaleDateString('en-GB', { month: 'long' });
                 const dateLabel = `${dayName} ${dayNum} ${monthName}`;
                 return (
-                  <AnimatedCard key={year} onPress={() => openDayDetail(memories, year, memories[0].date)} style={styles.yearCard}>
+                  <AnimatedCard key={year} onPress={() => openDayDetail(memories, year, memories[0].date)} style={[styles.yearCard, { height: windowHeight * 0.45 }]}>
                     {firstMemory.uri && (
                       <Image source={{ uri: firstMemory.uri }} style={styles.yearCardBg} resizeMode="cover" />
                     )}
@@ -1082,8 +1088,8 @@ const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#6b35d4' },
   container: { flex: 1 },
   header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#6b35d4' },
-  headerTitle: { fontSize: 28, fontWeight: '300', color: '#ffffff', marginBottom: 2, textAlign: 'center', letterSpacing: 2 },
-  headerDate: { fontSize: 16, fontWeight: '400', color: 'rgba(255,255,255,0.7)', marginBottom: 16, letterSpacing: 1, textAlign: 'center' },
+  headerTitle: { fontSize: 28, fontFamily: 'Fraunces_300Light', color: '#ffffff', marginBottom: 2, textAlign: 'center', letterSpacing: 2 },
+  headerDate: { fontSize: 16, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.7)', marginBottom: 16, letterSpacing: 1, textAlign: 'center' },
   tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   tabButtonActive: { backgroundColor: '#ffffff' },
@@ -1105,7 +1111,7 @@ const styles = StyleSheet.create({
   yearCardBg: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
   yearCardOverlay: { flex: 1, padding: 18, justifyContent: 'space-between' },
   yearBadge: { backgroundColor: '#9b72ff', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 28, alignItems: 'center', justifyContent: 'center' },
-  yearBadgeText: { color: '#ffffff', fontWeight: '800', fontSize: 36, letterSpacing: -0.5 },
+  yearBadgeText: { color: '#ffffff', fontFamily: 'Fraunces_800ExtraBold', fontSize: 36, letterSpacing: -0.5 },
   yearCardDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginBottom: 14 },
   yearCardBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   yearDateLabel: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
@@ -1150,7 +1156,7 @@ const styles = StyleSheet.create({
   dayYearBadge: { backgroundColor: '#9b72ff', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 16 },
   dayYearBadgeText: { color: '#ffffff', fontWeight: '800', fontSize: 15 },
   dayDateText: { fontSize: 18, fontWeight: '700', color: '#ffffff', flex: 1, flexWrap: 'wrap' },
-  sectionTitle: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
+  sectionTitle: { fontSize: 22, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
   sectionSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 16, fontStyle: 'italic' },
   saveDayButton: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', marginBottom: 20 },
   saveDayButtonSaved: { backgroundColor: 'rgba(155,114,255,0.25)', borderColor: 'rgba(255,255,255,0.4)' },

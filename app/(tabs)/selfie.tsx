@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { useEffect, useRef, useState } from 'react';
@@ -100,10 +101,15 @@ export default function DailySelfie() {
     if (!cameraRef.current || capturing) return;
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85, base64: false, mirror: true });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85, base64: false });
       if (photo?.uri) {
-        if (mediaPermission?.granted) await MediaLibrary.saveToLibraryAsync(photo.uri);
-        await AsyncStorage.setItem(`selfie_${todayKey}`, photo.uri);
+        const flipped = await ImageManipulator.manipulateAsync(
+          photo.uri,
+          [{ flip: ImageManipulator.FlipType.Horizontal }],
+          { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        if (mediaPermission?.granted) await MediaLibrary.saveToLibraryAsync(flipped.uri);
+        await AsyncStorage.setItem(`selfie_${todayKey}`, flipped.uri);
         setCameraOpen(false);
         loadSelfies();
       }
@@ -147,7 +153,7 @@ export default function DailySelfie() {
 
         {hasTodaySelfie ? (
           <View style={styles.todayDoneCard}>
-            <Image source={{ uri: todaySelfieUri }} style={[styles.todayDoneImage, { transform: [{ scaleX: -1 }] }]} />
+            <Image source={{ uri: todaySelfieUri }} style={styles.todayDoneImage} />
             <View style={styles.todayDoneOverlay}>
               <Text style={styles.todayDoneEmoji}>✅</Text>
               <Text style={styles.todayDoneTitle}>Today's selfie saved!</Text>
@@ -205,7 +211,7 @@ export default function DailySelfie() {
                       activeOpacity={0.95}>
                       <Image
                         source={{ uri: slideshowSelfies[slideshowIndex]?.uri }}
-                        style={[styles.slideshowPhoto, { transform: [{ scaleX: -1 }] }]}
+                        style={styles.slideshowPhoto}
                         resizeMode="cover"
                       />
                       <View style={styles.slideshowDateBadge}>
@@ -249,7 +255,7 @@ export default function DailySelfie() {
               <View style={styles.grid}>
                 {displaySelfies.map(selfie => (
                   <TouchableOpacity key={selfie.date} style={styles.gridItem} onPress={() => setFullScreenUri(selfie.uri)}>
-                    <Image source={{ uri: selfie.uri }} style={[styles.gridImage, { transform: [{ scaleX: -1 }] }]} />
+                    <Image source={{ uri: selfie.uri }} style={styles.gridImage} />
                     <Text style={styles.gridDate}>
                       {new Date(selfie.date + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                     </Text>
@@ -302,7 +308,7 @@ export default function DailySelfie() {
       {/* Full screen viewer */}
       <Modal visible={fullScreenUri !== null} transparent animationType="fade">
         <TouchableOpacity style={styles.fullScreenOverlay} activeOpacity={1} onPress={() => setFullScreenUri(null)}>
-          {fullScreenUri ? <Image source={{ uri: fullScreenUri }} style={[styles.fullScreenImage, { transform: [{ scaleX: -1 }] }]} resizeMode="contain" /> : null}
+          {fullScreenUri ? <Image source={{ uri: fullScreenUri }} style={styles.fullScreenImage} resizeMode="contain" /> : null}
           <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
         </TouchableOpacity>
       </Modal>
