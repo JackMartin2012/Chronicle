@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold, useFonts } from '@expo-google-fonts/space-grotesk';
 import { Audio } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -29,8 +30,9 @@ import {
 
 const { width } = Dimensions.get('window');
 const THUMB_SIZE = Math.floor((width - 32 - 12) / 7);
+const CAL_SLOT_WIDTH = Math.floor((width - 32) / 7);
 
-const WEEK_DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const WEEK_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -996,27 +998,46 @@ export default function ThePresent() {
                         {WEEK_DAYS.map((d, i) => <Text key={i} style={styles.calendarDayHeader}>{d}</Text>)}
                       </View>
                       <View style={styles.calendarGrid}>
-                        {Array.from({ length: firstDay }).map((_, i) => <View key={`e-${i}`} style={styles.calendarCell} />)}
+                        {Array.from({ length: firstDay }).map((_, i) => (
+                          <View key={`blank-${i}`} style={styles.calSlot} />
+                        ))}
                         {Array.from({ length: daysInMonth }).map((_, i) => {
                           const day = i + 1;
                           const dateKey = `${archiveCalYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                           const archiveDay = archiveDayMap[dateKey];
+                          const isToday = dateKey === formatDateKey(new Date());
+                          const hasPhoto = !!archiveDay?.photoUri;
                           return (
-                            <TouchableOpacity key={day} style={styles.calendarCell} onPress={() => archiveDay ? setSelectedDay({ key: dateKey, entry: archiveDay }) : null} activeOpacity={archiveDay ? 0.8 : 1}>
-                              {archiveDay ? (
-                                <View style={styles.calendarCellFilled}>
-                                  {archiveDay.photoUri
-                                    ? <Image source={{ uri: archiveDay.photoUri }} style={styles.calendarThumb} />
-                                    : archiveDay.mood
-                                      ? <View style={[styles.calendarThumb, styles.calendarMoodCell]}><Text style={styles.calendarMoodEmoji}>{archiveDay.mood}</Text></View>
-                                      : null}
-                                  <Text style={styles.calendarDayNumber}>{day}</Text>
-                                </View>
-                              ) : (
-                                <View style={styles.calendarCellEmpty}>
-                                  <Text style={styles.calendarDayNumberEmpty}>{day}</Text>
-                                </View>
-                              )}
+                            <TouchableOpacity
+                              key={day}
+                              style={styles.calSlot}
+                              onPress={() => archiveDay ? setSelectedDay({ key: dateKey, entry: archiveDay }) : null}
+                              activeOpacity={archiveDay ? 0.8 : 1}
+                            >
+                              <View style={[
+                                styles.calCard,
+                                hasPhoto ? styles.calCardFilled : styles.calCardEmpty,
+                                isToday && styles.calCardToday,
+                              ]}>
+                                {hasPhoto && (
+                                  <Image
+                                    source={{ uri: archiveDay!.photoUri }}
+                                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                                    resizeMode="cover"
+                                  />
+                                )}
+                                {hasPhoto && (
+                                  <LinearGradient
+                                    colors={['transparent', 'rgba(0,0,0,0.7)']}
+                                    style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' }}
+                                  />
+                                )}
+                                {hasPhoto ? (
+                                  <Text style={styles.calDayNumFilled}>{day}</Text>
+                                ) : (
+                                  <Text style={styles.calDayNumEmpty}>{day}</Text>
+                                )}
+                              </View>
                             </TouchableOpacity>
                           );
                         })}
@@ -1722,16 +1743,15 @@ const styles = StyleSheet.create({
   calendarMonth: { paddingHorizontal: 16, marginBottom: 32 },
   calendarMonthTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 12 },
   calendarDayHeaders: { flexDirection: 'row', marginBottom: 6 },
-  calendarDayHeader: { width: THUMB_SIZE, textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: '600' },
+  calendarDayHeader: { width: CAL_SLOT_WIDTH, textAlign: 'center', fontSize: 9, color: '#ffffff', fontWeight: '700' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calendarCell: { width: THUMB_SIZE, height: THUMB_SIZE, padding: 2 },
-  calendarCellFilled: { flex: 1, borderRadius: 6, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.05)' },
-  calendarThumb: { width: '100%', height: '100%', position: 'absolute' },
-  calendarMoodCell: { backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
-  calendarMoodEmoji: { fontSize: 18 },
-  calendarDayNumber: { position: 'absolute', bottom: 2, right: 3, fontSize: 11, color: '#4a90d9', fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 } },
-  calendarCellEmpty: { flex: 1, borderRadius: 6, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
-  calendarDayNumberEmpty: { fontSize: 11, color: 'rgba(255,255,255,0.2)' },
+  calSlot: { width: CAL_SLOT_WIDTH, alignItems: 'center', marginBottom: 8 },
+  calCard: { width: '86%', aspectRatio: 3 / 4, borderRadius: 8, overflow: 'hidden' },
+  calCardFilled: { borderWidth: 1.5, borderColor: '#ffffff' },
+  calCardEmpty: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
+  calCardToday: { borderWidth: 2, borderColor: '#ffffff' },
+  calDayNumFilled: { position: 'absolute', bottom: 4, left: 5, color: '#ffffff', fontSize: 12, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  calDayNumEmpty: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' },
   emptyState: { padding: 40, alignItems: 'center', marginTop: 40 },
   emptyEmoji: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
