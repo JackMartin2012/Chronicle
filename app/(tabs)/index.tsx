@@ -660,10 +660,7 @@ export default function OnThisDay() {
                       </View>
                       <View style={styles.calendarGrid}>
                         {Array.from({ length: firstDay }).map((_, i) => (
-                          <View key={`empty-${i}`} style={styles.calDayCell}>
-                            <View style={styles.calPhotoCardInvisible} />
-                            <Text style={styles.calDayNumEmpty}> </Text>
-                          </View>
+                          <View key={`empty-${i}`} style={styles.calCell} />
                         ))}
                         {Array.from({ length: daysInMonth }).map((_, i) => {
                           const day = i + 1;
@@ -674,22 +671,32 @@ export default function OnThisDay() {
                           return (
                             <TouchableOpacity
                               key={day}
-                              style={styles.calDayCell}
+                              style={[
+                                styles.calCell,
+                                hasPhoto ? styles.calCellFilled : styles.calCellEmpty,
+                                isToday && styles.calCellToday,
+                              ]}
                               onPress={() => vaultDay ? setSelectedVaultDay(vaultDay) : null}
                               activeOpacity={vaultDay ? 0.75 : 1}
                             >
-                              {hasPhoto ? (
-                                <View style={styles.calPhotoCard}>
-                                  <Image
-                                    source={{ uri: vaultDay!.thumbUri! }}
-                                    style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-                                    resizeMode="cover"
-                                  />
-                                </View>
-                              ) : (
-                                <View style={styles.calPhotoCardInvisible} />
+                              {hasPhoto && (
+                                <Image
+                                  source={{ uri: vaultDay!.thumbUri! }}
+                                  style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+                                  resizeMode="cover"
+                                />
                               )}
-                              <Text style={[styles.calDayNum, !hasPhoto && styles.calDayNumEmpty]}>{day}</Text>
+                              {hasPhoto && (
+                                <LinearGradient
+                                  colors={['transparent', 'rgba(0,0,0,0.7)']}
+                                  style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' }}
+                                />
+                              )}
+                              {hasPhoto ? (
+                                <Text style={styles.calDayNumFilled}>{day}</Text>
+                              ) : (
+                                <Text style={styles.calDayNumEmpty}>{day}</Text>
+                              )}
                             </TouchableOpacity>
                           );
                         })}
@@ -1174,11 +1181,12 @@ const styles = StyleSheet.create({
   calendarDayHeaders: { flexDirection: 'row', marginBottom: 4 },
   calendarDayHeader: { width: CARD_WIDTH, textAlign: 'center', fontSize: 9, color: '#ffffff', fontWeight: '700' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calDayCell: { width: CARD_WIDTH, alignItems: 'center' },
-  calPhotoCard: { width: CARD_WIDTH, aspectRatio: 2 / 3, borderRadius: 6, overflow: 'hidden', borderWidth: 1.5, borderColor: '#ffffff' },
-  calPhotoCardInvisible: { width: CARD_WIDTH, aspectRatio: 2 / 3 },
-  calDayNum: { fontSize: 12, fontWeight: '700', color: '#ffffff', textAlign: 'center', marginTop: 2 },
-  calDayNumEmpty: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: 2 },
+  calCell: { width: CARD_WIDTH, aspectRatio: 2 / 3, borderRadius: 6, overflow: 'hidden' },
+  calCellFilled: { borderWidth: 1.5, borderColor: '#ffffff' },
+  calCellEmpty: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center' },
+  calCellToday: { borderWidth: 2, borderColor: '#ffffff' },
+  calDayNumFilled: { position: 'absolute', bottom: 4, left: 6, color: '#ffffff', fontSize: 13, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  calDayNumEmpty: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '700' },
 
   // Your Friends tab
   friendsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
