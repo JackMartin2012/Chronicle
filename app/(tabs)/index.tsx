@@ -678,8 +678,8 @@ export default function OnThisDay() {
                               )}
                               {hasPhoto && (
                                 <LinearGradient
-                                  colors={['transparent', 'rgba(0,0,0,0.6)']}
-                                  locations={[0.4, 1]}
+                                  colors={['rgba(0,0,0,0.5)', 'transparent']}
+                                  locations={[0, 0.45]}
                                   style={StyleSheet.absoluteFillObject}
                                 />
                               )}
@@ -1166,12 +1166,12 @@ const styles = StyleSheet.create({
   calendarMonth: { paddingHorizontal: 16, marginBottom: 28 },
   calendarMonthTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 8, letterSpacing: -0.3 },
   calendarDayHeaders: { flexDirection: 'row', marginBottom: 4 },
-  calendarDayHeader: { width: CARD_WIDTH, textAlign: 'center', fontSize: 9, color: 'rgba(255,255,255,0.3)', fontWeight: '600', letterSpacing: 0.3 },
+  calendarDayHeader: { width: CARD_WIDTH, textAlign: 'center', fontSize: 11, color: '#ffffff', fontWeight: '700' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calPortraitCard: { width: CARD_WIDTH, height: CARD_WIDTH, borderRadius: 6, overflow: 'hidden', backgroundColor: 'transparent', justifyContent: 'flex-end', alignItems: 'flex-start' },
+  calPortraitCard: { width: CARD_WIDTH, aspectRatio: 3 / 4, borderRadius: 6, overflow: 'hidden', backgroundColor: 'transparent', justifyContent: 'flex-start', alignItems: 'flex-start' },
   calPortraitCardToday: { borderWidth: 1.5, borderColor: '#ffffff' },
-  calPortraitEmpty: { width: CARD_WIDTH, height: CARD_WIDTH },
-  calPortraitDayNum: { margin: 3, fontSize: 11, fontWeight: '700', color: '#ffffff' },
+  calPortraitEmpty: { width: CARD_WIDTH, aspectRatio: 3 / 4 },
+  calPortraitDayNum: { margin: 3, fontSize: 13, fontWeight: '800', color: '#ffffff' },
   calPortraitDayNumEmpty: { color: 'rgba(255,255,255,0.45)' },
 
   // Your Friends tab
