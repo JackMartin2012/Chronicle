@@ -66,6 +66,30 @@ type VaultDay = {
   thumbUri: string | null;
 };
 
+type PlaceContext = {
+  liveWith?: string;
+  chapterDescription?: string;
+  bestMemory?: string;
+  wentWith?: string;
+  highlight?: string;
+  wouldReturn?: string;
+  whyItMatters?: string;
+  whoYouAssociate?: string;
+};
+
+type Place = {
+  id: string;
+  type: 'home' | 'visited' | 'meaningful';
+  name: string;
+  locationName: string;
+  startDate?: string;
+  endDate?: string;
+  coverPhotoUri: string;
+  photoUris: string[];
+  dayKeys: string[];
+  context: PlaceContext;
+};
+
 const emptyContext: DayContext = {
   living: '', doing: '', with: '', listening: '', thinking: '',
 };
@@ -98,6 +122,24 @@ const contextFields = [
   { key: 'listening', label: 'WHAT I WAS LISTENING TO', placeholder: 'Obsessed with...', emoji: '🎵' },
   { key: 'thinking', label: 'WHAT I WAS THINKING ABOUT', placeholder: 'Worried about / excited about...', emoji: '💭' },
 ];
+
+const placeContextFields: Record<string, { key: string; label: string; emoji: string; placeholder: string }[]> = {
+  home: [
+    { key: 'liveWith', label: 'WHO DID YOU LIVE WITH?', emoji: '👥', placeholder: 'By myself, with flatmates...' },
+    { key: 'chapterDescription', label: 'WHAT WAS THIS CHAPTER?', emoji: '📖', placeholder: 'Describe this period of life...' },
+    { key: 'bestMemory', label: 'BEST MEMORY HERE?', emoji: '⭐', placeholder: 'The time when...' },
+  ],
+  visited: [
+    { key: 'wentWith', label: 'WHO DID YOU GO WITH?', emoji: '👥', placeholder: 'Solo, with friends...' },
+    { key: 'highlight', label: 'TRIP HIGHLIGHT?', emoji: '⭐', placeholder: 'The best part was...' },
+    { key: 'wouldReturn', label: 'WOULD YOU GO BACK?', emoji: '🔄', placeholder: 'Absolutely / Maybe not...' },
+  ],
+  meaningful: [
+    { key: 'whyItMatters', label: 'WHY DOES THIS PLACE MATTER?', emoji: '💭', placeholder: 'This place means...' },
+    { key: 'bestMemory', label: 'BEST MEMORY HERE?', emoji: '⭐', placeholder: 'The time when...' },
+    { key: 'whoYouAssociate', label: 'WHO DO YOU ASSOCIATE WITH IT?', emoji: '👥', placeholder: 'Always think of...' },
+  ],
+};
 
 const WEEK_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
@@ -143,7 +185,7 @@ export default function OnThisDay() {
   const [memoryList, setMemoryList] = useState<Memory[]>([]);
   const [loading, setLoading] = useState(true);
   const [permission, requestPermission] = MediaLibrary.usePermissions();
-  const [activeTab, setActiveTab] = useState<'today' | 'vault' | 'friends'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'vault' | 'places' | 'friends'>('today');
 
   const [selectedDayMemories, setSelectedDayMemories] = useState<Memory[] | null>(null);
   const [selectedDayYear, setSelectedDayYear] = useState('');
@@ -176,6 +218,18 @@ export default function OnThisDay() {
   const [personProfilePhotos, setPersonProfilePhotos] = useState<Record<string, string>>({});
   const [personDaysCount, setPersonDaysCount] = useState<Record<string, number>>({});
 
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [showCreatePlace, setShowCreatePlace] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [showPlaceProfile, setShowPlaceProfile] = useState(false);
+  const [newPlaceName, setNewPlaceName] = useState('');
+  const [newPlaceType, setNewPlaceType] = useState<'home' | 'visited' | 'meaningful'>('home');
+  const [newPlaceLocation, setNewPlaceLocation] = useState('');
+  const [newPlaceCoverUri, setNewPlaceCoverUri] = useState('');
+  const [editingPlaceField, setEditingPlaceField] = useState<string | null>(null);
+  const [placeFieldText, setPlaceFieldText] = useState('');
+  const [showAddToPlace, setShowAddToPlace] = useState(false);
+
   const today = new Date();
   const dateString = today.toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -190,8 +244,10 @@ export default function OnThisDay() {
   }, [permission]);
 
   useEffect(() => {
-    if (activeTab === 'vault' || activeTab === 'friends') loadVault();
+    if (activeTab === 'vault' || activeTab === 'friends' || activeTab === 'places') loadVault();
   }, [activeTab]);
+
+  useEffect(() => { loadPlaces(); }, []);
 
   const loadMemories = async () => {
     setLoading(true);
@@ -487,6 +543,70 @@ export default function OnThisDay() {
     setEditingVaultDate(selectedVaultDay.dateKey);
   };
 
+  const loadPlaces = async () => {
+    const raw = await AsyncStorage.getItem('places');
+    if (raw) setPlaces(JSON.parse(raw));
+  };
+
+  const savePlaces = async (updated: Place[]) => {
+    await AsyncStorage.setItem('places', JSON.stringify(updated));
+    setPlaces(updated);
+  };
+
+  const createPlace = async () => {
+    if (!newPlaceName.trim()) return;
+    const newPlace: Place = {
+      id: Date.now().toString(),
+      type: newPlaceType,
+      name: newPlaceName.trim(),
+      locationName: newPlaceLocation.trim(),
+      coverPhotoUri: newPlaceCoverUri,
+      photoUris: [],
+      dayKeys: [],
+      context: {},
+    };
+    await savePlaces([...places, newPlace]);
+    setShowCreatePlace(false);
+    setNewPlaceName('');
+    setNewPlaceType('home');
+    setNewPlaceLocation('');
+    setNewPlaceCoverUri('');
+  };
+
+  const updatePlaceContext = async (field: string, value: string) => {
+    if (!selectedPlace) return;
+    const updated = places.map(p => p.id === selectedPlace.id ? { ...p, context: { ...p.context, [field]: value } } : p);
+    await savePlaces(updated);
+    setSelectedPlace(prev => prev ? { ...prev, context: { ...prev.context, [field]: value } } : null);
+    setEditingPlaceField(null);
+  };
+
+  const addPhotoToPlace = async () => {
+    if (!selectedPlace) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    if (result.canceled) return;
+    const uri = result.assets[0].uri;
+    const updated = places.map(p => p.id === selectedPlace.id ? { ...p, photoUris: [...p.photoUris, uri] } : p);
+    await savePlaces(updated);
+    setSelectedPlace(prev => prev ? { ...prev, photoUris: [...prev.photoUris!, uri] } : null);
+  };
+
+  const pickPlaceCover = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    if (!result.canceled) setNewPlaceCoverUri(result.assets[0].uri);
+  };
+
+  const addDayToPlace = async (placeId: string) => {
+    if (!selectedVaultDay) return;
+    const updated = places.map(p => {
+      if (p.id !== placeId) return p;
+      const dayKeys = p.dayKeys.includes(selectedVaultDay.dateKey) ? p.dayKeys : [...p.dayKeys, selectedVaultDay.dateKey];
+      return { ...p, dayKeys };
+    });
+    await savePlaces(updated);
+    setShowAddToPlace(false);
+  };
+
   const groupedMemories = memoryList.reduce((groups, memory) => {
     if (!groups[memory.year]) groups[memory.year] = [];
     groups[memory.year].push(memory);
@@ -535,10 +655,13 @@ export default function OnThisDay() {
             <Text style={[styles.tabButtonText, activeTab === 'today' && styles.tabButtonTextActive]}>On This Day</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.tabButton, activeTab === 'vault' && styles.tabButtonActive]} onPress={() => setActiveTab('vault')}>
-            <Text style={[styles.tabButtonText, activeTab === 'vault' && styles.tabButtonTextActive]}>Your Vault</Text>
+            <Text style={[styles.tabButtonText, activeTab === 'vault' && styles.tabButtonTextActive]}>Vault</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.tabButton, activeTab === 'places' && styles.tabButtonActive]} onPress={() => setActiveTab('places')}>
+            <Text style={[styles.tabButtonText, activeTab === 'places' && styles.tabButtonTextActive]}>Places</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.tabButton, activeTab === 'friends' && styles.tabButtonActive]} onPress={() => setActiveTab('friends')}>
-            <Text style={[styles.tabButtonText, activeTab === 'friends' && styles.tabButtonTextActive]}>Your Friends</Text>
+            <Text style={[styles.tabButtonText, activeTab === 'friends' && styles.tabButtonTextActive]}>Friends</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -712,6 +835,51 @@ export default function OnThisDay() {
           )}
         </View>
       )}
+
+      {/* YOUR PLACES */}
+      {activeTab === 'places' && (() => {
+        const homePlaces = places.filter(p => p.type === 'home').sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+        const visitedPlaces = places.filter(p => p.type === 'visited');
+        const meaningfulPlaces = places.filter(p => p.type === 'meaningful');
+        const renderPlaceCard = (place: Place) => (
+          <AnimatedCard key={place.id} onPress={() => { setSelectedPlace(place); setShowPlaceProfile(true); }} style={styles.placeCard}>
+            {place.coverPhotoUri
+              ? <Image source={{ uri: place.coverPhotoUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+              : <View style={[StyleSheet.absoluteFillObject, styles.placeCardNoCover]} />}
+            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={[StyleSheet.absoluteFillObject, { top: '30%' }]} />
+            <View style={styles.placeTypeBadge}>
+              <Text style={styles.placeTypeBadgeText}>{place.type.toUpperCase()}</Text>
+            </View>
+            <View style={styles.placeCardBottom}>
+              <Text style={styles.placeCardName}>{place.name}</Text>
+              {!!place.locationName && <Text style={styles.placeCardLocation}>{place.locationName}</Text>}
+              {!!place.startDate && (
+                <Text style={styles.placeCardDate}>{place.startDate}{place.endDate ? ` — ${place.endDate}` : ''}</Text>
+              )}
+            </View>
+            {place.photoUris.length > 0 && (
+              <View style={styles.placeCardPhotoCount}>
+                <Text style={styles.placeCardPhotoCountText}>{place.photoUris.length} photos</Text>
+              </View>
+            )}
+          </AnimatedCard>
+        );
+        return (
+          <View style={styles.container}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 120 }}>
+              <Text style={styles.placeSectionHeader}>🏠 Homes</Text>
+              {homePlaces.length > 0 ? homePlaces.map(renderPlaceCard) : <Text style={styles.placeEmptyText}>None added yet.</Text>}
+              <Text style={styles.placeSectionHeader}>✈️ Places I've Been</Text>
+              {visitedPlaces.length > 0 ? visitedPlaces.map(renderPlaceCard) : <Text style={styles.placeEmptyText}>None added yet.</Text>}
+              <Text style={styles.placeSectionHeader}>❤️ Places That Matter</Text>
+              {meaningfulPlaces.length > 0 ? meaningfulPlaces.map(renderPlaceCard) : <Text style={styles.placeEmptyText}>None added yet.</Text>}
+            </ScrollView>
+            <TouchableOpacity style={styles.placeFab} onPress={() => setShowCreatePlace(true)}>
+              <Ionicons name="add" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        );
+      })()}
 
       {/* YOUR FRIENDS */}
       {activeTab === 'friends' && (
@@ -1011,6 +1179,16 @@ export default function OnThisDay() {
           </ScrollView>
 
           <View style={styles.vaultDayActions}>
+            {(() => {
+              const linkedPlace = places.find(p => selectedVaultDay ? p.dayKeys.includes(selectedVaultDay.dateKey) : false);
+              return (
+                <TouchableOpacity style={styles.vaultDayAddPlaceRow} onPress={() => setShowAddToPlace(true)}>
+                  <Text style={[styles.vaultDayAddPlaceText, linkedPlace && { color: '#9b72ff' }]}>
+                    {linkedPlace ? `📍 ${linkedPlace.name}` : '📍 Add to a place'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })()}
             <TouchableOpacity style={styles.vaultDayEditButton} onPress={openVaultEditSheet}>
               <Text style={styles.vaultDayEditButtonText}>✏️ Edit context</Text>
             </TouchableOpacity>
@@ -1018,6 +1196,32 @@ export default function OnThisDay() {
               <Text style={styles.dayModalCloseText}>← Back to Vault</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Add to place picker — nested inside vault day modal */}
+          <Modal visible={showAddToPlace} animationType="slide" transparent>
+            <View style={styles.modalOverlay}>
+              <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+              <View style={styles.modalBox}>
+                <Text style={styles.modalTitle}>Add to a place</Text>
+                <ScrollView style={{ maxHeight: 300 }}>
+                  {places.map(p => (
+                    <TouchableOpacity key={p.id} style={styles.addToPlaceRow} onPress={() => addDayToPlace(p.id)}>
+                      <Text style={styles.addToPlaceRowName}>{p.name}</Text>
+                      <View style={styles.placeTypePill}>
+                        <Text style={styles.placeTypePillText}>{p.type.toUpperCase()}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                  <TouchableOpacity style={styles.addToPlaceNewBtn} onPress={() => { setShowAddToPlace(false); setShowCreatePlace(true); }}>
+                    <Text style={styles.addToPlaceNewBtnText}>+ Create new place</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => setShowAddToPlace(false)}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </View>
       </Modal>
 
@@ -1123,6 +1327,158 @@ export default function OnThisDay() {
         </View>
       </Modal>
 
+      {/* PLACE PROFILE MODAL */}
+      <Modal visible={showPlaceProfile && selectedPlace !== null} animationType="slide" presentationStyle="pageSheet">
+        <View style={{ flex: 1, backgroundColor: '#0d0a14' }}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+            {/* Cover header */}
+            <View style={{ height: 280 }}>
+              {selectedPlace?.coverPhotoUri
+                ? <Image source={{ uri: selectedPlace.coverPhotoUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                : <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(255,255,255,0.06)' }]} />}
+              <LinearGradient colors={['transparent', '#0d0a14']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 120 }} />
+              <TouchableOpacity style={styles.placeProfileClose} onPress={() => setShowPlaceProfile(false)}>
+                <Ionicons name="chevron-down" size={28} color="#ffffff" />
+              </TouchableOpacity>
+              <View style={styles.placeTypeBadgeTop}>
+                <Text style={styles.placeTypeBadgeText}>{selectedPlace?.type.toUpperCase()}</Text>
+              </View>
+              <View style={{ position: 'absolute', bottom: 16, left: 16 }}>
+                <Text style={styles.placeProfileName}>{selectedPlace?.name}</Text>
+                {!!selectedPlace?.locationName && <Text style={styles.placeProfileLocation}>{selectedPlace.locationName}</Text>}
+                {!!selectedPlace?.startDate && (
+                  <Text style={styles.placeProfileDate}>{selectedPlace.startDate}{selectedPlace.endDate ? ` — ${selectedPlace.endDate}` : ''}</Text>
+                )}
+              </View>
+            </View>
+
+            {/* Context fields */}
+            <Text style={styles.placeProfileSectionTitle}>About this place</Text>
+            {selectedPlace && (placeContextFields[selectedPlace.type] || []).map(field => {
+              const val = selectedPlace.context[field.key as keyof PlaceContext] || '';
+              return (
+                <TouchableOpacity key={field.key} style={styles.placeContextRow} onPress={() => { setPlaceFieldText(val); setEditingPlaceField(field.key); }}>
+                  <Text style={styles.placeContextLabel}>{field.emoji} {field.label}</Text>
+                  {val ? <Text style={styles.placeContextValue}>{val}</Text> : <Text style={styles.placeContextEmpty}>Tap to add...</Text>}
+                </TouchableOpacity>
+              );
+            })}
+
+            {/* Photos */}
+            <Text style={styles.placeProfileSectionTitle}>Photos</Text>
+            {(!selectedPlace?.photoUris || selectedPlace.photoUris.length === 0) ? (
+              <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
+                <Text style={styles.placeEmptyText}>No photos added yet.</Text>
+                <TouchableOpacity style={styles.placeAddPhotoBtn} onPress={addPhotoToPlace}>
+                  <Text style={styles.placeAddPhotoBtnText}>Add photos</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+                {selectedPlace.photoUris.map((uri, i) => (
+                  <Image key={i} source={{ uri }} style={{ width: 100, height: 130, borderRadius: 8 }} resizeMode="cover" />
+                ))}
+                <TouchableOpacity onPress={addPhotoToPlace} style={{ width: 100, height: 130, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="add" size={28} color="rgba(255,255,255,0.4)" />
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+
+            {/* Linked days */}
+            <Text style={styles.placeProfileSectionTitle}>Days here</Text>
+            {(!selectedPlace?.dayKeys || selectedPlace.dayKeys.length === 0) ? (
+              <Text style={[styles.placeEmptyText, { paddingHorizontal: 16 }]}>No days linked yet.</Text>
+            ) : (
+              <View style={{ paddingHorizontal: 16 }}>
+                {selectedPlace.dayKeys.map(dateKey => {
+                  const vd = vaultDays.find(d => d.dateKey === dateKey);
+                  return (
+                    <TouchableOpacity key={dateKey} style={styles.placeLinkedDayRow} onPress={() => vd ? setSelectedVaultDay(vd) : null}>
+                      {vd?.thumbUri && <Image source={{ uri: vd.thumbUri }} style={styles.placeLinkedDayThumb} />}
+                      <Text style={styles.placeLinkedDayDate}>{vd?.displayDate || dateKey}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Context field editor — nested inside place profile */}
+          <Modal visible={editingPlaceField !== null} animationType="slide" transparent>
+            <View style={styles.modalOverlay}>
+              <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+                <View style={styles.modalBox}>
+                  <Text style={styles.modalTitle}>
+                    {selectedPlace ? (placeContextFields[selectedPlace.type] || []).find(f => f.key === editingPlaceField)?.label || '' : ''}
+                  </Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder={selectedPlace ? (placeContextFields[selectedPlace.type] || []).find(f => f.key === editingPlaceField)?.placeholder || '' : ''}
+                    placeholderTextColor="#555555"
+                    multiline
+                    value={placeFieldText}
+                    onChangeText={setPlaceFieldText}
+                    autoFocus
+                  />
+                  <TouchableOpacity style={styles.saveButton} onPress={() => updatePlaceContext(editingPlaceField!, placeFieldText)}>
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.cancelButton} onPress={() => setEditingPlaceField(null)}>
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </KeyboardAvoidingView>
+            </View>
+          </Modal>
+        </View>
+      </Modal>
+
+      {/* CREATE PLACE MODAL */}
+      <Modal visible={showCreatePlace} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <View style={[styles.modalBox, { maxHeight: '90%' }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <Text style={styles.modalTitle}>New Place</Text>
+                <TouchableOpacity onPress={() => setShowCreatePlace(false)}>
+                  <Ionicons name="close" size={24} color="rgba(255,255,255,0.6)" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={styles.createPlaceLabel}>What kind of place?</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                  {(['home', 'visited', 'meaningful'] as const).map(t => (
+                    <TouchableOpacity key={t} style={[styles.createPlaceTypePill, newPlaceType === t && styles.createPlaceTypePillActive]} onPress={() => setNewPlaceType(t)}>
+                      <Text style={[styles.createPlaceTypePillText, newPlaceType === t && { color: '#fff' }]}>{t.charAt(0).toUpperCase() + t.slice(1)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.createPlaceLabel}>
+                  {newPlaceType === 'home' ? 'What did you call this place?' : newPlaceType === 'visited' ? 'Where did you go?' : 'What do you call this place?'}
+                </Text>
+                <TextInput style={styles.createPlaceInput} placeholder="Place name..." placeholderTextColor="rgba(255,255,255,0.25)" value={newPlaceName} onChangeText={setNewPlaceName} />
+                <Text style={styles.createPlaceLabel}>Address or location (optional)</Text>
+                <TextInput style={styles.createPlaceInput} placeholder="City, country..." placeholderTextColor="rgba(255,255,255,0.25)" value={newPlaceLocation} onChangeText={setNewPlaceLocation} />
+                <Text style={styles.createPlaceLabel}>Cover photo (optional)</Text>
+                <TouchableOpacity style={styles.createPlaceCoverBtn} onPress={pickPlaceCover}>
+                  {newPlaceCoverUri
+                    ? <Image source={{ uri: newPlaceCoverUri }} style={{ width: '100%', height: '100%', borderRadius: 10 }} resizeMode="cover" />
+                    : <>
+                        <Ionicons name="image-outline" size={32} color="rgba(255,255,255,0.3)" />
+                        <Text style={{ color: 'rgba(255,255,255,0.3)', marginTop: 8, fontSize: 14 }}>Tap to add cover photo</Text>
+                      </>}
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.saveButton, { marginTop: 16 }]} onPress={createPlace}>
+                  <Text style={styles.saveButtonText}>Create Place</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -1136,7 +1492,7 @@ const styles = StyleSheet.create({
   tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
   tabButtonActive: { backgroundColor: '#ffffff' },
-  tabButtonText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
+  tabButtonText: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
   tabButtonTextActive: { color: '#6b35d4' },
   centreScreen: { flex: 1, backgroundColor: '#6b35d4', justifyContent: 'center', alignItems: 'center', padding: 32 },
   permissionTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 16 },
@@ -1317,4 +1673,54 @@ const styles = StyleSheet.create({
   personGalleryItem: { width: '47%' },
   personGalleryThumb: { width: '100%', height: 160, borderRadius: 12, marginBottom: 4 },
   personGalleryCaption: { fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center', fontStyle: 'italic' },
+
+  // Your Places tab
+  placeSectionHeader: { fontSize: 18, fontWeight: '800', color: '#ffffff', marginTop: 24, marginBottom: 12 },
+  placeEmptyText: { color: 'rgba(255,255,255,0.3)', fontSize: 14, fontStyle: 'italic', marginBottom: 8 },
+  placeCard: { width: '100%', height: 180, borderRadius: 14, overflow: 'hidden', marginBottom: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  placeCardNoCover: { backgroundColor: 'rgba(255,255,255,0.06)' },
+  placeTypeBadge: { position: 'absolute', top: 12, right: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(0,0,0,0.4)' },
+  placeTypeBadgeTop: { position: 'absolute', top: 52, right: 16, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(0,0,0,0.5)' },
+  placeTypeBadgeText: { fontSize: 10, fontWeight: '700', color: '#ffffff' },
+  placeCardBottom: { position: 'absolute', bottom: 14, left: 14 },
+  placeCardName: { fontSize: 20, fontWeight: '800', color: '#ffffff' },
+  placeCardLocation: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+  placeCardDate: { fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  placeCardPhotoCount: { position: 'absolute', bottom: 14, right: 14 },
+  placeCardPhotoCountText: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
+  placeFab: { position: 'absolute', bottom: 100, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#9b72ff', justifyContent: 'center', alignItems: 'center' },
+
+  // Place profile modal
+  placeProfileClose: { position: 'absolute', top: 52, left: 16, padding: 4 },
+  placeProfileName: { fontSize: 28, fontWeight: '800', color: '#ffffff' },
+  placeProfileLocation: { fontSize: 15, color: 'rgba(255,255,255,0.65)', marginTop: 4 },
+  placeProfileDate: { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
+  placeProfileSectionTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginTop: 24, marginLeft: 16, marginBottom: 12 },
+  placeContextRow: { paddingHorizontal: 16, paddingVertical: 14, marginBottom: 1, backgroundColor: 'rgba(255,255,255,0.04)' },
+  placeContextLabel: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: 1.2, marginBottom: 4 },
+  placeContextValue: { fontSize: 15, color: '#ffffff', lineHeight: 22 },
+  placeContextEmpty: { fontSize: 15, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' },
+  placeAddPhotoBtn: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 8 },
+  placeAddPhotoBtnText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '600' },
+  placeLinkedDayRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  placeLinkedDayThumb: { width: 50, height: 50, borderRadius: 6 },
+  placeLinkedDayDate: { fontSize: 15, color: '#ffffff', fontWeight: '600' },
+
+  // Create place modal
+  createPlaceLabel: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 8 },
+  createPlaceInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 14, color: '#ffffff', fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', marginBottom: 16 },
+  createPlaceTypePill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+  createPlaceTypePillActive: { backgroundColor: '#9b72ff', borderColor: '#9b72ff' },
+  createPlaceTypePillText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, fontWeight: '600' },
+  createPlaceCoverBtn: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderStyle: 'dashed', borderRadius: 10, height: 120, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+
+  // Add to place (from vault day)
+  vaultDayAddPlaceRow: { backgroundColor: 'rgba(155,114,255,0.08)', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(155,114,255,0.25)', marginBottom: 8 },
+  vaultDayAddPlaceText: { color: 'rgba(255,255,255,0.4)', fontWeight: '600', fontSize: 15 },
+  addToPlaceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  addToPlaceRowName: { fontSize: 16, color: '#ffffff', fontWeight: '600', flex: 1 },
+  placeTypePill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: 'rgba(255,255,255,0.06)' },
+  placeTypePillText: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.5)' },
+  addToPlaceNewBtn: { paddingVertical: 14, alignItems: 'center' },
+  addToPlaceNewBtnText: { color: '#9b72ff', fontWeight: '600', fontSize: 15 },
 });
