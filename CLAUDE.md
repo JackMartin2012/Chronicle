@@ -30,6 +30,9 @@ The app connects your past (photos from this date in previous years) with your p
 - expo-linear-gradient (used on year cards in index.tsx, place cards, calendar gradients)
 - expo-blur (used on all bottom-sheet modals across all files)
 - @expo/vector-icons (Ionicons)
+- react-native-maps (Places map view — Apple Maps in Expo Go on iOS)
+- @expo-google-fonts/fraunces (display font on The Past — weights 300/400/600/800)
+- `.env` (gitignored): `EXPO_PUBLIC_FOOTBALL_API_KEY` for football-data.org
 
 ---
 
@@ -38,6 +41,7 @@ The app connects your past (photos from this date in previous years) with your p
 app/
   _layout.tsx         — root layout, checks onboarding_complete flag
   onboarding.tsx      — 4-slide onboarding (already built)
+  settings.tsx        — Settings screen (news feed toggles)
   (tabs)/
     _layout.tsx       — custom tab bar layout
     index.tsx         — The Past screen
@@ -48,19 +52,26 @@ app/
 ---
 
 ## Colour System
-- **The Past background:** `#0d0a14` (dark purple tint)
+
+### The Past (index.tsx + settings.tsx) — overhauled July 2026
+- **Background:** `#17102a` (visibly purple-black)
+- **Card background:** `#1e1535`
+- **Purple accent:** `#9b72ff`
+- **Border default:** `rgba(155,114,255,0.25)` / **active:** `rgba(155,114,255,0.45)`
+- **Text primary:** `#ffffff`
+- **Text secondary:** `rgba(255,255,255,0.65)` / **muted:** `rgba(255,255,255,0.35)`
+- **Ghost watermark:** `rgba(155,114,255,0.08)`
+- **Divider:** `rgba(155,114,255,0.2)`
+- **Pin colours:** home `#9b72ff`, visited `#4a90d9`, meaningful `#f0b429` (`PIN_COLOURS` constant)
+- **Glass modal box:** `rgba(24,16,42,0.98)` with `rgba(155,114,255,0.15)` border
+- **Fraunces font** on: "The Past" title, year numbers/badges, trading card date + section headers, people names, month headers, place names
+
+### The Present / Selfie (unchanged)
 - **The Present background:** `#090d14` (dark blue tint)
 - **Selfie background:** `#0d0d0d` (neutral dark)
-- **Cards:** `#1a1a1a`
-- **Borders:** `#2a2a2a`
-- **The Past accent:** `#9b72ff` (purple)
 - **The Present accent:** `#4a90d9` (blue)
-- **Text primary:** `#ffffff`
-- **Text secondary:** `#cccccc`
-- **Text muted:** `#666666` / `#555555`
 - **Danger:** `#ff4444`
 - **Capsule gold:** `#f5c842`
-- **Glass modal box (The Past):** `rgba(18,14,26,0.98)` with `rgba(155,114,255,0.15)` border
 - **Glass modal box (The Present):** `rgba(10,14,22,0.98)` with `rgba(74,144,217,0.15)` border
 
 ---
@@ -129,68 +140,64 @@ Key points:
 ## Screen 1 — The Past (index.tsx)
 
 ### Purpose
-Shows photos from this exact date in previous years. Lets the user add context, captions, tag people, save days to Vault, document places, and browse friends.
+Shows photos from this exact date in previous years. Lets the user add context, captions, tag people, save days to Vault, document places on a map, and browse people.
 
-### Four tabs: On This Day | Vault | Places | Friends
-(Tab button labels shortened to fit 4 across; fontSize 12)
+### Four tabs: On This Day | Vault | Places | People
+Header: "The Past" (Fraunces 32) left, gear icon right → `router.push('/settings')`.
+Tab pills: active `rgba(155,114,255,0.18)` bg + `rgba(155,114,255,0.35)` border, fontSize 11.
 
 ---
 
 ### On This Day
-- Year cards — full bleed photo background, ~45% screen height, purple border
-- Wrapped in **AnimatedCard** (scale on press)
-- **LinearGradient overlay**: `['rgba(0,0,0,0.35)', 'transparent', 'rgba(0,0,0,0.75)']`
-- Purple year badge top centre, date + photo count bottom row
-- Tap year card → Day Detail modal
+- Year cards — height 230, borderRadius 18, `#1e1535` bg, border `rgba(155,114,255,0.3)`, shadow
+- Photo fill at opacity 0.88 + gradient `['rgba(13,10,20,0.18)', 'transparent', 'rgba(10,5,20,0.82)']`
+- **Ghost year watermark** top-right (Fraunces 108, `rgba(155,114,255,0.08)`, pointerEvents none)
+- Small year badge pill top-left; divider + day name/date + photo count bottom bar
+- **Empty year rows** (height 80) shown for gap years between oldest photo year and last year
+- Tap year card → **openTradingCard(dateKey, year)** — NOT a day detail modal
 
-### Day Detail Modal
-- Hero photo, purple year badge + date
-- **"Save Day to Vault"** button
-- **Context section** — 5 tappable fields (WHERE I WAS LIVING, WHAT I WAS DOING, WHO I WAS WITH, WHAT I WAS LISTENING TO, WHAT I WAS THINKING ABOUT)
-- **Photos section** — ⋯ three dot menu → Hide, Set as cover, Share, Copy caption
-- All nested modals use **BlurView pattern**
+### THE TRADING CARD (core day view)
+Full-screen Modal, `presentationStyle="pageSheet"`, `#17102a` bg. Opens from year cards, vault calendar days, person profile days, and place profile linked days. Replaced the old day detail modal AND vault day modal entirely.
+
+Layout (ScrollView):
+1. **Header** — chevron-down close (top-left), purple "Save" pill (top-right) → `saveTradingCard()`: sets `saved_day_`, `tc_description_`, `tc_location_` keys, closes, reloads vault
+2. **Date block** — day of week (Fraunces 16) + "14 June 2019" (Fraunces 38)
+3. **Info strip** — weather pill (from news cache), tappable location pill (inline TextInput edit), "In Vault" badge if saved
+4. **Photos** — one card per photo (aspectRatio 4/3): tap → fullscreen; ⋯ menu (set cover / hide / share / copy caption); Cover badge; "Save just this photo" row (`tc_single_photo_` key); action row: Add context (caption) | Tag people | Add to place — icons turn purple when filled; caption + people chips below
+5. **Description** — "What were you doing?" multiline input, auto-saves with 500ms debounce to `tc_description_`
+6. **Context fields** — "Where you were", the 5 DayContext rows, BlurView editor
+7. **News feed** — "The World That Day": Wikipedia on-this-day events (filtered to year−25..year+5, max 5 + 1 birth), ⚽ Football section with inline toggle Switch (football-data.org, rate-limit aware via `football_requests_available`/`football_reset_time`), historical weather card (Open-Meteo archive API + expo-location). All cached 30 days under `news_cache_${dateKey}`
+
+All child modals (photo menu, fullscreen, caption, tag people, add-to-place, context field) are **nested inside the trading card Modal JSX**. The add-to-place picker has a "Just this photo | The whole day" scope toggle and an **inline create-place mini form** (not the root create modal — avoids stacking sibling modals).
 
 ---
 
 ### Your Vault
-- **Year picker strip** — horizontal scroll of year pills
-- **BeReal-style portrait card calendar** — see Calendar section below
-- Vault populated from `day_context_`, `saved_day_`, `caption_` keys
-
-### Vault Day Modal
-- Hero photo, bold date, mood/weather chips, context fields, present journal answers, photo strip
-- **"Add to place" row** in actions — shows linked place name (purple) or "📍 Add to a place" (muted)
-  - Tapping opens a nested BlurView picker listing all places; also has "Create new place" option
-- **Edit context button** → reloads fresh context from AsyncStorage before opening
+- **Year picker strip** — active pill `rgba(155,114,255,0.25)` bg
+- **BeReal-style portrait card calendar** — see Calendar section below; month headers Fraunces 22
+- Tap a saved day → **openTradingCard(dateKey, year)** (old vault day modal removed)
+- Vault includes days from `day_context_`, `saved_day_`, `caption_` keys; thumb falls back to `tc_single_photo_` asset
 
 ---
 
-### Your Places (NEW)
-Three sections in a ScrollView:
-- 🏠 **Homes** — places where `type === 'home'`, sorted by startDate ascending
-- ✈️ **Places I've Been** — `type === 'visited'`
-- ❤️ **Places That Matter** — `type === 'meaningful'`
+### Your Places — MAP + LIST
+Two views toggled by a Map | List segmented pill (absolute top-right). Default: **Map**.
 
-**Place card** (AnimatedCard, height 180, borderRadius 14):
-- Cover photo fills card; LinearGradient overlay bottom 70%
-- Type badge top-right; name/location/date bottom-left; photo count bottom-right
-- No cover photo: `rgba(255,255,255,0.06)` background with faint border
-- Tap → Place Profile modal
+**Map view** (react-native-maps, `mapType="mutedStandard"`, `showsUserLocation`):
+- Custom Marker per place with lat/lon: coloured name bubble + triangle pointer (`PIN_COLOURS`: home purple, visited blue, meaningful amber)
+- Tap marker → bottom card (absolute bottom 100): name, location, type pill, chevron → Place Profile; X to dismiss (FAB hides while card is shown)
+- **Search bar** (absolute top, left of toggle) → Nominatim with 400ms debounce, `User-Agent: ChronicleApp/1.0` header required; results dropdown; tap result → animate map + open Create Place pre-filled with name/location/lat/lon
 
-**Floating + FAB** (bottom 100, right 20) → Create Place modal
+**List view**:
+- Empty state: map icon + "Your Places" + three coloured add buttons (Add a Home / Add a Trip / Add a Meaningful Place) that pre-set the type
+- Non-empty: 🏠 Homes / ✈️ Places I've Been / ❤️ Places That Matter sections (headers in category colour), place cards height 180 borderRadius 16
+- + FAB (bottom 100, right 16) in both views
 
-**Create Place modal** (BlurView, slide up):
-- Type picker pills: Home / Visited / Meaningful
-- Name input (label changes by type)
-- Location input (optional)
-- Cover photo picker (ImagePicker)
+**Create Place modal** (BlurView, slide up): type pills, name, location, cover photo picker; saves lat/lon when opened from a search result
 
-**Place Profile modal** (`presentationStyle="pageSheet"`, full screen, `#0d0a14` background):
-- Cover header height 280: photo fill + gradient + close button (chevron-down) + type badge + name/location/date
-- Context fields section (fields differ by type — see `placeContextFields` constant)
-- Photos section: horizontal strip of thumbnails + add button
-- Linked days section: vault days in `place.dayKeys`, tap to open vault day modal
-- Context field editor nested inside (BlurView)
+**Place Profile modal** (`pageSheet`, `#17102a` bg):
+- Cover header 280 + "View on Map" button (only if lat/lon set) → nested map modal
+- Context fields (per-type), photos strip, linked days → tap closes profile then opens trading card (350ms delay for modal dismissal)
 
 **Place types and context fields:**
 ```
@@ -210,6 +217,7 @@ type PlaceContext = {
 type Place = {
   id: string; type: 'home' | 'visited' | 'meaningful';
   name: string; locationName: string;
+  latitude?: number; longitude?: number;
   startDate?: string; endDate?: string;
   coverPhotoUri: string; photoUris: string[];
   dayKeys: string[]; context: PlaceContext;
@@ -220,13 +228,15 @@ type Place = {
 
 ---
 
-### Your Friends
-- Grid of person cards (avatar/initial, name, days count)
-- Empty state: "People you tag in your photos will appear here."
-- Tap → Person Profile modal (full screen)
-- Person profile: large photo or initial, name, days together, photos grid
-- Tap avatar → pick profile photo from camera or library
-- Stored as `person_photo_${name}` in AsyncStorage
+### Your People (renamed from Friends)
+- Grid of person cards (avatar/initial, name, days count with singular/plural fix)
+- People sourced from photo tags + day entry `taggedPeople` + day context `with` mentions
+- Avatar fallback: initial in circle, `rgba(155,114,255,0.3)` bg
+- Tap → **Person Profile modal** (`pageSheet`, `#17102a` bg):
+  - Header 220: profile photo full bleed (or gradient + big Fraunces initial), gradient into bg, name (Fraunces 28), "X days documented together", chevron-down close, "📷 Edit photo" pill
+  - **About** — 6 tappable fields: `person_desc_` / `person_since_` / `person_bday_` / `person_phone_` / `person_insta_` / `person_notes_` (+ name suffix). Saving a birthday schedules a yearly 9am local notification
+  - **Days Together** — horizontal 120×160 mini cards, tap closes profile then opens trading card
+  - **Photos Together** — horizontal 80×80 thumbs, tap → fullscreen (nested modal)
 
 ---
 
@@ -255,10 +265,17 @@ Every day cell is a two-layer structure:
 - `people_${assetId}` — JSON array of name strings
 - `day_context_${dateKey}` — JSON DayContext object
 - `saved_day_${dateKey}` — 'true' if day saved to vault
+- `tc_description_${dateKey}` — trading card day description
+- `tc_location_${dateKey}` — trading card day location
+- `tc_single_photo_${dateKey}` — assetId when only one photo was saved for the day
+- `news_cache_${dateKey}` — JSON `{fetchedAt, wikipedia, football, weather}` (30-day TTL)
+- `show_football_feed` / `show_wikipedia_feed` / `show_weather_feed` — 'true'/'false' (settings screen; wiki + weather default true)
+- `football_requests_available` / `football_reset_time` — rate-limit bookkeeping for football-data.org
 - `hidden_photos` — JSON array of hidden asset IDs
 - `cover_photos` — JSON object {year: assetId}
 - `person_photo_${name}` — URI string for person profile photo
-- `places` — JSON array of Place objects
+- `person_desc_${name}`, `person_since_${name}`, `person_bday_${name}`, `person_phone_${name}`, `person_insta_${name}`, `person_notes_${name}` — person about fields
+- `places` — JSON array of Place objects (now with latitude/longitude)
 
 ---
 
@@ -393,24 +410,22 @@ git push
 
 ---
 
-## Session Summary (July 2026)
+## Session Summary (July 2026 — index.tsx overhaul)
 
-### Tab bar (_layout.tsx)
-- Replaced native React Navigation tab bar with fully custom `CustomTabBar` component using `tabBar` prop
-- BlurView frosted glass background, pill highlight on active tab, `usePathname()` for active detection
-- Fixed repeated iOS icon slot collapse bug — custom `tabBar` is now the permanent solution
+### index.tsx — complete rewrite (~2540 lines)
+- **New design system**: `#17102a` background, `#1e1535` cards, Fraunces display font, purple-tinted borders throughout. Old `#6b35d4`/`#0d0a14` backgrounds gone
+- **Trading card** built — the core day view. Replaces the old day detail modal AND vault day modal. Opens from year cards, vault calendar, person profile days, place profile linked days. Photos + captions + tags + places + description + context + "The World That Day" news feed (Wikipedia / football / historical weather, cached 30 days)
+- **Year cards** redesigned: 230px, ghost year watermark, small badge, divider bottom bar, empty-year rows for gaps
+- **Places tab rethought**: Map view (react-native-maps custom pins, Nominatim search, bottom card) + List view (empty state with 3 coloured add buttons); `Place` type gained `latitude`/`longitude`
+- **Friends → People**: expanded person profile (about fields, birthday yearly notification, days together, photos together)
 
-### index.tsx — The Past
-- **4-tab layout**: On This Day | Vault | Places | Friends (was 2 tabs)
-- **Vault calendar** redesigned multiple times → final: two-layer `calSlot`/`calCard` structure, portrait 3/4 cards, `(width-32)/7` slot width, `86%` inner card, filled/empty/today variants
-- **Your Friends tab**: moved People bubbles here from Vault; grid of person cards
-- **Your Places tab** (new): Homes / Places I've Been / Places That Matter, AnimatedCard place cards, Create Place modal, Place Profile full-page modal with context fields / photos / linked days
-- `Place` and `PlaceContext` types; `places` AsyncStorage key
-- Vault day modal: "Add to place" action with nested BlurView place picker
+### New files / config
+- `app/settings.tsx` — news feed toggles (football/wikipedia/weather)
+- `.env` (gitignored) — `EXPO_PUBLIC_FOOTBALL_API_KEY`
+- Installed `react-native-maps`
 
-### explore.tsx — The Present
-- Your Days calendar redesigned to match vault calendar exactly (calSlot/calCard)
-- `LinearGradient` imported; `CAL_SLOT_WIDTH` constant; MON–SUN full headers
-- Filled day = has `photoUri`; image fill + bottom gradient + day number bottom-left
+### Removed
+- Old day detail modal, vault day modal, vault context edit modal (trading card covers all)
+- Dead `allPrompts`/`getPromptForDate` code
 
 *Chronicle is functional and running on iOS via Expo Go. All core screens complete. Next up: privacy policy page, then TestFlight.*
