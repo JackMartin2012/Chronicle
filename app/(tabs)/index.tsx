@@ -30,7 +30,7 @@ import {
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = Math.floor((width - 32) / 7);
 const FOOTBALL_API_KEY = process.env.EXPO_PUBLIC_FOOTBALL_API_KEY;
 
@@ -95,12 +95,21 @@ type Place = {
   locationName: string;
   latitude?: number;
   longitude?: number;
+  pinEmoji?: string;
   startDate?: string;
   endDate?: string;
   coverPhotoUri: string;
   photoUris: string[];
   dayKeys: string[];
   context: PlaceContext;
+};
+
+type ArchiveData = {
+  fetchedAt: number;
+  events: WikiEvent[];
+  births: WikiEvent[];
+  deaths: WikiEvent[];
+  holidays: { text: string }[];
 };
 
 type TcPhoto = { id: string; uri: string; mediaType: 'photo' | 'video' };
@@ -247,6 +256,7 @@ export default function OnThisDay() {
   const [newPlaceCoverUri, setNewPlaceCoverUri] = useState('');
   const [newPlaceLat, setNewPlaceLat] = useState<number | null>(null);
   const [newPlaceLon, setNewPlaceLon] = useState<number | null>(null);
+  const [newPlacePinEmoji, setNewPlacePinEmoji] = useState('');
   const [editingPlaceField, setEditingPlaceField] = useState<string | null>(null);
   const [placeFieldText, setPlaceFieldText] = useState('');
   const [placesView, setPlacesView] = useState<'map' | 'list'>('map');
@@ -292,6 +302,12 @@ export default function OnThisDay() {
   const [tcSaved, setTcSaved] = useState(false);
   const [newsSettings, setNewsSettings] = useState({ wiki: true, football: false, weather: true });
   const descTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const locTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Archive
+  const [showArchive, setShowArchive] = useState(false);
+  const [archiveData, setArchiveData] = useState<ArchiveData | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
 
   const today = new Date();
   const dateString = today.toLocaleDateString('en-GB', {
@@ -426,13 +442,34 @@ export default function OnThisDay() {
 
       let thumbUri = photos.length > 0 ? photos[0].uri : null;
       if (!thumbUri) {
-        const singleId = await AsyncStorage.getItem(`tc_single_photo_${dateKey}`);
-        if (singleId) {
+        const thumbId = (await AsyncStorage.getItem(`tc_single_photo_${dateKey}`))
+          || (await AsyncStorage.getItem(`tc_thumb_${dateKey}`));
+        if (thumbId) {
           try {
-            const asset = await MediaLibrary.getAssetInfoAsync(singleId);
+            const asset = await MediaLibrary.getAssetInfoAsync(thumbId);
             thumbUri = asset.localUri || asset.uri;
           } catch { }
         }
+      }
+      if (!thumbUri && savedFlagSet.has(dateKey)) {
+        // Saved day with no stored thumb — grab the first photo taken that day
+        try {
+          const day = new Date(dateKey + 'T12:00:00');
+          const start = new Date(day); start.setHours(0, 0, 0, 0);
+          const end = new Date(day); end.setHours(23, 59, 59, 999);
+          const result = await MediaLibrary.getAssetsAsync({
+            mediaType: ['photo'],
+            createdAfter: start.getTime(),
+            createdBefore: end.getTime(),
+            first: 1,
+            sortBy: MediaLibrary.SortBy.creationTime,
+          });
+          if (result.assets[0]) {
+            const asset = await MediaLibrary.getAssetInfoAsync(result.assets[0].id);
+            thumbUri = asset.localUri || asset.uri;
+            await AsyncStorage.setItem(`tc_thumb_${dateKey}`, result.assets[0].id);
+          }
+        } catch { }
       }
 
       const date = new Date(dateKey + 'T12:00:00');
@@ -569,6 +606,10 @@ export default function OnThisDay() {
     await AsyncStorage.setItem(`saved_day_${tradingCardDateKey}`, 'true');
     await AsyncStorage.setItem(`tc_description_${tradingCardDateKey}`, tcDescription);
     await AsyncStorage.setItem(`tc_location_${tradingCardDateKey}`, tcLocation);
+    // Remember a thumbnail so the vault calendar can show this day
+    const visible = tcPhotos.filter(p => !tcHiddenPhotos.includes(p.id));
+    const thumb = visible.find(p => p.id === tcCoverPhotoId) || visible[0];
+    if (thumb) await AsyncStorage.setItem(`tc_thumb_${tradingCardDateKey}`, thumb.id);
     setTcSaved(true);
     setShowTradingCard(false);
     loadVault();
@@ -583,9 +624,47 @@ export default function OnThisDay() {
     }, 500);
   };
 
-  const saveTcLocation = () => {
+  const onTcLocationChange = (text: string) => {
+    setTcLocation(text);
+    if (locTimer.current) clearTimeout(locTimer.current);
+    const dateKey = tradingCardDateKey;
+    locTimer.current = setTimeout(() => {
+      AsyncStorage.setItem(`tc_location_${dateKey}`, text);
+    }, 500);
+  };
+
+  const submitTcLocation = () => {
     setTcEditingLocation(false);
     AsyncStorage.setItem(`tc_location_${tradingCardDateKey}`, tcLocation);
+    const text = tcLocation.trim();
+    if (text && !places.some(p => p.name.toLowerCase() === text.toLowerCase())) {
+      Alert.alert('Add to your Places?', `"${text}" isn't in your Places yet. What kind of place is it?`, [
+        { text: '🏠 Home', onPress: () => quickCreatePlace(text, 'home') },
+        { text: '✈️ Trip', onPress: () => quickCreatePlace(text, 'visited') },
+        { text: '❤️ Meaningful', onPress: () => quickCreatePlace(text, 'meaningful') },
+        { text: 'Not now', style: 'cancel' },
+      ]);
+    }
+  };
+
+  const pickLocationSuggestion = (name: string) => {
+    setTcLocation(name);
+    setTcEditingLocation(false);
+    AsyncStorage.setItem(`tc_location_${tradingCardDateKey}`, name);
+  };
+
+  const quickCreatePlace = async (name: string, type: 'home' | 'visited' | 'meaningful') => {
+    const newPlace: Place = {
+      id: Date.now().toString(),
+      type,
+      name,
+      locationName: '',
+      coverPhotoUri: '',
+      photoUris: [],
+      dayKeys: tradingCardDateKey ? [tradingCardDateKey] : [],
+      context: {},
+    };
+    await savePlaces([...places, newPlace]);
   };
 
   const tcSaveSinglePhoto = async (assetId: string) => {
@@ -646,13 +725,31 @@ export default function OnThisDay() {
 
   const saveTcTags = async () => {
     if (!tcTagModal) return;
+    const assetId = tcTagModal;
     let selected = tcTagSelected;
     const pending = tcTagText.trim();
     if (pending && !selected.includes(pending)) selected = [...selected, pending];
-    await AsyncStorage.setItem(`people_${tcTagModal}`, JSON.stringify(selected));
-    setTcPeople(prev => ({ ...prev, [tcTagModal]: selected }));
-    setTcTagModal(null);
-    setTcTagText('');
+
+    const doSave = async (finalNames: string[]) => {
+      await AsyncStorage.setItem(`people_${assetId}`, JSON.stringify(finalNames));
+      setTcPeople(prev => ({ ...prev, [assetId]: finalNames }));
+      setTcTagModal(null);
+      setTcTagText('');
+    };
+
+    const newNames = selected.filter(n => !allPeople.includes(n));
+    if (newNames.length > 0) {
+      Alert.alert(
+        newNames.length === 1 ? 'New person' : 'New people',
+        `Add ${newNames.join(', ')} to your People?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Add', onPress: () => doSave(selected) },
+        ]
+      );
+    } else {
+      await doSave(selected);
+    }
   };
 
   const saveTcContextField = async () => {
@@ -718,13 +815,13 @@ export default function OnThisDay() {
       const seen = new Set<string>();
       const events: WikiEvent[] = [];
       for (const e of pool) {
-        if (!e.year || e.year < yearNum - 25 || e.year > yearNum + 5) continue;
+        if (e.year !== yearNum) continue;
         if (seen.has(e.text)) continue;
         seen.add(e.text);
         events.push({ year: e.year, text: e.text });
         if (events.length >= 5) break;
       }
-      const b = (data.births || [])[0];
+      const b = (data.births || []).find((x: any) => x.year === yearNum);
       const birth: WikiEvent | null = b ? { year: b.year, text: b.text } : null;
       return { events, birth };
     } catch {
@@ -826,6 +923,53 @@ export default function OnThisDay() {
         await AsyncStorage.setItem(`news_cache_${tradingCardDateKey}`, JSON.stringify(merged));
       }
     }
+  };
+
+  // ── ARCHIVE ────────────────────────────────────────────────────────────────
+
+  const openArchive = async () => {
+    setShowArchive(true);
+    if (archiveData) return;
+    setArchiveLoading(true);
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const cacheKey = `archive_cache_${mm}-${dd}`;
+
+    const cachedRaw = await AsyncStorage.getItem(cacheKey);
+    if (cachedRaw) {
+      try {
+        const cached: ArchiveData = JSON.parse(cachedRaw);
+        if (cached.fetchedAt && Date.now() - cached.fetchedAt < 30 * 24 * 60 * 60 * 1000) {
+          setArchiveData(cached);
+          setArchiveLoading(false);
+          return;
+        }
+      } catch { }
+    }
+
+    try {
+      const res = await fetch(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/all/${mm}/${dd}`);
+      if (!res.ok) throw new Error('fetch failed');
+      const data = await res.json();
+      const seen = new Set<string>();
+      const events: WikiEvent[] = [];
+      const pool = [...(data.selected || []), ...(data.events || [])];
+      pool.sort((a: any, b: any) => (b.year || 0) - (a.year || 0));
+      for (const e of pool) {
+        if (!e.year || seen.has(e.text)) continue;
+        seen.add(e.text);
+        events.push({ year: e.year, text: e.text });
+        if (events.length >= 30) break;
+      }
+      const births: WikiEvent[] = (data.births || []).slice(0, 8).map((b: any) => ({ year: b.year, text: b.text }));
+      const deaths: WikiEvent[] = (data.deaths || []).slice(0, 8).map((d: any) => ({ year: d.year, text: d.text }));
+      const holidays: { text: string }[] = (data.holidays || []).slice(0, 6).map((h: any) => ({ text: h.text }));
+      const archive: ArchiveData = { fetchedAt: Date.now(), events, births, deaths, holidays };
+      setArchiveData(archive);
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(archive));
+    } catch { }
+    setArchiveLoading(false);
   };
 
   // ── PEOPLE ─────────────────────────────────────────────────────────────────
@@ -935,6 +1079,7 @@ export default function OnThisDay() {
       locationName: newPlaceLocation.trim(),
       latitude: newPlaceLat ?? undefined,
       longitude: newPlaceLon ?? undefined,
+      pinEmoji: newPlacePinEmoji.trim() || undefined,
       coverPhotoUri: newPlaceCoverUri,
       photoUris: [],
       dayKeys: [],
@@ -948,6 +1093,7 @@ export default function OnThisDay() {
     setNewPlaceCoverUri('');
     setNewPlaceLat(null);
     setNewPlaceLon(null);
+    setNewPlacePinEmoji('');
   };
 
   const updatePlaceContext = async (field: string, value: string) => {
@@ -956,6 +1102,50 @@ export default function OnThisDay() {
     await savePlaces(updated);
     setSelectedPlace(prev => prev ? { ...prev, context: { ...prev.context, [field]: value } } : null);
     setEditingPlaceField(null);
+  };
+
+  const updatePlaceCover = async () => {
+    if (!selectedPlace) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    if (result.canceled) return;
+    const uri = result.assets[0].uri;
+    const updated = places.map(p => p.id === selectedPlace.id ? { ...p, coverPhotoUri: uri } : p);
+    await savePlaces(updated);
+    setSelectedPlace(prev => prev ? { ...prev, coverPhotoUri: uri } : null);
+  };
+
+  const editPinEmoji = () => {
+    if (!selectedPlace) return;
+    const placeId = selectedPlace.id;
+    Alert.prompt(
+      'Pin emoji',
+      'Enter an emoji to show on the map pin. Leave empty to show the place name.',
+      async (text) => {
+        const emoji = (text || '').trim().slice(0, 4);
+        const updated = places.map(p => p.id === placeId ? { ...p, pinEmoji: emoji || undefined } : p);
+        await savePlaces(updated);
+        setSelectedPlace(prev => prev ? { ...prev, pinEmoji: emoji || undefined } : null);
+        setSelectedMapPlace(prev => prev && prev.id === placeId ? { ...prev, pinEmoji: emoji || undefined } : prev);
+      },
+      'plain-text',
+      selectedPlace.pinEmoji || ''
+    );
+  };
+
+  const deletePlace = () => {
+    if (!selectedPlace) return;
+    const placeId = selectedPlace.id;
+    Alert.alert('Delete place', `Remove "${selectedPlace.name}" from your Places? Photos stay on your camera roll.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          const updated = places.filter(p => p.id !== placeId);
+          await savePlaces(updated);
+          setShowPlaceProfile(false);
+          setSelectedMapPlace(null);
+        }
+      },
+    ]);
   };
 
   const addPhotoToPlace = async () => {
@@ -1118,7 +1308,7 @@ export default function OnThisDay() {
                 const dayNum = cardDate.getDate();
                 const monthName = cardDate.toLocaleDateString('en-GB', { month: 'long' });
                 return (
-                  <AnimatedCard key={year} onPress={() => openTradingCard(memories[0].date, year)} style={styles.yearCard}>
+                  <AnimatedCard key={year} onPress={() => openTradingCard(memories[0].date, year)} style={[styles.yearCard, { height: Math.round(height * 0.5) }]}>
                     {firstMemory.uri && (
                       <Image source={{ uri: firstMemory.uri }} style={styles.yearCardBg} resizeMode="cover" />
                     )}
@@ -1145,6 +1335,20 @@ export default function OnThisDay() {
                   </AnimatedCard>
                 );
               })}
+            </View>
+          )}
+          {!loading && (
+            <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}>
+              <AnimatedCard onPress={openArchive} style={styles.archiveCard}>
+                <View pointerEvents="none" style={styles.yearGhostWrap}>
+                  <Text style={styles.yearGhost}>📜</Text>
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 18 }}>
+                  <Text style={styles.archiveTitle}>Archive</Text>
+                  <Text style={styles.archiveSubtitle}>This day in history — before your photos began</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="rgba(155,114,255,0.6)" style={{ position: 'absolute', right: 16, top: '50%', marginTop: 8 }} />
+              </AnimatedCard>
             </View>
           )}
         </ScrollView>
@@ -1260,11 +1464,20 @@ export default function OnThisDay() {
                   <Marker
                     key={place.id}
                     coordinate={{ latitude: place.latitude!, longitude: place.longitude! }}
-                    onPress={() => setSelectedMapPlace(place)}
+                    anchor={{ x: 0.5, y: 1 }}
+                    centerOffset={{ x: 0, y: -22 }}
+                    onPress={() => {
+                      if (selectedMapPlace?.id === place.id) {
+                        setSelectedPlace(place);
+                        setShowPlaceProfile(true);
+                      } else {
+                        setSelectedMapPlace(place);
+                      }
+                    }}
                   >
                     <View style={{ alignItems: 'center' }}>
                       <View style={[styles.mapPinBubble, { backgroundColor: PIN_COLOURS[place.type] }]}>
-                        <Text style={styles.mapPinText}>{place.name}</Text>
+                        <Text style={place.pinEmoji ? styles.mapPinEmoji : styles.mapPinText}>{place.pinEmoji || place.name}</Text>
                       </View>
                       <View style={[styles.mapPinTriangle, { borderTopColor: PIN_COLOURS[place.type] }]} />
                     </View>
@@ -1326,42 +1539,56 @@ export default function OnThisDay() {
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 160, paddingTop: 60 }}>
                   {([
                     { type: 'home' as const, title: '🏠 Homes' },
-                    { type: 'visited' as const, title: "✈️ Places I've Been" },
+                    { type: 'visited' as const, title: '✈️ Trips' },
                     { type: 'meaningful' as const, title: '❤️ Places That Matter' },
                   ]).map(section => {
                     const sectionPlaces = places
                       .filter(p => p.type === section.type)
                       .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+                    const renderCard = (place: Place, horizontal: boolean) => (
+                      <AnimatedCard
+                        key={place.id}
+                        onPress={() => { setSelectedMapPlace(place); setSelectedPlace(place); setShowPlaceProfile(true); }}
+                        style={[
+                          styles.placeCard,
+                          { height: Math.round(height * 0.5) },
+                          horizontal ? { width: Math.round(width * 0.72), marginRight: 12 } : null,
+                          !place.coverPhotoUri && { borderColor: PIN_COLOURS[place.type] + '4D' },
+                        ]}
+                      >
+                        {place.coverPhotoUri
+                          ? <Image source={{ uri: place.coverPhotoUri }} style={[StyleSheet.absoluteFillObject, { opacity: 0.85 }]} resizeMode="cover" />
+                          : <View style={[StyleSheet.absoluteFillObject, styles.placeCardNoCover]} />}
+                        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={[StyleSheet.absoluteFillObject, { top: '40%' }]} />
+                        <View style={styles.placeTypeBadge}>
+                          <Text style={styles.placeTypeBadgeText}>{place.type.toUpperCase()}</Text>
+                        </View>
+                        <View style={styles.placeCardBottom}>
+                          <Text style={styles.placeCardName}>{place.name}</Text>
+                          {!!place.locationName && <Text style={styles.placeCardLocation} numberOfLines={1}>{place.locationName}</Text>}
+                          {!!place.startDate && (
+                            <Text style={styles.placeCardDate}>{place.startDate}{place.endDate ? ` — ${place.endDate}` : ''}</Text>
+                          )}
+                        </View>
+                        {place.photoUris.length > 0 && (
+                          <View style={styles.placeCardPhotoCount}>
+                            <Text style={styles.placeCardPhotoCountText}>{place.photoUris.length} photo{place.photoUris.length === 1 ? '' : 's'}</Text>
+                          </View>
+                        )}
+                      </AnimatedCard>
+                    );
                     return (
                       <View key={section.type}>
                         <Text style={[styles.placeSectionHeader, { color: PIN_COLOURS[section.type] }]}>{section.title}</Text>
-                        {sectionPlaces.length > 0 ? sectionPlaces.map(place => (
-                          <AnimatedCard
-                            key={place.id}
-                            onPress={() => { setSelectedMapPlace(place); setSelectedPlace(place); setShowPlaceProfile(true); }}
-                            style={[styles.placeCard, !place.coverPhotoUri && { borderColor: PIN_COLOURS[place.type] + '4D' }]}
-                          >
-                            {place.coverPhotoUri
-                              ? <Image source={{ uri: place.coverPhotoUri }} style={[StyleSheet.absoluteFillObject, { opacity: 0.85 }]} resizeMode="cover" />
-                              : <View style={[StyleSheet.absoluteFillObject, styles.placeCardNoCover]} />}
-                            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={[StyleSheet.absoluteFillObject, { top: '30%' }]} />
-                            <View style={styles.placeTypeBadge}>
-                              <Text style={styles.placeTypeBadgeText}>{place.type.toUpperCase()}</Text>
-                            </View>
-                            <View style={styles.placeCardBottom}>
-                              <Text style={styles.placeCardName}>{place.name}</Text>
-                              {!!place.locationName && <Text style={styles.placeCardLocation} numberOfLines={1}>{place.locationName}</Text>}
-                              {!!place.startDate && (
-                                <Text style={styles.placeCardDate}>{place.startDate}{place.endDate ? ` — ${place.endDate}` : ''}</Text>
-                              )}
-                            </View>
-                            {place.photoUris.length > 0 && (
-                              <View style={styles.placeCardPhotoCount}>
-                                <Text style={styles.placeCardPhotoCountText}>{place.photoUris.length} photo{place.photoUris.length === 1 ? '' : 's'}</Text>
-                              </View>
-                            )}
-                          </AnimatedCard>
-                        )) : <Text style={styles.placeEmptyText}>None added yet.</Text>}
+                        {sectionPlaces.length === 0 ? (
+                          <Text style={styles.placeEmptyText}>None added yet.</Text>
+                        ) : sectionPlaces.length === 1 ? (
+                          renderCard(sectionPlaces[0], false)
+                        ) : (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            {sectionPlaces.map(p => renderCard(p, true))}
+                          </ScrollView>
+                        )}
                       </View>
                     );
                   })}
@@ -1470,7 +1697,7 @@ export default function OnThisDay() {
             <Text style={styles.tcSaveBtnText}>Save</Text>
           </TouchableOpacity>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 80 }}>
             {/* Date block */}
             <View style={styles.tcDateBlock}>
               <Text style={styles.tcDayOfWeek}>{tcDate?.toLocaleDateString('en-GB', { weekday: 'long' })}</Text>
@@ -1492,12 +1719,11 @@ export default function OnThisDay() {
                   <TextInput
                     style={styles.tcPillInput}
                     value={tcLocation}
-                    onChangeText={setTcLocation}
+                    onChangeText={onTcLocationChange}
                     autoFocus
                     placeholder="Where were you?"
                     placeholderTextColor="rgba(255,255,255,0.3)"
-                    onBlur={saveTcLocation}
-                    onSubmitEditing={saveTcLocation}
+                    onSubmitEditing={submitTcLocation}
                   />
                 </View>
               ) : (
@@ -1515,8 +1741,51 @@ export default function OnThisDay() {
               )}
             </View>
 
+            {/* Location suggestions from saved places */}
+            {tcEditingLocation && places.length > 0 && (
+              <View style={styles.tcSuggestRow}>
+                {places
+                  .filter(p => !tcLocation.trim() || p.name.toLowerCase().includes(tcLocation.trim().toLowerCase()))
+                  .slice(0, 6)
+                  .map(p => (
+                    <TouchableOpacity key={p.id} style={styles.tcTagChip} onPress={() => pickLocationSuggestion(p.name)}>
+                      <Text style={styles.tcTagChipText}>📍 {p.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+              </View>
+            )}
+
+            {/* Description */}
+            <Text style={styles.tcSectionTitleSmall}>What were you doing?</Text>
+            <TextInput
+              style={styles.tcDescInput}
+              multiline
+              value={tcDescription}
+              onChangeText={onTcDescriptionChange}
+              placeholder="Describe your day..."
+              placeholderTextColor="rgba(255,255,255,0.25)"
+            />
+
+            {/* Context fields */}
+            <Text style={[styles.tcSectionTitleSmall, { marginTop: 24 }]}>Where you were</Text>
+            {contextFields.map(field => {
+              const val = tcContext[field.key as keyof DayContext];
+              return (
+                <TouchableOpacity
+                  key={field.key}
+                  style={styles.tcContextRow}
+                  onPress={() => { setTcModalText(val || ''); setTcContextField(field.key); }}
+                >
+                  <Text style={styles.tcContextLabel}>{field.emoji} {field.label}</Text>
+                  {val
+                    ? <Text style={styles.tcContextValue}>{val}</Text>
+                    : <Text style={styles.tcContextEmpty}>Tap to add...</Text>}
+                </TouchableOpacity>
+              );
+            })}
+
             {/* Photos section */}
-            <Text style={styles.tcSectionTitle}>Photos</Text>
+            <Text style={[styles.tcSectionTitle, { marginTop: 24 }]}>Photos</Text>
             {tcPhotosLoading ? (
               <ActivityIndicator size="small" color="#9b72ff" style={{ marginVertical: 24 }} />
             ) : visibleTcPhotos.length === 0 ? (
@@ -1580,35 +1849,6 @@ export default function OnThisDay() {
               ))
             )}
 
-            {/* Description */}
-            <Text style={styles.tcSectionTitleSmall}>What were you doing?</Text>
-            <TextInput
-              style={styles.tcDescInput}
-              multiline
-              value={tcDescription}
-              onChangeText={onTcDescriptionChange}
-              placeholder="Describe your day..."
-              placeholderTextColor="rgba(255,255,255,0.25)"
-            />
-
-            {/* Context fields */}
-            <Text style={[styles.tcSectionTitleSmall, { marginTop: 24 }]}>Where you were</Text>
-            {contextFields.map(field => {
-              const val = tcContext[field.key as keyof DayContext];
-              return (
-                <TouchableOpacity
-                  key={field.key}
-                  style={styles.tcContextRow}
-                  onPress={() => { setTcModalText(val || ''); setTcContextField(field.key); }}
-                >
-                  <Text style={styles.tcContextLabel}>{field.emoji} {field.label}</Text>
-                  {val
-                    ? <Text style={styles.tcContextValue}>{val}</Text>
-                    : <Text style={styles.tcContextEmpty}>Tap to add...</Text>}
-                </TouchableOpacity>
-              );
-            })}
-
             {/* News feed */}
             <View style={styles.tcNewsHeaderRow}>
               <Text style={styles.tcSectionTitleSmall}>The World That Day</Text>
@@ -1624,7 +1864,7 @@ export default function OnThisDay() {
               <ActivityIndicator size="small" color="#9b72ff" style={{ marginVertical: 20 }} />
             ) : (
               <>
-                {newsSettings.wiki && tcNewsCache.wikipedia?.events?.map((ev, i) => (
+                {newsSettings.wiki && tcNewsCache.wikipedia?.events?.filter(ev => ev.year === parseInt(tradingCardYear)).map((ev, i) => (
                   <View key={`ev-${i}`} style={styles.tcNewsCard}>
                     <View style={styles.tcNewsTopRow}>
                       <View style={styles.tcNewsYearPill}>
@@ -1636,7 +1876,7 @@ export default function OnThisDay() {
                     <Text style={styles.tcNewsSource}>Wikipedia</Text>
                   </View>
                 ))}
-                {newsSettings.wiki && tcNewsCache.wikipedia?.birth && (
+                {newsSettings.wiki && tcNewsCache.wikipedia?.birth && tcNewsCache.wikipedia.birth.year === parseInt(tradingCardYear) && (
                   <View style={styles.tcNewsCard}>
                     <View style={styles.tcNewsTopRow}>
                       <View style={styles.tcNewsYearPill}>
@@ -1910,6 +2150,28 @@ export default function OnThisDay() {
               <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
                 <View style={styles.modalBox}>
                   <Text style={styles.modalTitle}>{contextFields.find(f => f.key === tcContextField)?.label || ''}</Text>
+                  {tcContextField === 'with' && allPeople.length > 0 && (
+                    <View style={styles.tcTagChipsWrap}>
+                      {allPeople.slice(0, 10).map(name => (
+                        <TouchableOpacity
+                          key={name}
+                          style={styles.tcTagChip}
+                          onPress={() => setTcModalText(prev => prev ? (prev.includes(name) ? prev : `${prev}, ${name}`) : name)}
+                        >
+                          <Text style={styles.tcTagChipText}>{name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                  {tcContextField === 'living' && places.filter(p => p.type === 'home').length > 0 && (
+                    <View style={styles.tcTagChipsWrap}>
+                      {places.filter(p => p.type === 'home').slice(0, 6).map(p => (
+                        <TouchableOpacity key={p.id} style={styles.tcTagChip} onPress={() => setTcModalText(p.name)}>
+                          <Text style={styles.tcTagChipText}>🏠 {p.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
                   <TextInput
                     style={styles.textInput}
                     placeholder={contextFields.find(f => f.key === tcContextField)?.placeholder || ''}
@@ -1929,6 +2191,108 @@ export default function OnThisDay() {
               </KeyboardAvoidingView>
             </View>
           </Modal>
+        </View>
+      </Modal>
+
+      {/* ═══ ARCHIVE ═══ */}
+      <Modal
+        visible={showArchive}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowArchive(false)}
+      >
+        <View style={styles.tcContainer}>
+          <TouchableOpacity style={styles.tcClose} onPress={() => setShowArchive(false)}>
+            <Ionicons name="chevron-down" size={26} color="#ffffff" />
+          </TouchableOpacity>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+            <View style={styles.tcDateBlock}>
+              <Text style={styles.tcDayOfWeek}>THE ARCHIVE</Text>
+              <Text style={styles.tcDateBig}>
+                {today.getDate()} {today.toLocaleDateString('en-GB', { month: 'long' })}
+              </Text>
+              <Text style={[styles.tcNewsSubheader, { paddingHorizontal: 0, marginTop: 6, marginBottom: 0 }]}>
+                This day in history{oldestPhotoYear ? `, before your photos began in ${oldestPhotoYear}` : ''}
+              </Text>
+            </View>
+
+            {archiveLoading ? (
+              <ActivityIndicator size="large" color="#9b72ff" style={{ marginTop: 40 }} />
+            ) : !archiveData ? (
+              <Text style={styles.tcNoPhotosText}>Couldn&apos;t load the archive. Try again later.</Text>
+            ) : (
+              <>
+                {(() => {
+                  const cutoff = oldestPhotoYear || new Date().getFullYear();
+                  const oldEvents = archiveData.events.filter(e => e.year < cutoff).slice(0, 15);
+                  return oldEvents.length > 0 ? (
+                    <>
+                      <Text style={styles.tcSectionTitleSmall}>📅 Events</Text>
+                      {oldEvents.map((ev, i) => (
+                        <View key={`aev-${i}`} style={styles.tcNewsCard}>
+                          <View style={styles.tcNewsTopRow}>
+                            <View style={styles.tcNewsYearPill}>
+                              <Text style={styles.tcNewsYearPillText}>{ev.year}</Text>
+                            </View>
+                            <Text style={styles.tcNewsIcon}>📅</Text>
+                          </View>
+                          <Text style={styles.tcNewsText}>{ev.text}</Text>
+                          <Text style={styles.tcNewsSource}>Wikipedia</Text>
+                        </View>
+                      ))}
+                    </>
+                  ) : (
+                    <Text style={styles.tcNoPhotosText}>No older events found for this date.</Text>
+                  );
+                })()}
+
+                {archiveData.births.length > 0 && (
+                  <>
+                    <Text style={[styles.tcSectionTitleSmall, { marginTop: 20 }]}>🎂 Born on this day</Text>
+                    {archiveData.births.map((b, i) => (
+                      <View key={`ab-${i}`} style={styles.tcNewsCard}>
+                        <View style={styles.tcNewsTopRow}>
+                          <View style={styles.tcNewsYearPill}>
+                            <Text style={styles.tcNewsYearPillText}>{b.year}</Text>
+                          </View>
+                          <Text style={styles.tcNewsIcon}>🎂</Text>
+                        </View>
+                        <Text style={styles.tcNewsText}>{b.text}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                {archiveData.deaths.length > 0 && (
+                  <>
+                    <Text style={[styles.tcSectionTitleSmall, { marginTop: 20 }]}>🕯️ Remembered today</Text>
+                    {archiveData.deaths.map((d, i) => (
+                      <View key={`ad-${i}`} style={styles.tcNewsCard}>
+                        <View style={styles.tcNewsTopRow}>
+                          <View style={styles.tcNewsYearPill}>
+                            <Text style={styles.tcNewsYearPillText}>{d.year}</Text>
+                          </View>
+                          <Text style={styles.tcNewsIcon}>🕯️</Text>
+                        </View>
+                        <Text style={styles.tcNewsText}>{d.text}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+
+                {archiveData.holidays.length > 0 && (
+                  <>
+                    <Text style={[styles.tcSectionTitleSmall, { marginTop: 20 }]}>🎉 Holidays & observances</Text>
+                    {archiveData.holidays.map((h, i) => (
+                      <View key={`ah-${i}`} style={styles.tcNewsCard}>
+                        <Text style={styles.tcNewsText}>{h.text}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+              </>
+            )}
+          </ScrollView>
         </View>
       </Modal>
 
@@ -2095,6 +2459,9 @@ export default function OnThisDay() {
               <View style={styles.placeTypeBadgeTop}>
                 <Text style={styles.placeTypeBadgeText}>{selectedPlace?.type.toUpperCase()}</Text>
               </View>
+              <TouchableOpacity style={styles.placeEditCoverBtn} onPress={updatePlaceCover}>
+                <Text style={styles.placeEditCoverText}>📷 Edit cover</Text>
+              </TouchableOpacity>
               <View style={{ position: 'absolute', bottom: 16, left: 16, right: 16 }}>
                 <Text style={styles.placeProfileName}>{selectedPlace?.name}</Text>
                 {!!selectedPlace?.locationName && <Text style={styles.placeProfileLocation} numberOfLines={1}>{selectedPlace.locationName}</Text>}
@@ -2104,13 +2471,19 @@ export default function OnThisDay() {
               </View>
             </View>
 
-            {/* View on map */}
-            {selectedPlace?.latitude != null && selectedPlace?.longitude != null && (
-              <TouchableOpacity style={styles.placeViewMapBtn} onPress={() => setShowPlaceMapModal(true)}>
-                <Ionicons name="map-outline" size={16} color="#9b72ff" />
-                <Text style={styles.placeViewMapBtnText}>View on Map</Text>
+            {/* Actions row */}
+            <View style={styles.placeActionsRow}>
+              {selectedPlace?.latitude != null && selectedPlace?.longitude != null && (
+                <TouchableOpacity style={styles.placeViewMapBtn} onPress={() => setShowPlaceMapModal(true)}>
+                  <Ionicons name="map-outline" size={16} color="#9b72ff" />
+                  <Text style={styles.placeViewMapBtnText}>View on Map</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.placeViewMapBtn} onPress={editPinEmoji}>
+                <Text style={{ fontSize: 14 }}>{selectedPlace?.pinEmoji || '📍'}</Text>
+                <Text style={styles.placeViewMapBtnText}>Pin emoji</Text>
               </TouchableOpacity>
-            )}
+            </View>
 
             {/* Context fields */}
             <Text style={styles.placeProfileSectionTitle}>About this place</Text>
@@ -2169,6 +2542,12 @@ export default function OnThisDay() {
                 })}
               </View>
             )}
+
+            {/* Delete place */}
+            <TouchableOpacity style={styles.placeDeleteBtn} onPress={deletePlace}>
+              <Ionicons name="trash-outline" size={16} color="#ff4444" />
+              <Text style={styles.placeDeleteBtnText}>Delete place</Text>
+            </TouchableOpacity>
           </ScrollView>
 
           {/* Context field editor — nested */}
@@ -2214,10 +2593,14 @@ export default function OnThisDay() {
                     longitudeDelta: 0.05,
                   }}
                 >
-                  <Marker coordinate={{ latitude: selectedPlace.latitude, longitude: selectedPlace.longitude }}>
+                  <Marker
+                    coordinate={{ latitude: selectedPlace.latitude, longitude: selectedPlace.longitude }}
+                    anchor={{ x: 0.5, y: 1 }}
+                    centerOffset={{ x: 0, y: -22 }}
+                  >
                     <View style={{ alignItems: 'center' }}>
                       <View style={[styles.mapPinBubble, { backgroundColor: PIN_COLOURS[selectedPlace.type] }]}>
-                        <Text style={styles.mapPinText}>{selectedPlace.name}</Text>
+                        <Text style={selectedPlace.pinEmoji ? styles.mapPinEmoji : styles.mapPinText}>{selectedPlace.pinEmoji || selectedPlace.name}</Text>
                       </View>
                       <View style={[styles.mapPinTriangle, { borderTopColor: PIN_COLOURS[selectedPlace.type] }]} />
                     </View>
@@ -2259,6 +2642,8 @@ export default function OnThisDay() {
                 <TextInput style={styles.createPlaceInput} placeholder="Place name..." placeholderTextColor="rgba(255,255,255,0.25)" value={newPlaceName} onChangeText={setNewPlaceName} />
                 <Text style={styles.createPlaceLabel}>Address or location (optional)</Text>
                 <TextInput style={styles.createPlaceInput} placeholder="City, country..." placeholderTextColor="rgba(255,255,255,0.25)" value={newPlaceLocation} onChangeText={setNewPlaceLocation} />
+                <Text style={styles.createPlaceLabel}>Map pin emoji (optional)</Text>
+                <TextInput style={styles.createPlaceInput} placeholder="🏠 ✈️ ❤️ — shows on the map instead of the name" placeholderTextColor="rgba(255,255,255,0.25)" value={newPlacePinEmoji} onChangeText={setNewPlacePinEmoji} maxLength={4} />
                 <Text style={styles.createPlaceLabel}>Cover photo (optional)</Text>
                 <TouchableOpacity style={styles.createPlaceCoverBtn} onPress={pickPlaceCover}>
                   {newPlaceCoverUri
@@ -2308,8 +2693,11 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 22, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
 
   // On This Day — year cards
-  yearCardsList: { padding: 16, gap: 16, paddingBottom: 100 },
-  yearCard: { width: '100%', height: 230, borderRadius: 18, overflow: 'hidden', backgroundColor: '#1e1535', borderWidth: 1.5, borderColor: 'rgba(155,114,255,0.3)', shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  yearCardsList: { padding: 16, gap: 16, paddingBottom: 0 },
+  yearCard: { width: '100%', borderRadius: 18, overflow: 'hidden', backgroundColor: '#1e1535', borderWidth: 1.5, borderColor: 'rgba(155,114,255,0.3)', shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  archiveCard: { width: '100%', height: 110, borderRadius: 18, overflow: 'hidden', backgroundColor: 'rgba(155,114,255,0.06)', borderWidth: 1.5, borderColor: 'rgba(155,114,255,0.2)', borderStyle: 'dashed' },
+  archiveTitle: { fontSize: 24, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff' },
+  archiveSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 4, paddingRight: 40 },
   yearCardBg: { ...StyleSheet.absoluteFillObject, opacity: 0.88 },
   yearGhostWrap: { position: 'absolute', top: -10, right: -6 },
   yearGhost: { fontSize: 108, fontFamily: 'Fraunces_800ExtraBold', color: 'rgba(155,114,255,0.08)' },
@@ -2374,6 +2762,7 @@ const styles = StyleSheet.create({
   // Map view
   mapPinBubble: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 6 },
   mapPinText: { fontSize: 12, fontWeight: '700', color: '#ffffff' },
+  mapPinEmoji: { fontSize: 18 },
   mapPinTriangle: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent' },
   mapSearchWrap: { position: 'absolute', top: 60, left: 16, right: 130, zIndex: 10 },
   mapSearchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(30,21,53,0.95)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: 'rgba(155,114,255,0.25)' },
@@ -2403,7 +2792,7 @@ const styles = StyleSheet.create({
   placeAddDesc: { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
   placeSectionHeader: { fontSize: 20, fontFamily: 'Fraunces_600SemiBold', marginTop: 24, marginBottom: 12 },
   placeEmptyText: { color: 'rgba(255,255,255,0.3)', fontSize: 14, fontStyle: 'italic', marginBottom: 8 },
-  placeCard: { width: '100%', height: 180, borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#1e1535', borderWidth: 1, borderColor: 'rgba(155,114,255,0.25)' },
+  placeCard: { width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#1e1535', borderWidth: 1, borderColor: 'rgba(155,114,255,0.25)' },
   placeCardNoCover: { backgroundColor: 'rgba(255,255,255,0.05)' },
   placeTypeBadge: { position: 'absolute', top: 12, right: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(155,114,255,0.45)', backgroundColor: 'rgba(13,10,20,0.55)' },
   placeTypeBadgeTop: { position: 'absolute', top: 20, right: 16, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(155,114,255,0.45)', backgroundColor: 'rgba(13,10,20,0.55)' },
@@ -2421,7 +2810,12 @@ const styles = StyleSheet.create({
   placeProfileLocation: { fontSize: 15, color: 'rgba(255,255,255,0.65)', marginTop: 4 },
   placeProfileDate: { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
   placeProfileSectionTitle: { fontSize: 18, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', marginTop: 24, marginLeft: 16, marginBottom: 8 },
-  placeViewMapBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16, marginHorizontal: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: 'rgba(155,114,255,0.12)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.3)' },
+  placeActionsRow: { flexDirection: 'row', gap: 10, marginTop: 16, marginHorizontal: 16 },
+  placeViewMapBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: 'rgba(155,114,255,0.12)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.3)' },
+  placeEditCoverBtn: { position: 'absolute', top: 60, right: 16, backgroundColor: 'rgba(13,10,20,0.6)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.35)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+  placeEditCoverText: { fontSize: 12, color: '#ffffff' },
+  placeDeleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 32, marginHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,68,68,0.35)', backgroundColor: 'rgba(255,68,68,0.08)' },
+  placeDeleteBtnText: { color: '#ff4444', fontSize: 14, fontWeight: '700' },
   placeViewMapBtnText: { color: '#9b72ff', fontSize: 14, fontWeight: '700' },
   placeAddPhotoBtn: { borderWidth: 1, borderColor: 'rgba(155,114,255,0.25)', borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 8 },
   placeAddPhotoBtnText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '600' },
@@ -2512,6 +2906,7 @@ const styles = StyleSheet.create({
   tcTagChipText: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
   tcTagChipTextActive: { color: '#ffffff', fontWeight: '600' },
   tcTagInputRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  tcSuggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingBottom: 16, marginTop: -8 },
   tcTagAddBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#9b72ff', justifyContent: 'center', alignItems: 'center' },
 
   // Three dot menu
