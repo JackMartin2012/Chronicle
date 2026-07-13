@@ -30,6 +30,7 @@ The app connects your past (photos from this date in previous years) with your p
 - expo-linear-gradient (used on year cards in index.tsx, place cards, calendar gradients)
 - expo-blur (used on all bottom-sheet modals across all files)
 - @expo/vector-icons (Ionicons)
+- expo-haptics (mood slider ticks, save-day success)
 - react-native-maps (Places map view — Apple Maps in Expo Go on iOS)
 - @expo-google-fonts/fraunces (display font on The Past — weights 300/400/600/800)
 - `.env` (gitignored): `EXPO_PUBLIC_FOOTBALL_API_KEY` for football-data.org
@@ -47,6 +48,9 @@ app/
     index.tsx         — The Past screen
     explore.tsx       — The Present screen
     selfie.tsx        — Daily selfie screen
+components/
+  DayCard.tsx         — SHARED swipeable day carousel (replaces trading card)
+  newsFeed.ts         — shared Wikipedia/football/weather fetch + 30-day cache
 ```
 
 ---
@@ -66,13 +70,19 @@ app/
 - **Glass modal box:** `rgba(24,16,42,0.98)` with `rgba(155,114,255,0.15)` border
 - **Fraunces font** on: "The Past" title, year numbers/badges, trading card date + section headers, people names, month headers, place names
 
-### The Present / Selfie (unchanged)
-- **The Present background:** `#090d14` (dark blue tint)
+### The Present (explore.tsx) — overhauled July 2026
+- **Background:** `#08090f` (cold blue-black)
+- **Card background:** `#0d1220`
+- **Blue accent:** `#4a90d9` (rgba form: 74,144,217)
+- **Border default:** `rgba(74,144,217,0.2)` / **active:** `rgba(74,144,217,0.45)`
+- **Capsule gold:** `#f5c842` — used ONLY for Future Capsules, nothing else
+- **Ghost watermark:** `rgba(74,144,217,0.08)`
+- **Space Grotesk** on: "The Present" title, section/question headers, month headers, favourite names
+- **Glass modal box:** `rgba(10,14,22,0.98)` with `rgba(74,144,217,0.15)` border
+
+### Selfie (unchanged)
 - **Selfie background:** `#0d0d0d` (neutral dark)
-- **The Present accent:** `#4a90d9` (blue)
 - **Danger:** `#ff4444`
-- **Capsule gold:** `#f5c842`
-- **Glass modal box (The Present):** `rgba(10,14,22,0.98)` with `rgba(74,144,217,0.15)` border
 
 ---
 
@@ -154,29 +164,26 @@ Tab pills: active `rgba(155,114,255,0.18)` bg + `rgba(155,114,255,0.35)` border,
 - **Ghost year watermark** top-right (Fraunces 108, `rgba(155,114,255,0.08)`, pointerEvents none)
 - Small year badge pill top-left; divider + day name/date + photo count bottom bar
 - **Empty year rows** (height 80) shown for gap years between oldest photo year and last year
-- Tap year card → **openTradingCard(dateKey, year)** — NOT a day detail modal
+- Tap year card → **openDayCard(dateKey)** — opens the shared DayCard carousel
+- **Archive card** at the bottom (dashed border, 📜 ghost) → full-page this-day-in-history modal (events before your photos began / births / deaths / holidays, cached under `archive_cache_${MM-DD}`)
 
-### THE TRADING CARD (core day view)
-Full-screen Modal, `presentationStyle="pageSheet"`, `#17102a` bg. Opens from year cards, vault calendar days, person profile days, and place profile linked days. Replaced the old day detail modal AND vault day modal entirely.
-
-Layout (ScrollView):
-1. **Header** — chevron-down close (top-left), purple "Save" pill (top-right) → `saveTradingCard()`: sets `saved_day_`, `tc_description_`, `tc_location_` keys, closes, reloads vault
-2. **Date block** — day of week (Fraunces 16) + "14 June 2019" (Fraunces 38)
-3. **Info strip** — weather pill (from news cache), tappable location pill (inline TextInput edit), "In Vault" badge if saved
-4. **Photos** — one card per photo (aspectRatio 4/3): tap → fullscreen; ⋯ menu (set cover / hide / share / copy caption); Cover badge; "Save just this photo" row (`tc_single_photo_` key); action row: Add context (caption) | Tag people | Add to place — icons turn purple when filled; caption + people chips below
-5. **Description** — "What were you doing?" multiline input, auto-saves with 500ms debounce to `tc_description_`
-6. **Context fields** — "Where you were", the 5 DayContext rows, BlurView editor
-7. **News feed** — "The World That Day": Wikipedia on-this-day events (filtered to year−25..year+5, max 5 + 1 birth), ⚽ Football section with inline toggle Switch (football-data.org, rate-limit aware via `football_requests_available`/`football_reset_time`), historical weather card (Open-Meteo archive API + expo-location). All cached 30 days under `news_cache_${dateKey}`
-
-All child modals (photo menu, fullscreen, caption, tag people, add-to-place, context field) are **nested inside the trading card Modal JSX**. The add-to-place picker has a "Just this photo | The whole day" scope toggle and an **inline create-place mini form** (not the root create modal — avoids stacking sibling modals).
+### DAYCARD (components/DayCard.tsx — SHARED, replaces the trading card)
+Full-screen Modal, `pageSheet`, horizontal paging FlatList with animated pagination dots (active dot stretches to 20px). Props: `dateKey`, `accent: 'past' | 'present'`, `visible`, `onClose`, `onOpenDate`.
+- accent 'past' → `#17102a` bg, `#1e1535` cards, purple, Fraunces headers
+- accent 'present' → `#08090f` bg, `#0d1220` cards, blue, Space Grotesk headers
+- Header: chevron-down close (left); Edit/Done toggle (right); past accent also gets a purple "Save" pill when unsaved (`saved_day_` + `tc_description_` + `tc_location_` + `tc_thumb_`)
+- Slides render only if they have content: **COVER** (always — huge date, ghost mood emoji, weather/location/mood pills, three words, "Swipe →"), **PHOTOS** (BeReal pair with swappable inset for present entries; focused photo + thumb strip for past MediaLibrary photos; edit mode gets ⋯ menu + caption/tag/place action row), **YOUR DAY** (description pull-quote, voice memo play, labelled blocks: daily question, reflection with glow border, highlight/learned legacy, soundtrack, watched, cooked, people chips, 5 day-context fields), **WHERE TODAY TOOK YOU** (if ≥2 locations), **THE WORLD** (news via components/newsFeed.ts, football toggle inline; past accent always, present only if saved), **ONE YEAR AGO** ("Open that day" → onOpenDate swaps the dateKey in place)
+- Edit mode: every field opens a nested BlurView editor; description writes entry.dayDescription if a day_entry exists, else `tc_description_`
+- All child modals nested inside the DayCard Modal JSX; tag-people confirms before adding brand-new names
+- index.tsx opens it from year cards / vault days / person profile days / place linked days; explore.tsx from Your Days calendar + Save Day button
 
 ---
 
 ### Your Vault
 - **Year picker strip** — active pill `rgba(155,114,255,0.25)` bg
 - **BeReal-style portrait card calendar** — see Calendar section below; month headers Fraunces 22
-- Tap a saved day → **openTradingCard(dateKey, year)** (old vault day modal removed)
-- Vault includes days from `day_context_`, `saved_day_`, `caption_` keys; thumb falls back to `tc_single_photo_` asset
+- Tap a saved day → **openDayCard(dateKey)** (shared DayCard carousel)
+- Vault includes days from `day_context_`, `saved_day_`, `caption_` keys; thumb falls back to `tc_single_photo_` / `tc_thumb_` assets, then a MediaLibrary date query
 
 ---
 
@@ -286,27 +293,34 @@ Daily journal screen. Documents today so it becomes a flashback in the future.
 
 ### Three tabs: Today | Your Days | Favourites
 
-### Today Tab
-- Selfie card → navigates to selfie screen (AnimatedCard)
-- Main photo + extra photos strip (in-app CameraView, not native camera)
-- Mood selector (5 emoji) + day description
-- Weather card (Open-Meteo API)
-- Voice memo card
-- Today's Highlight, What I Learned, Today's Song (all AnimatedCard)
-- **Who I Was With** — people tagging with chips, autocomplete (BlurView modal)
-- Daily reminders (notification toggle — no test button)
-- **Future Capsules section**: sealed/ready-to-open capsules, reveal modal, create modal
+### Today Tab (restructured July 2026 — card order top to bottom)
+All cards: `#0d1220` bg, borderRadius 16, border `rgba(74,144,217,0.2)`, marginHorizontal 16.
+1. **THE CAPTURE PAIR** — BeReal-style single card (height 300): main photo + selfie inset (100×133, white border) top-left, tap inset to swap (`pairSwapped`); two dashed prompts when empty; 64×64 extraPhotos strip + "+" tile (multi-select library); "View all selfies →" link to selfie screen (face timelapse untouched)
+2. **MOOD** — PanResponder slider, 5 stops 😞😐🙂😊🤩, `Haptics.selectionAsync()` per stop, thumb scales while dragging; saves emoji to `entry.mood` (old 😔 mapped to 😞 for display)
+3. **TODAY IN THREE WORDS** — three chip TextInputs (maxLength 16) → `entry.threeWords`
+4. **TODAY'S QUESTION** — rotating 12-question pool seeded by dateKey (`getSeededPrompt`); stores `dailyQuestion` + `dailyAnswer`
+5. **FOR FUTURE YOU** — reflection card with blue glow border; 6-question pool, seed offset +7; stores `reflectionQuestion` + `reflectionAnswer`
+6. **YOUR DAY** — ✍️ Write (inline multiline → `dayDescription`) | 🎙 Speak (expo-av record, unchanged); memo play row if exists
+7. **WHAT I COOKED** — dish input + photo slot; "Save to recipes ★" creates a Recipe favourite (dedupe per day → "Saved ✓")
+8. **THE SOUNDTRACK** — renamed Today's Song, same modal/fields
+9. **WHAT I WATCHED** — plain input → `entry.watched`
+10. **WHO MADE TODAY BETTER** — renamed, same tagging chips + autocomplete modal
+11. **WHERE TODAY TOOK YOU** — location rows (name + optional withWho) + BlurView add modal, no geocoding; weather card after it
+12. Daily reminders (Switch now)
+13. **FUTURE CAPSULES** — gold-only (`#f5c842`): sealed rows show "Opens in X days" countdown; reveal modal shows a gold capsule graphic (spring scale-in) for 1.2s, then message/photo fade in over 600ms
+14. **Save today to your days** button — persists entry, sets `saved_day_${todayKey}`, success haptic, opens DayCard (accent 'present') for today
+
+Removed: old selfie card + its camera (selfie lives on selfie screen), Highlight & What I Learned cards (legacy fields still render in DayCard for old entries).
 
 ### Your Days Tab
-- Same portrait card calendar as Vault (calSlot/calCard two-layer structure)
-- `CAL_SLOT_WIDTH = Math.floor((width - 32) / 7)` — separate constant from index.tsx
-- `LinearGradient` imported from `expo-linear-gradient` (added this session)
-- Filled = has `photoUri`; empty = no photo (entry may exist but shows empty card style)
-- Week day headers: MON TUE WED THU FRI SAT SUN, fontSize 9, white bold
+- Same portrait card calendar as Vault (calSlot/calCard two-layer structure), Space Grotesk month headers, blue year pills
+- Tap a day with an entry → **DayCard carousel (accent 'present')** — old day detail modal removed
+- Archive filter includes any new field content (threeWords, answers, cooked, watched, locations...)
 
 ### Favourites Tab
-- Category filter pills: All, Song, Movie/TV, Book, Restaurant, Recipe, Place
-- Floating + button → Add Favourite modal (BlurView)
+- Category filter pills: All, Song, Movie/TV, Book, Restaurant, Recipe, Place — active `rgba(74,144,217,0.25)`
+- Recipe favourites show their photo prominently (taller image)
+- Floating + button → Add Favourite modal
 
 ### DayEntry Type
 ```typescript
@@ -317,12 +331,25 @@ type DayEntry = {
   songName: string; songRating: number; songMeaning: string;
   withWho: string; taggedPeople: string[]; voiceMemoUri: string;
   openedCapsules: { id: string; message: string; photoUri: string; createdDate: string }[];
+  sealedCapsules: { id: string; openDate: string; context: string }[];
+  // July 2026 extensions — ALWAYS guard for undefined (old entries):
+  pairSelfieUri: string;          // BeReal pair selfie (NOT the timelapse selfie)
+  threeWords: string[];           // 0 or 3 entries
+  dailyQuestion: string; dailyAnswer: string;
+  reflectionQuestion: string; reflectionAnswer: string;
+  cookedDish: string; cookedPhotoUri: string;
+  watched: string;
+  locations: { name: string; withWho?: string }[];
 };
+```
+`normaliseEntry(parsed)` fills all array/new fields with defaults — use it whenever parsing a day_entry.
+```typescript
 ```
 
 ### AsyncStorage Keys (The Present)
-- `day_entry_${dateKey}` — JSON DayEntry object
-- `favourites` — JSON array of Favourite objects
+- `day_entry_${dateKey}` — JSON DayEntry object (extended type, same key)
+- `saved_day_${dateKey}` — 'true' set by the Save Day button (shared with The Past vault)
+- `favourites` — JSON array of Favourite objects (recipes get created from What I Cooked)
 - `notifications_enabled` — 'true'/'false'
 - `capsules` — JSON array of Capsule objects
 
@@ -353,6 +380,10 @@ type DayEntry = {
 7. **AnimatedCard requires `Animated` and `useRef`** imported in the file
 8. **Tab bar: never use `tabBarIcon` with custom View wrappers** — use the custom `tabBar` component
 9. **Calendar cells: never use `flex: 1`** — use fixed `width: CARD_WIDTH` on calSlot, `width: '86%'` on calCard
+10. **Day views go through components/DayCard.tsx** — don't rebuild per-screen day modals; pass the right `accent`
+11. **News fetching goes through components/newsFeed.ts** — one implementation of Wikipedia/football/weather + 30-day cache + rate limiting
+12. **Guard every new DayEntry field** — old entries won't have them; use `normaliseEntry`
+13. **expo-av stays for voice memos** — do NOT migrate to expo-audio yet
 
 ---
 
@@ -410,22 +441,24 @@ git push
 
 ---
 
-## Session Summary (July 2026 — index.tsx overhaul)
+## Session Summary (July 2026 — explore.tsx overhaul + shared DayCard)
 
-### index.tsx — complete rewrite (~2540 lines)
-- **New design system**: `#17102a` background, `#1e1535` cards, Fraunces display font, purple-tinted borders throughout. Old `#6b35d4`/`#0d0a14` backgrounds gone
-- **Trading card** built — the core day view. Replaces the old day detail modal AND vault day modal. Opens from year cards, vault calendar, person profile days, place profile linked days. Photos + captions + tags + places + description + context + "The World That Day" news feed (Wikipedia / football / historical weather, cached 30 days)
-- **Year cards** redesigned: 230px, ghost year watermark, small badge, divider bottom bar, empty-year rows for gaps
-- **Places tab rethought**: Map view (react-native-maps custom pins, Nominatim search, bottom card) + List view (empty state with 3 coloured add buttons); `Place` type gained `latitude`/`longitude`
-- **Friends → People**: expanded person profile (about fields, birthday yearly notification, days together, photos together)
+### Shared components (new)
+- **components/DayCard.tsx** (~1300 lines) — the swipeable day carousel that REPLACED the trading card in index.tsx. Both screens open it; accent prop switches the whole design system. Slides: cover / photos / your day / locations / the world / one year ago. Edit mode with nested BlurView editors
+- **components/newsFeed.ts** — extracted Wikipedia/football/weather fetching, 30-day cache, football rate-limit bookkeeping. Both screens + DayCard use this single implementation
 
-### New files / config
-- `app/settings.tsx` — news feed toggles (football/wikipedia/weather)
-- `.env` (gitignored) — `EXPO_PUBLIC_FOOTBALL_API_KEY`
-- Installed `react-native-maps`
+### explore.tsx — complete rewrite (~2110 lines)
+- **New design system**: `#08090f` cold blue-black, `#0d1220` cards, Space Grotesk headers, gold reserved for capsules. Old `#1a4fd4` bright blue gone
+- **DayEntry extended** (pairSelfieUri, threeWords, daily/reflection Q&A, cooked, watched, locations) — `normaliseEntry` guards old entries
+- **Today tab restructured** into 14 cards (capture pair → mood slider → three words → daily question → reflection → your day → cooked → soundtrack → watched → people → locations → weather → reminders → capsules → save button)
+- **Capsule reveal** got the anticipation moment: gold capsule spring-in, 1.2s, content fades in
+- **Your Days** opens DayCard (present accent); old day detail modal removed
 
-### Removed
-- Old day detail modal, vault day modal, vault context edit modal (trading card covers all)
-- Dead `allPrompts`/`getPromptForDate` code
+### index.tsx (~1970 lines after refactor)
+- Trading card JSX/logic removed (~930 lines); `openDayCard(dateKey)` + `<DayCard accent="past">` in its place
+- Earlier this month: full The Past redesign (year cards 50% height, ghost watermarks, Archive card, map Places with anchored emoji pins, People profiles, settings screen, .env football key)
+
+### Prior session (same July 2026 arc)
+- The Past design system `#17102a`/Fraunces; Places map view; Friends → People; `app/settings.tsx`; react-native-maps installed
 
 *Chronicle is functional and running on iOS via Expo Go. All core screens complete. Next up: privacy policy page, then TestFlight.*
