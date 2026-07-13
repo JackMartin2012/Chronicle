@@ -4,7 +4,6 @@ import { BlurView } from 'expo-blur';
 import { Fraunces_300Light, Fraunces_400Regular, Fraunces_600SemiBold, Fraunces_800ExtraBold, useFonts } from '@expo-google-fonts/fraunces';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Location from 'expo-location';
 import * as MediaLibrary from 'expo-media-library';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
@@ -13,26 +12,23 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
-  Clipboard,
   Dimensions,
   Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
-  Share,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
+import DayCard from '../../components/DayCard';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = Math.floor((width - 32) / 7);
-const FOOTBALL_API_KEY = process.env.EXPO_PUBLIC_FOOTBALL_API_KEY;
 
 const PIN_COLOURS: Record<'home' | 'visited' | 'meaningful', string> = {
   home: '#9b72ff',
@@ -112,28 +108,7 @@ type ArchiveData = {
   holidays: { text: string }[];
 };
 
-type TcPhoto = { id: string; uri: string; mediaType: 'photo' | 'video' };
-
 type WikiEvent = { year: number; text: string };
-
-type NewsCache = {
-  fetchedAt: number;
-  wikipedia: { events: WikiEvent[]; birth: WikiEvent | null } | null;
-  football: any[] | null;
-  weather: { max: number; min: number; emoji: string } | null;
-};
-
-const emptyContext: DayContext = {
-  living: '', doing: '', with: '', listening: '', thinking: '',
-};
-
-const contextFields = [
-  { key: 'living', label: 'WHERE I WAS LIVING', placeholder: 'My flat in Edinburgh...', emoji: '📍' },
-  { key: 'doing', label: 'WHAT I WAS DOING', placeholder: 'Working at..., studying...', emoji: '💼' },
-  { key: 'with', label: 'WHO I WAS WITH', placeholder: 'Mostly with Alex and...', emoji: '👥' },
-  { key: 'listening', label: 'WHAT I WAS LISTENING TO', placeholder: 'Obsessed with...', emoji: '🎵' },
-  { key: 'thinking', label: 'WHAT I WAS THINKING ABOUT', placeholder: 'Worried about / excited about...', emoji: '💭' },
-];
 
 const placeContextFields: Record<string, { key: string; label: string; emoji: string; placeholder: string }[]> = {
   home: [
@@ -183,20 +158,6 @@ const formatDateKey = (date: Date) => {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-};
-
-const wmoEmoji = (code: number | null | undefined): string => {
-  if (code == null) return '🌤️';
-  if (code === 0) return '☀️';
-  if (code === 1 || code === 2) return '🌤️';
-  if (code === 3) return '☁️';
-  if (code === 45 || code === 48) return '🌫️';
-  if (code === 51 || code === 53 || code === 55) return '🌦️';
-  if (code === 61 || code === 63 || code === 65) return '🌧️';
-  if (code === 71 || code === 73 || code === 75) return '❄️';
-  if (code === 80 || code === 81 || code === 82) return '🌧️';
-  if (code >= 95) return '⛈️';
-  return '🌤️';
 };
 
 // ── ANIMATED CARD ────────────────────────────────────────────────────────────
@@ -272,37 +233,9 @@ export default function OnThisDay() {
   const mapRef = useRef<MapView>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Trading card
-  const [showTradingCard, setShowTradingCard] = useState(false);
-  const [tradingCardDateKey, setTradingCardDateKey] = useState('');
-  const [tradingCardYear, setTradingCardYear] = useState('');
-  const [tcPhotos, setTcPhotos] = useState<TcPhoto[]>([]);
-  const [tcPhotosLoading, setTcPhotosLoading] = useState(false);
-  const [tcCaptions, setTcCaptions] = useState<Record<string, string>>({});
-  const [tcPeople, setTcPeople] = useState<Record<string, string[]>>({});
-  const [tcContext, setTcContext] = useState<DayContext>(emptyContext);
-  const [tcDescription, setTcDescription] = useState('');
-  const [tcLocation, setTcLocation] = useState('');
-  const [tcEditingLocation, setTcEditingLocation] = useState(false);
-  const [tcWeather, setTcWeather] = useState<NewsCache['weather']>(null);
-  const [tcNewsCache, setTcNewsCache] = useState<NewsCache | null>(null);
-  const [tcHiddenPhotos, setTcHiddenPhotos] = useState<string[]>([]);
-  const [tcCoverPhotoId, setTcCoverPhotoId] = useState<string>('');
-  const [tcFullscreenPhoto, setTcFullscreenPhoto] = useState<string | null>(null);
-  const [tcPhotoMenuId, setTcPhotoMenuId] = useState<string | null>(null);
-  const [tcTagModal, setTcTagModal] = useState<string | null>(null);
-  const [tcTagSelected, setTcTagSelected] = useState<string[]>([]);
-  const [tcTagText, setTcTagText] = useState('');
-  const [tcPlaceModal, setTcPlaceModal] = useState<string | 'day' | null>(null);
-  const [tcPlaceScope, setTcPlaceScope] = useState<'photo' | 'day'>('photo');
-  const [tcNewPlaceMode, setTcNewPlaceMode] = useState(false);
-  const [tcContextModal, setTcContextModal] = useState<string | null>(null);
-  const [tcContextField, setTcContextField] = useState<string | null>(null);
-  const [tcModalText, setTcModalText] = useState('');
-  const [tcSaved, setTcSaved] = useState(false);
-  const [newsSettings, setNewsSettings] = useState({ wiki: true, football: false, weather: true });
-  const descTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const locTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Day card
+  const [dayCardKey, setDayCardKey] = useState<string | null>(null);
 
   // Archive
   const [showArchive, setShowArchive] = useState(false);
@@ -536,394 +469,7 @@ export default function OnThisDay() {
     setVaultLoading(false);
   };
 
-  // ── TRADING CARD ───────────────────────────────────────────────────────────
-
-  const openTradingCard = async (dateKey: string, year: string) => {
-    setTradingCardDateKey(dateKey);
-    setTradingCardYear(year);
-    setTcPhotos([]);
-    setTcCaptions({});
-    setTcPeople({});
-    setTcNewsCache(null);
-    setTcWeather(null);
-    setTcEditingLocation(false);
-
-    const hiddenRaw = await AsyncStorage.getItem('hidden_photos');
-    setTcHiddenPhotos(hiddenRaw ? JSON.parse(hiddenRaw) : []);
-    const coverRaw = await AsyncStorage.getItem('cover_photos');
-    const coverMap: Record<string, string> = coverRaw ? JSON.parse(coverRaw) : {};
-    setTcCoverPhotoId(coverMap[year] || '');
-
-    const ctxRaw = await AsyncStorage.getItem(`day_context_${dateKey}`);
-    setTcContext(ctxRaw ? JSON.parse(ctxRaw) : { ...emptyContext });
-    setTcDescription((await AsyncStorage.getItem(`tc_description_${dateKey}`)) || '');
-    setTcLocation((await AsyncStorage.getItem(`tc_location_${dateKey}`)) || '');
-    setTcSaved((await AsyncStorage.getItem(`saved_day_${dateKey}`)) === 'true');
-
-    setShowTradingCard(true);
-    loadTcPhotos(dateKey);
-    loadNewsForDay(dateKey, year);
-  };
-
-  const loadTcPhotos = async (dateKey: string) => {
-    setTcPhotosLoading(true);
-    const day = new Date(dateKey + 'T12:00:00');
-    const start = new Date(day);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(day);
-    end.setHours(23, 59, 59, 999);
-
-    const result = await MediaLibrary.getAssetsAsync({
-      mediaType: ['photo', 'video'],
-      createdAfter: start.getTime(),
-      createdBefore: end.getTime(),
-      first: 30,
-      sortBy: MediaLibrary.SortBy.creationTime,
-    });
-
-    const photos: TcPhoto[] = [];
-    const captions: Record<string, string> = {};
-    const people: Record<string, string[]> = {};
-    for (const asset of result.assets) {
-      let uri = asset.uri;
-      try {
-        const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-        uri = info.localUri || asset.uri;
-      } catch { }
-      const cap = await AsyncStorage.getItem(`caption_${asset.id}`);
-      if (cap) captions[asset.id] = cap;
-      const ppl = await AsyncStorage.getItem(`people_${asset.id}`);
-      if (ppl) people[asset.id] = JSON.parse(ppl);
-      photos.push({ id: asset.id, uri, mediaType: asset.mediaType === 'video' ? 'video' : 'photo' });
-    }
-    setTcPhotos(photos);
-    setTcCaptions(captions);
-    setTcPeople(people);
-    setTcPhotosLoading(false);
-  };
-
-  const saveTradingCard = async () => {
-    await AsyncStorage.setItem(`saved_day_${tradingCardDateKey}`, 'true');
-    await AsyncStorage.setItem(`tc_description_${tradingCardDateKey}`, tcDescription);
-    await AsyncStorage.setItem(`tc_location_${tradingCardDateKey}`, tcLocation);
-    // Remember a thumbnail so the vault calendar can show this day
-    const visible = tcPhotos.filter(p => !tcHiddenPhotos.includes(p.id));
-    const thumb = visible.find(p => p.id === tcCoverPhotoId) || visible[0];
-    if (thumb) await AsyncStorage.setItem(`tc_thumb_${tradingCardDateKey}`, thumb.id);
-    setTcSaved(true);
-    setShowTradingCard(false);
-    loadVault();
-  };
-
-  const onTcDescriptionChange = (text: string) => {
-    setTcDescription(text);
-    if (descTimer.current) clearTimeout(descTimer.current);
-    const dateKey = tradingCardDateKey;
-    descTimer.current = setTimeout(() => {
-      AsyncStorage.setItem(`tc_description_${dateKey}`, text);
-    }, 500);
-  };
-
-  const onTcLocationChange = (text: string) => {
-    setTcLocation(text);
-    if (locTimer.current) clearTimeout(locTimer.current);
-    const dateKey = tradingCardDateKey;
-    locTimer.current = setTimeout(() => {
-      AsyncStorage.setItem(`tc_location_${dateKey}`, text);
-    }, 500);
-  };
-
-  const submitTcLocation = () => {
-    setTcEditingLocation(false);
-    AsyncStorage.setItem(`tc_location_${tradingCardDateKey}`, tcLocation);
-    const text = tcLocation.trim();
-    if (text && !places.some(p => p.name.toLowerCase() === text.toLowerCase())) {
-      Alert.alert('Add to your Places?', `"${text}" isn't in your Places yet. What kind of place is it?`, [
-        { text: '🏠 Home', onPress: () => quickCreatePlace(text, 'home') },
-        { text: '✈️ Trip', onPress: () => quickCreatePlace(text, 'visited') },
-        { text: '❤️ Meaningful', onPress: () => quickCreatePlace(text, 'meaningful') },
-        { text: 'Not now', style: 'cancel' },
-      ]);
-    }
-  };
-
-  const pickLocationSuggestion = (name: string) => {
-    setTcLocation(name);
-    setTcEditingLocation(false);
-    AsyncStorage.setItem(`tc_location_${tradingCardDateKey}`, name);
-  };
-
-  const quickCreatePlace = async (name: string, type: 'home' | 'visited' | 'meaningful') => {
-    const newPlace: Place = {
-      id: Date.now().toString(),
-      type,
-      name,
-      locationName: '',
-      coverPhotoUri: '',
-      photoUris: [],
-      dayKeys: tradingCardDateKey ? [tradingCardDateKey] : [],
-      context: {},
-    };
-    await savePlaces([...places, newPlace]);
-  };
-
-  const tcSaveSinglePhoto = async (assetId: string) => {
-    await AsyncStorage.setItem(`saved_day_${tradingCardDateKey}`, 'true');
-    await AsyncStorage.setItem(`tc_single_photo_${tradingCardDateKey}`, assetId);
-    setTcSaved(true);
-    Alert.alert('Saved 🔒', 'This photo now represents this day in your vault.');
-    loadVault();
-  };
-
-  const tcSetCover = async (assetId: string) => {
-    const coverRaw = await AsyncStorage.getItem('cover_photos');
-    const coverMap = coverRaw ? JSON.parse(coverRaw) : {};
-    coverMap[tradingCardYear] = assetId;
-    await AsyncStorage.setItem('cover_photos', JSON.stringify(coverMap));
-    setTcCoverPhotoId(assetId);
-    setTcPhotoMenuId(null);
-    loadMemories();
-  };
-
-  const tcHidePhoto = async (assetId: string) => {
-    const hiddenRaw = await AsyncStorage.getItem('hidden_photos');
-    const hidden: string[] = hiddenRaw ? JSON.parse(hiddenRaw) : [];
-    hidden.push(assetId);
-    await AsyncStorage.setItem('hidden_photos', JSON.stringify(hidden));
-    setTcHiddenPhotos(hidden);
-    setTcPhotoMenuId(null);
-    setMemoryList(prev => prev.filter(m => m.id !== assetId));
-  };
-
-  const tcSharePhoto = async (assetId: string) => {
-    const photo = tcPhotos.find(p => p.id === assetId);
-    if (photo) {
-      try {
-        await Share.share({ url: photo.uri, message: tcCaptions[assetId] || 'A memory from Chronicle' });
-      } catch { }
-    }
-    setTcPhotoMenuId(null);
-  };
-
-  const tcCopyCaption = (assetId: string) => {
-    const caption = tcCaptions[assetId];
-    if (caption) {
-      Clipboard.setString(caption);
-      Alert.alert('Copied!', 'Caption copied to clipboard.');
-    } else {
-      Alert.alert('No caption', 'Add context to this photo first.');
-    }
-    setTcPhotoMenuId(null);
-  };
-
-  const saveTcCaption = async () => {
-    if (!tcContextModal) return;
-    await AsyncStorage.setItem(`caption_${tcContextModal}`, tcModalText);
-    setTcCaptions(prev => ({ ...prev, [tcContextModal]: tcModalText }));
-    setTcContextModal(null);
-  };
-
-  const saveTcTags = async () => {
-    if (!tcTagModal) return;
-    const assetId = tcTagModal;
-    let selected = tcTagSelected;
-    const pending = tcTagText.trim();
-    if (pending && !selected.includes(pending)) selected = [...selected, pending];
-
-    const doSave = async (finalNames: string[]) => {
-      await AsyncStorage.setItem(`people_${assetId}`, JSON.stringify(finalNames));
-      setTcPeople(prev => ({ ...prev, [assetId]: finalNames }));
-      setTcTagModal(null);
-      setTcTagText('');
-    };
-
-    const newNames = selected.filter(n => !allPeople.includes(n));
-    if (newNames.length > 0) {
-      Alert.alert(
-        newNames.length === 1 ? 'New person' : 'New people',
-        `Add ${newNames.join(', ')} to your People?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Add', onPress: () => doSave(selected) },
-        ]
-      );
-    } else {
-      await doSave(selected);
-    }
-  };
-
-  const saveTcContextField = async () => {
-    if (!tcContextField) return;
-    const updated = { ...tcContext, [tcContextField]: tcModalText };
-    setTcContext(updated);
-    await AsyncStorage.setItem(`day_context_${tradingCardDateKey}`, JSON.stringify(updated));
-    setTcContextField(null);
-  };
-
-  const tcAddToPlace = async (placeId: string) => {
-    const updated = places.map(p => {
-      if (p.id !== placeId) return p;
-      if (tcPlaceScope === 'day' || tcPlaceModal === 'day') {
-        const dayKeys = p.dayKeys.includes(tradingCardDateKey) ? p.dayKeys : [...p.dayKeys, tradingCardDateKey];
-        return { ...p, dayKeys };
-      }
-      const photo = tcPhotos.find(ph => ph.id === tcPlaceModal);
-      if (!photo) return p;
-      const photoUris = p.photoUris.includes(photo.uri) ? p.photoUris : [...p.photoUris, photo.uri];
-      return { ...p, photoUris };
-    });
-    await savePlaces(updated);
-    setTcPlaceModal(null);
-    setTcNewPlaceMode(false);
-  };
-
-  const tcCreatePlaceAndAdd = async () => {
-    if (!newPlaceName.trim()) return;
-    const newPlace: Place = {
-      id: Date.now().toString(),
-      type: newPlaceType,
-      name: newPlaceName.trim(),
-      locationName: '',
-      coverPhotoUri: '',
-      photoUris: [],
-      dayKeys: [],
-      context: {},
-    };
-    if (tcPlaceScope === 'day' || tcPlaceModal === 'day') {
-      newPlace.dayKeys = [tradingCardDateKey];
-    } else {
-      const photo = tcPhotos.find(ph => ph.id === tcPlaceModal);
-      if (photo) newPlace.photoUris = [photo.uri];
-    }
-    await savePlaces([...places, newPlace]);
-    setNewPlaceName('');
-    setNewPlaceType('home');
-    setTcNewPlaceMode(false);
-    setTcPlaceModal(null);
-  };
-
-  // ── NEWS FEED ──────────────────────────────────────────────────────────────
-
-  const fetchWikipedia = async (dateKey: string, year: string) => {
-    try {
-      const [, mm, dd] = dateKey.split('-');
-      const res = await fetch(`https://en.wikipedia.org/api/rest_v1/feed/onthisday/all/${mm}/${dd}`);
-      if (!res.ok) return null;
-      const data = await res.json();
-      const yearNum = parseInt(year);
-      const pool = [...(data.selected || []), ...(data.events || [])];
-      const seen = new Set<string>();
-      const events: WikiEvent[] = [];
-      for (const e of pool) {
-        if (e.year !== yearNum) continue;
-        if (seen.has(e.text)) continue;
-        seen.add(e.text);
-        events.push({ year: e.year, text: e.text });
-        if (events.length >= 5) break;
-      }
-      const b = (data.births || []).find((x: any) => x.year === yearNum);
-      const birth: WikiEvent | null = b ? { year: b.year, text: b.text } : null;
-      return { events, birth };
-    } catch {
-      return null;
-    }
-  };
-
-  const fetchFootball = async (dateKey: string) => {
-    if (!FOOTBALL_API_KEY) return null;
-    try {
-      const availRaw = await AsyncStorage.getItem('football_requests_available');
-      const resetRaw = await AsyncStorage.getItem('football_reset_time');
-      if (availRaw !== null && parseInt(availRaw) < 3 && resetRaw && parseInt(resetRaw) > Date.now()) {
-        return null;
-      }
-      const res = await fetch(
-        `https://api.football-data.org/v4/matches?dateFrom=${dateKey}&dateTo=${dateKey}`,
-        { headers: { 'X-Auth-Token': FOOTBALL_API_KEY } }
-      );
-      if (res.status === 429) return null;
-      const avail = res.headers.get('X-RequestsAvailable') || res.headers.get('X-Requests-Available-Minute');
-      if (avail) await AsyncStorage.setItem('football_requests_available', avail);
-      const reset = res.headers.get('X-RequestCounter-Reset');
-      if (reset) await AsyncStorage.setItem('football_reset_time', String(Date.now() + parseInt(reset) * 1000));
-      if (!res.ok) return null;
-      const data = await res.json();
-      return (data.matches || []).slice(0, 5);
-    } catch {
-      return null;
-    }
-  };
-
-  const fetchHistoricWeather = async (dateKey: string) => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return null;
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
-      const res = await fetch(
-        `https://archive-api.open-meteo.com/v1/archive?latitude=${pos.coords.latitude}&longitude=${pos.coords.longitude}&start_date=${dateKey}&end_date=${dateKey}&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto`
-      );
-      if (!res.ok) return null;
-      const data = await res.json();
-      const max = data?.daily?.temperature_2m_max?.[0];
-      const min = data?.daily?.temperature_2m_min?.[0];
-      const code = data?.daily?.weathercode?.[0];
-      if (max == null || min == null) return null;
-      return { max: Math.round(max), min: Math.round(min), emoji: wmoEmoji(code) };
-    } catch {
-      return null;
-    }
-  };
-
-  const loadNewsForDay = async (dateKey: string, year: string) => {
-    const showWiki = (await AsyncStorage.getItem('show_wikipedia_feed')) !== 'false';
-    const showFootball = (await AsyncStorage.getItem('show_football_feed')) === 'true';
-    const showWeather = (await AsyncStorage.getItem('show_weather_feed')) !== 'false';
-    setNewsSettings({ wiki: showWiki, football: showFootball, weather: showWeather });
-
-    const cachedRaw = await AsyncStorage.getItem(`news_cache_${dateKey}`);
-    if (cachedRaw) {
-      try {
-        const cached: NewsCache = JSON.parse(cachedRaw);
-        if (cached.fetchedAt && Date.now() - cached.fetchedAt < 30 * 24 * 60 * 60 * 1000) {
-          setTcNewsCache(cached);
-          setTcWeather(cached.weather);
-          if (showFootball && !cached.football) {
-            const fb = await fetchFootball(dateKey);
-            if (fb) {
-              const merged = { ...cached, football: fb };
-              setTcNewsCache(merged);
-              await AsyncStorage.setItem(`news_cache_${dateKey}`, JSON.stringify(merged));
-            }
-          }
-          return;
-        }
-      } catch { }
-    }
-
-    const [wiki, football, weather] = await Promise.all([
-      showWiki ? fetchWikipedia(dateKey, year) : Promise.resolve(null),
-      showFootball ? fetchFootball(dateKey) : Promise.resolve(null),
-      showWeather ? fetchHistoricWeather(dateKey) : Promise.resolve(null),
-    ]);
-
-    const cache: NewsCache = { fetchedAt: Date.now(), wikipedia: wiki, football, weather };
-    setTcNewsCache(cache);
-    setTcWeather(weather);
-    await AsyncStorage.setItem(`news_cache_${dateKey}`, JSON.stringify(cache));
-  };
-
-  const toggleFootballFeed = async (value: boolean) => {
-    setNewsSettings(prev => ({ ...prev, football: value }));
-    await AsyncStorage.setItem('show_football_feed', value ? 'true' : 'false');
-    if (value && tcNewsCache && !tcNewsCache.football) {
-      const fb = await fetchFootball(tradingCardDateKey);
-      if (fb) {
-        const merged = { ...tcNewsCache, football: fb };
-        setTcNewsCache(merged);
-        await AsyncStorage.setItem(`news_cache_${tradingCardDateKey}`, JSON.stringify(merged));
-      }
-    }
-  };
+  const openDayCard = (dateKey: string) => setDayCardKey(dateKey);
 
   // ── ARCHIVE ────────────────────────────────────────────────────────────────
 
@@ -1227,11 +773,6 @@ export default function OnThisDay() {
 
   const allPeople = Object.keys(personDaysCount).filter(Boolean).sort();
 
-  const tcDate = tradingCardDateKey ? new Date(tradingCardDateKey + 'T12:00:00') : null;
-  const visibleTcPhotos = tcPhotos
-    .filter(p => !tcHiddenPhotos.includes(p.id))
-    .sort((a, b) => (a.id === tcCoverPhotoId ? -1 : b.id === tcCoverPhotoId ? 1 : 0));
-
   if (!permission?.granted) {
     return (
       <View style={styles.centreScreen}>
@@ -1308,7 +849,7 @@ export default function OnThisDay() {
                 const dayNum = cardDate.getDate();
                 const monthName = cardDate.toLocaleDateString('en-GB', { month: 'long' });
                 return (
-                  <AnimatedCard key={year} onPress={() => openTradingCard(memories[0].date, year)} style={[styles.yearCard, { height: Math.round(height * 0.5) }]}>
+                  <AnimatedCard key={year} onPress={() => openDayCard(memories[0].date)} style={[styles.yearCard, { height: Math.round(height * 0.5) }]}>
                     {firstMemory.uri && (
                       <Image source={{ uri: firstMemory.uri }} style={styles.yearCardBg} resizeMode="cover" />
                     )}
@@ -1405,7 +946,7 @@ export default function OnThisDay() {
                             <TouchableOpacity
                               key={day}
                               style={styles.calSlot}
-                              onPress={() => vaultDay ? openTradingCard(dateKey, dateKey.split('-')[0]) : null}
+                              onPress={() => vaultDay ? openDayCard(dateKey) : null}
                               activeOpacity={vaultDay ? 0.75 : 1}
                             >
                               <View style={[
@@ -1682,517 +1223,14 @@ export default function OnThisDay() {
         </View>
       )}
 
-      {/* ═══ THE TRADING CARD ═══ */}
-      <Modal
-        visible={showTradingCard}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowTradingCard(false)}
-      >
-        <View style={styles.tcContainer}>
-          <TouchableOpacity style={styles.tcClose} onPress={() => setShowTradingCard(false)}>
-            <Ionicons name="chevron-down" size={26} color="#ffffff" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tcSaveBtn} onPress={saveTradingCard}>
-            <Text style={styles.tcSaveBtnText}>Save</Text>
-          </TouchableOpacity>
-
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 80 }}>
-            {/* Date block */}
-            <View style={styles.tcDateBlock}>
-              <Text style={styles.tcDayOfWeek}>{tcDate?.toLocaleDateString('en-GB', { weekday: 'long' })}</Text>
-              <Text style={styles.tcDateBig}>
-                {tcDate?.getDate()} {tcDate?.toLocaleDateString('en-GB', { month: 'long' })} {tradingCardYear}
-              </Text>
-            </View>
-
-            {/* Info strip */}
-            <View style={styles.tcInfoStrip}>
-              {tcWeather && (
-                <View style={styles.tcPill}>
-                  <Text style={styles.tcPillText}>{tcWeather.emoji} {tcWeather.max}°C</Text>
-                </View>
-              )}
-              {tcEditingLocation ? (
-                <View style={styles.tcPill}>
-                  <Ionicons name="location-outline" size={14} color="rgba(255,255,255,0.6)" />
-                  <TextInput
-                    style={styles.tcPillInput}
-                    value={tcLocation}
-                    onChangeText={onTcLocationChange}
-                    autoFocus
-                    placeholder="Where were you?"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                    onSubmitEditing={submitTcLocation}
-                  />
-                </View>
-              ) : (
-                <TouchableOpacity style={styles.tcPill} onPress={() => setTcEditingLocation(true)}>
-                  <Ionicons name="location-outline" size={14} color="rgba(255,255,255,0.6)" />
-                  <Text style={[styles.tcPillText, !tcLocation && styles.tcPillTextMuted]}>
-                    {tcLocation || 'Add location'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              {tcSaved && (
-                <View style={styles.tcSavedPill}>
-                  <Text style={styles.tcSavedPillText}>In Vault</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Location suggestions from saved places */}
-            {tcEditingLocation && places.length > 0 && (
-              <View style={styles.tcSuggestRow}>
-                {places
-                  .filter(p => !tcLocation.trim() || p.name.toLowerCase().includes(tcLocation.trim().toLowerCase()))
-                  .slice(0, 6)
-                  .map(p => (
-                    <TouchableOpacity key={p.id} style={styles.tcTagChip} onPress={() => pickLocationSuggestion(p.name)}>
-                      <Text style={styles.tcTagChipText}>📍 {p.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-              </View>
-            )}
-
-            {/* Description */}
-            <Text style={styles.tcSectionTitleSmall}>What were you doing?</Text>
-            <TextInput
-              style={styles.tcDescInput}
-              multiline
-              value={tcDescription}
-              onChangeText={onTcDescriptionChange}
-              placeholder="Describe your day..."
-              placeholderTextColor="rgba(255,255,255,0.25)"
-            />
-
-            {/* Context fields */}
-            <Text style={[styles.tcSectionTitleSmall, { marginTop: 24 }]}>Where you were</Text>
-            {contextFields.map(field => {
-              const val = tcContext[field.key as keyof DayContext];
-              return (
-                <TouchableOpacity
-                  key={field.key}
-                  style={styles.tcContextRow}
-                  onPress={() => { setTcModalText(val || ''); setTcContextField(field.key); }}
-                >
-                  <Text style={styles.tcContextLabel}>{field.emoji} {field.label}</Text>
-                  {val
-                    ? <Text style={styles.tcContextValue}>{val}</Text>
-                    : <Text style={styles.tcContextEmpty}>Tap to add...</Text>}
-                </TouchableOpacity>
-              );
-            })}
-
-            {/* Photos section */}
-            <Text style={[styles.tcSectionTitle, { marginTop: 24 }]}>Photos</Text>
-            {tcPhotosLoading ? (
-              <ActivityIndicator size="small" color="#9b72ff" style={{ marginVertical: 24 }} />
-            ) : visibleTcPhotos.length === 0 ? (
-              <Text style={styles.tcNoPhotosText}>No photos from this day.</Text>
-            ) : (
-              visibleTcPhotos.map(photo => (
-                <View key={photo.id} style={styles.tcPhotoCard}>
-                  <View>
-                    <TouchableOpacity activeOpacity={0.9} onPress={() => setTcFullscreenPhoto(photo.uri)}>
-                      <Image source={{ uri: photo.uri }} style={styles.tcPhotoImage} resizeMode="cover" />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.tcPhotoMenuBtn} onPress={() => setTcPhotoMenuId(photo.id)}>
-                      <Ionicons name="ellipsis-horizontal" size={16} color="#ffffff" />
-                    </TouchableOpacity>
-                    {photo.id === tcCoverPhotoId && (
-                      <View style={styles.tcCoverBadge}>
-                        <Text style={styles.tcCoverBadgeText}>Cover</Text>
-                      </View>
-                    )}
-                  </View>
-                  <TouchableOpacity style={styles.tcSingleSaveRow} onPress={() => tcSaveSinglePhoto(photo.id)}>
-                    <Ionicons name="bookmark-outline" size={14} color="rgba(255,255,255,0.35)" />
-                    <Text style={styles.tcSingleSaveText}>Save just this photo</Text>
-                  </TouchableOpacity>
-                  <View style={styles.tcActionRow}>
-                    <TouchableOpacity
-                      style={styles.tcActionBtn}
-                      onPress={() => { setTcModalText(tcCaptions[photo.id] || ''); setTcContextModal(photo.id); }}
-                    >
-                      <Ionicons name="chatbubble-outline" size={16} color={tcCaptions[photo.id] ? '#9b72ff' : 'rgba(255,255,255,0.4)'} />
-                      <Text style={[styles.tcActionText, tcCaptions[photo.id] ? styles.tcActionTextActive : null]}>Add context</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.tcActionBtn}
-                      onPress={() => { setTcTagSelected(tcPeople[photo.id] || []); setTcTagText(''); setTcTagModal(photo.id); }}
-                    >
-                      <Ionicons name="people-outline" size={16} color={tcPeople[photo.id]?.length ? '#9b72ff' : 'rgba(255,255,255,0.4)'} />
-                      <Text style={[styles.tcActionText, tcPeople[photo.id]?.length ? styles.tcActionTextActive : null]}>Tag people</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.tcActionBtn}
-                      onPress={() => { setTcPlaceScope('photo'); setTcNewPlaceMode(false); setTcPlaceModal(photo.id); }}
-                    >
-                      <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.4)" />
-                      <Text style={styles.tcActionText}>Add to place</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {tcCaptions[photo.id] ? (
-                    <Text style={styles.tcCaption}>{`"${tcCaptions[photo.id]}"`}</Text>
-                  ) : null}
-                  {tcPeople[photo.id]?.length ? (
-                    <View style={styles.tcPeopleRow}>
-                      {tcPeople[photo.id].map(name => (
-                        <View key={name} style={styles.tcPersonChip}>
-                          <Text style={styles.tcPersonChipText}>{name}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-                </View>
-              ))
-            )}
-
-            {/* News feed */}
-            <View style={styles.tcNewsHeaderRow}>
-              <Text style={styles.tcSectionTitleSmall}>The World That Day</Text>
-              <TouchableOpacity onPress={() => { setShowTradingCard(false); router.push('/settings'); }}>
-                <Ionicons name="options-outline" size={18} color="rgba(155,114,255,0.6)" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.tcNewsSubheader}>
-              {tcDate?.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </Text>
-
-            {!tcNewsCache ? (
-              <ActivityIndicator size="small" color="#9b72ff" style={{ marginVertical: 20 }} />
-            ) : (
-              <>
-                {newsSettings.wiki && tcNewsCache.wikipedia?.events?.filter(ev => ev.year === parseInt(tradingCardYear)).map((ev, i) => (
-                  <View key={`ev-${i}`} style={styles.tcNewsCard}>
-                    <View style={styles.tcNewsTopRow}>
-                      <View style={styles.tcNewsYearPill}>
-                        <Text style={styles.tcNewsYearPillText}>{ev.year}</Text>
-                      </View>
-                      <Text style={styles.tcNewsIcon}>📅</Text>
-                    </View>
-                    <Text style={styles.tcNewsText}>{ev.text}</Text>
-                    <Text style={styles.tcNewsSource}>Wikipedia</Text>
-                  </View>
-                ))}
-                {newsSettings.wiki && tcNewsCache.wikipedia?.birth && tcNewsCache.wikipedia.birth.year === parseInt(tradingCardYear) && (
-                  <View style={styles.tcNewsCard}>
-                    <View style={styles.tcNewsTopRow}>
-                      <View style={styles.tcNewsYearPill}>
-                        <Text style={styles.tcNewsYearPillText}>{tcNewsCache.wikipedia.birth.year}</Text>
-                      </View>
-                      <Text style={styles.tcNewsIcon}>🎂</Text>
-                    </View>
-                    <Text style={styles.tcNewsText}>{tcNewsCache.wikipedia.birth.text}</Text>
-                    <Text style={styles.tcNewsSource}>Born on this day · Wikipedia</Text>
-                  </View>
-                )}
-
-                <View style={styles.tcFootballHeaderRow}>
-                  <Text style={styles.tcFootballHeaderText}>⚽ Football</Text>
-                  <Switch
-                    value={newsSettings.football}
-                    onValueChange={toggleFootballFeed}
-                    trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(155,114,255,0.6)' }}
-                    thumbColor="#ffffff"
-                  />
-                </View>
-                {newsSettings.football && tcNewsCache.football && tcNewsCache.football.length > 0 && tcNewsCache.football.slice(0, 5).map((m: any, i: number) => (
-                  <View key={`fb-${i}`} style={styles.tcNewsCard}>
-                    <Text style={styles.tcMatchComp}>⚽ {m.competition?.name || 'Football'}</Text>
-                    <View style={styles.tcMatchRow}>
-                      <Text style={styles.tcMatchTeam} numberOfLines={1}>{m.homeTeam?.shortName || m.homeTeam?.name || 'Home'}</Text>
-                      <Text style={styles.tcMatchScore}>{m.score?.fullTime?.home ?? '–'} — {m.score?.fullTime?.away ?? '–'}</Text>
-                      <Text style={[styles.tcMatchTeam, { textAlign: 'right' }]} numberOfLines={1}>{m.awayTeam?.shortName || m.awayTeam?.name || 'Away'}</Text>
-                    </View>
-                    <Text style={styles.tcMatchStatus}>{m.status === 'FINISHED' ? 'FT' : m.status}</Text>
-                  </View>
-                ))}
-                {newsSettings.football && (!tcNewsCache.football || tcNewsCache.football.length === 0) && (
-                  <Text style={styles.tcNoPhotosText}>No football results for this day.</Text>
-                )}
-
-                {newsSettings.weather && tcWeather && (
-                  <View style={styles.tcNewsCard}>
-                    <Text style={styles.tcNewsText}>🌤️ The weather that day</Text>
-                    <Text style={styles.tcWeatherBig}>{tcWeather.emoji} {tcWeather.max}°C / {tcWeather.min}°C</Text>
-                  </View>
-                )}
-              </>
-            )}
-          </ScrollView>
-
-          {/* Three dot photo menu — nested */}
-          <Modal visible={tcPhotoMenuId !== null} animationType="slide" transparent>
-            <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setTcPhotoMenuId(null)}>
-              <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
-              <View style={styles.menuBox}>
-                <Text style={styles.menuTitle}>Photo options</Text>
-                <TouchableOpacity style={styles.menuItem} onPress={() => tcSetCover(tcPhotoMenuId!)}>
-                  <Text style={styles.menuItemEmoji}>⭐</Text>
-                  <View>
-                    <Text style={styles.menuItemText}>Set as cover photo</Text>
-                    <Text style={styles.menuItemSub}>Use this as the {tradingCardYear} card thumbnail</Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => tcSharePhoto(tcPhotoMenuId!)}>
-                  <Text style={styles.menuItemEmoji}>📤</Text>
-                  <View>
-                    <Text style={styles.menuItemText}>Share photo</Text>
-                    <Text style={styles.menuItemSub}>Share this photo or save it elsewhere</Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuItem} onPress={() => tcCopyCaption(tcPhotoMenuId!)}>
-                  <Text style={styles.menuItemEmoji}>📋</Text>
-                  <View>
-                    <Text style={styles.menuItemText}>Copy caption</Text>
-                    <Text style={styles.menuItemSub}>Copy the caption text to clipboard</Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.menuItem, styles.menuItemDanger]} onPress={() => {
-                  Alert.alert('Hide photo', 'This photo will be hidden from Chronicle. It stays on your camera roll.', [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Hide', style: 'destructive', onPress: () => tcHidePhoto(tcPhotoMenuId!) },
-                  ]);
-                }}>
-                  <Text style={styles.menuItemEmoji}>🙈</Text>
-                  <View>
-                    <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Hide this photo</Text>
-                    <Text style={styles.menuItemSub}>Remove from Chronicle — stays on your camera roll</Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.menuCancel} onPress={() => setTcPhotoMenuId(null)}>
-                  <Text style={styles.menuCancelText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          </Modal>
-
-          {/* Fullscreen photo — nested */}
-          <Modal visible={tcFullscreenPhoto !== null} animationType="fade">
-            <View style={{ flex: 1, backgroundColor: '#000000' }}>
-              {tcFullscreenPhoto && (
-                <Image source={{ uri: tcFullscreenPhoto }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-              )}
-              <TouchableOpacity style={styles.tcFullscreenClose} onPress={() => setTcFullscreenPhoto(null)}>
-                <Ionicons name="close" size={22} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
-          </Modal>
-
-          {/* Photo caption ("Add context") — nested */}
-          <Modal visible={tcContextModal !== null} animationType="slide" transparent>
-            <View style={styles.modalOverlay}>
-              <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
-              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
-                <View style={styles.modalBox}>
-                  <Text style={styles.modalTitle}>Add context</Text>
-                  <Text style={styles.modalSubtitle}>What do you remember about this photo?</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Write something for future you..."
-                    placeholderTextColor="rgba(255,255,255,0.25)"
-                    multiline
-                    value={tcModalText}
-                    onChangeText={setTcModalText}
-                    autoFocus
-                  />
-                  <TouchableOpacity style={styles.saveButton} onPress={saveTcCaption}>
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.cancelButton} onPress={() => setTcContextModal(null)}>
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </KeyboardAvoidingView>
-            </View>
-          </Modal>
-
-          {/* Tag people — nested */}
-          <Modal visible={tcTagModal !== null} animationType="slide" transparent>
-            <View style={styles.modalOverlay}>
-              <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
-              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
-                <View style={styles.modalBox}>
-                  <Text style={styles.modalTitle}>Tag people</Text>
-                  <Text style={styles.modalSubtitle}>Who&apos;s in this photo?</Text>
-                  {[...new Set([...allPeople, ...tcTagSelected])].length > 0 && (
-                    <View style={styles.tcTagChipsWrap}>
-                      {[...new Set([...allPeople, ...tcTagSelected])].map(name => {
-                        const selected = tcTagSelected.includes(name);
-                        return (
-                          <TouchableOpacity
-                            key={name}
-                            style={[styles.tcTagChip, selected && styles.tcTagChipActive]}
-                            onPress={() => setTcTagSelected(prev =>
-                              selected ? prev.filter(n => n !== name) : [...prev, name]
-                            )}
-                          >
-                            <Text style={[styles.tcTagChipText, selected && styles.tcTagChipTextActive]}>{name}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  )}
-                  <View style={styles.tcTagInputRow}>
-                    <TextInput
-                      style={[styles.textInput, { flex: 1, minHeight: 44, marginBottom: 0 }]}
-                      placeholder="Add a new name..."
-                      placeholderTextColor="rgba(255,255,255,0.25)"
-                      value={tcTagText}
-                      onChangeText={setTcTagText}
-                      onSubmitEditing={() => {
-                        const name = tcTagText.trim();
-                        if (name && !tcTagSelected.includes(name)) setTcTagSelected(prev => [...prev, name]);
-                        setTcTagText('');
-                      }}
-                    />
-                    <TouchableOpacity
-                      style={styles.tcTagAddBtn}
-                      onPress={() => {
-                        const name = tcTagText.trim();
-                        if (name && !tcTagSelected.includes(name)) setTcTagSelected(prev => [...prev, name]);
-                        setTcTagText('');
-                      }}
-                    >
-                      <Ionicons name="add" size={22} color="#ffffff" />
-                    </TouchableOpacity>
-                  </View>
-                  <TouchableOpacity style={[styles.saveButton, { marginTop: 16 }]} onPress={saveTcTags}>
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.cancelButton} onPress={() => { setTcTagModal(null); setTcTagText(''); }}>
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </KeyboardAvoidingView>
-            </View>
-          </Modal>
-
-          {/* Add to place — nested */}
-          <Modal visible={tcPlaceModal !== null} animationType="slide" transparent>
-            <View style={styles.modalOverlay}>
-              <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
-              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
-                <View style={styles.modalBox}>
-                  <Text style={styles.modalTitle}>Add to a place</Text>
-                  {tcPlaceModal !== 'day' && (
-                    <View style={styles.tcScopeRow}>
-                      <TouchableOpacity
-                        style={[styles.tcScopePill, tcPlaceScope === 'photo' && styles.tcScopePillActive]}
-                        onPress={() => setTcPlaceScope('photo')}
-                      >
-                        <Text style={[styles.tcScopeText, tcPlaceScope === 'photo' && styles.tcScopeTextActive]}>Just this photo</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.tcScopePill, tcPlaceScope === 'day' && styles.tcScopePillActive]}
-                        onPress={() => setTcPlaceScope('day')}
-                      >
-                        <Text style={[styles.tcScopeText, tcPlaceScope === 'day' && styles.tcScopeTextActive]}>The whole day</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  {tcNewPlaceMode ? (
-                    <>
-                      <TextInput
-                        style={styles.createPlaceInput}
-                        placeholder="Place name..."
-                        placeholderTextColor="rgba(255,255,255,0.25)"
-                        value={newPlaceName}
-                        onChangeText={setNewPlaceName}
-                        autoFocus
-                      />
-                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-                        {(['home', 'visited', 'meaningful'] as const).map(t => (
-                          <TouchableOpacity
-                            key={t}
-                            style={[styles.createPlaceTypePill, newPlaceType === t && styles.createPlaceTypePillActive]}
-                            onPress={() => setNewPlaceType(t)}
-                          >
-                            <Text style={[styles.createPlaceTypePillText, newPlaceType === t && { color: '#fff' }]}>
-                              {t.charAt(0).toUpperCase() + t.slice(1)}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                      <TouchableOpacity style={styles.saveButton} onPress={tcCreatePlaceAndAdd}>
-                        <Text style={styles.saveButtonText}>Create & add</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <ScrollView style={{ maxHeight: 260 }}>
-                      {places.map(p => (
-                        <TouchableOpacity key={p.id} style={styles.addToPlaceRow} onPress={() => tcAddToPlace(p.id)}>
-                          <Text style={styles.addToPlaceRowName}>{p.name}</Text>
-                          <View style={styles.placeTypePill}>
-                            <Text style={styles.placeTypePillText}>{p.type.toUpperCase()}</Text>
-                          </View>
-                        </TouchableOpacity>
-                      ))}
-                      <TouchableOpacity style={styles.addToPlaceNewBtn} onPress={() => setTcNewPlaceMode(true)}>
-                        <Text style={styles.addToPlaceNewBtnText}>＋ Create new place</Text>
-                      </TouchableOpacity>
-                    </ScrollView>
-                  )}
-                  <TouchableOpacity style={styles.cancelButton} onPress={() => { setTcPlaceModal(null); setTcNewPlaceMode(false); }}>
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </KeyboardAvoidingView>
-            </View>
-          </Modal>
-
-          {/* Day context field editor — nested */}
-          <Modal visible={tcContextField !== null} animationType="slide" transparent>
-            <View style={styles.modalOverlay}>
-              <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
-              <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
-                <View style={styles.modalBox}>
-                  <Text style={styles.modalTitle}>{contextFields.find(f => f.key === tcContextField)?.label || ''}</Text>
-                  {tcContextField === 'with' && allPeople.length > 0 && (
-                    <View style={styles.tcTagChipsWrap}>
-                      {allPeople.slice(0, 10).map(name => (
-                        <TouchableOpacity
-                          key={name}
-                          style={styles.tcTagChip}
-                          onPress={() => setTcModalText(prev => prev ? (prev.includes(name) ? prev : `${prev}, ${name}`) : name)}
-                        >
-                          <Text style={styles.tcTagChipText}>{name}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                  {tcContextField === 'living' && places.filter(p => p.type === 'home').length > 0 && (
-                    <View style={styles.tcTagChipsWrap}>
-                      {places.filter(p => p.type === 'home').slice(0, 6).map(p => (
-                        <TouchableOpacity key={p.id} style={styles.tcTagChip} onPress={() => setTcModalText(p.name)}>
-                          <Text style={styles.tcTagChipText}>🏠 {p.name}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder={contextFields.find(f => f.key === tcContextField)?.placeholder || ''}
-                    placeholderTextColor="rgba(255,255,255,0.25)"
-                    multiline
-                    value={tcModalText}
-                    onChangeText={setTcModalText}
-                    autoFocus
-                  />
-                  <TouchableOpacity style={styles.saveButton} onPress={saveTcContextField}>
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.cancelButton} onPress={() => setTcContextField(null)}>
-                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </KeyboardAvoidingView>
-            </View>
-          </Modal>
-        </View>
-      </Modal>
+      {/* ═══ DAY CARD ═══ */}
+      <DayCard
+        dateKey={dayCardKey || ''}
+        accent="past"
+        visible={dayCardKey !== null}
+        onClose={() => { setDayCardKey(null); loadVault(); loadMemories(); }}
+        onOpenDate={(dk) => setDayCardKey(dk)}
+      />
 
       {/* ═══ ARCHIVE ═══ */}
       <Modal
@@ -2365,7 +1403,7 @@ export default function OnThisDay() {
                       style={styles.personDayCard}
                       onPress={() => {
                         setShowPersonProfile(null);
-                        setTimeout(() => openTradingCard(d.dateKey, d.dateKey.split('-')[0]), 350);
+                        setTimeout(() => openDayCard(d.dateKey), 350);
                       }}
                     >
                       {d.thumbUri
@@ -2532,7 +1570,7 @@ export default function OnThisDay() {
                       style={styles.placeLinkedDayRow}
                       onPress={() => {
                         setShowPlaceProfile(false);
-                        setTimeout(() => openTradingCard(dateKey, dateKey.split('-')[0]), 350);
+                        setTimeout(() => openDayCard(dateKey), 350);
                       }}
                     >
                       {vd?.thumbUri && <Image source={{ uri: vd.thumbUri }} style={styles.placeLinkedDayThumb} />}
