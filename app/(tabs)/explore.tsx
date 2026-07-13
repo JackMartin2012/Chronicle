@@ -1,11 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold, useFonts } from '@expo-google-fonts/space-grotesk';
 import { Audio } from 'expo-av';
-import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
@@ -18,6 +20,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -27,14 +30,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import DayCard from '../../components/DayCard';
 
 const { width } = Dimensions.get('window');
-const THUMB_SIZE = Math.floor((width - 32 - 12) / 7);
 const CAL_SLOT_WIDTH = Math.floor((width - 32) / 7);
 
 const WEEK_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
 const getFirstDayOfMonth = (year: number, month: number) => {
@@ -56,6 +59,16 @@ type DayEntry = {
   withWho: string; taggedPeople: string[]; voiceMemoUri: string;
   openedCapsules: { id: string; message: string; photoUri: string; createdDate: string }[];
   sealedCapsules: { id: string; openDate: string; context: string }[];
+  pairSelfieUri: string;
+  threeWords: string[];
+  dailyQuestion: string;
+  dailyAnswer: string;
+  reflectionQuestion: string;
+  reflectionAnswer: string;
+  cookedDish: string;
+  cookedPhotoUri: string;
+  watched: string;
+  locations: { name: string; withWho?: string }[];
 };
 
 type Favourite = {
@@ -71,32 +84,55 @@ type Capsule = {
 const emptyEntry: DayEntry = {
   mood: '', dayDescription: '', weatherEmoji: '', weatherDescription: '',
   weatherTemp: 0, photoUri: '', extraPhotos: [], highlight: '', learned: '',
-  songName: '', songRating: 0, songMeaning: '', withWho: '', taggedPeople: [], voiceMemoUri: '', openedCapsules: [], sealedCapsules: [],
+  songName: '', songRating: 0, songMeaning: '', withWho: '', taggedPeople: [], voiceMemoUri: '',
+  openedCapsules: [], sealedCapsules: [],
+  pairSelfieUri: '', threeWords: [], dailyQuestion: '', dailyAnswer: '',
+  reflectionQuestion: '', reflectionAnswer: '', cookedDish: '', cookedPhotoUri: '',
+  watched: '', locations: [],
 };
 
-const moods = [
-  { emoji: '😔', label: 'Low' }, { emoji: '😐', label: 'Okay' },
-  { emoji: '🙂', label: 'Good' }, { emoji: '😊', label: 'Great' }, { emoji: '🤩', label: 'Amazing' },
+const normaliseEntry = (parsed: any): DayEntry => ({
+  ...emptyEntry,
+  ...parsed,
+  extraPhotos: parsed.extraPhotos || [],
+  taggedPeople: parsed.taggedPeople || [],
+  openedCapsules: parsed.openedCapsules || [],
+  sealedCapsules: parsed.sealedCapsules || [],
+  threeWords: parsed.threeWords || [],
+  locations: parsed.locations || [],
+});
+
+const MOODS = ['😞', '😐', '🙂', '😊', '🤩'];
+
+const dailyQuestions = [
+  "What did you eat today that you'd eat again?",
+  "What's one conversation you had today?",
+  'What did today smell like?',
+  'What made you laugh today?',
+  "What did you see today that you'd photograph again?",
+  'Who did you think about today?',
+  "What's something small that went right?",
+  'Where were you at 3pm today?',
+  'What would you redo about today?',
+  'What did you put off today?',
+  'What surprised you today?',
+  "What's the most ordinary thing you did today?",
 ];
 
-const highlightPrompts = [
-  "What was the most significant thing about today?",
-  "What's one moment from today you want to remember?",
-  "What surprised you today?",
-  "What are you most proud of today?",
-  "What challenged you today?",
-  "What was today's unexpected highlight?",
-  "What made today different from yesterday?",
+const reflectionQuestions = [
+  'What are you looking forward to right now?',
+  'What are you waiting to hear back about?',
+  "What's worrying you at the moment?",
+  'What are you working towards?',
+  'What do you hope is different in a year?',
+  "What's about to change?",
 ];
 
-const learnPrompts = [
-  "What did you learn today?",
-  "What realisation did you have today?",
-  "What would you do differently today?",
-  "What did someone teach you today?",
-  "What changed your perspective today?",
-  "What did you discover about yourself today?",
-];
+const getSeededPrompt = (dateKey: string, prompts: string[], offset = 0) => {
+  const parts = dateKey.split('-');
+  const seed = parseInt(parts[0]) * 1000 + parseInt(parts[1]) * 31 + parseInt(parts[2]) + offset;
+  return prompts[seed % prompts.length];
+};
 
 const favCategories = [
   { key: 'all', label: 'All', emoji: '⭐' },
@@ -107,11 +143,6 @@ const favCategories = [
   { key: 'recipe', label: 'Recipe', emoji: '🍳' },
   { key: 'place', label: 'Place', emoji: '📍' },
 ];
-
-const getDayPrompt = (prompts: string[]) => {
-  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
-  return prompts[dayOfYear % prompts.length];
-};
 
 const getWeatherInfo = (code: number, temp: number) => {
   let emoji = '🌤️'; let description = 'Partly cloudy';
@@ -147,6 +178,94 @@ const AnimatedCard = ({ onPress, style, children }: {
   );
 };
 
+// ── MOOD SLIDER ──────────────────────────────────────────────────────────────
+const THUMB_W = 44;
+
+const MoodSlider = ({ value, onChange }: { value: string; onChange: (emoji: string) => void }) => {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const trackWidthRef = useRef(0);
+  const lastIndex = useRef(-1);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const thumbScale = useRef(new Animated.Value(1)).current;
+
+  const indexFromX = (x: number) => {
+    const usable = trackWidthRef.current - THUMB_W;
+    if (usable <= 0) return 0;
+    return Math.min(4, Math.max(0, Math.round((x - THUMB_W / 2) / (usable / 4))));
+  };
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        Animated.spring(thumbScale, { toValue: 1.3, useNativeDriver: true, speed: 40 }).start();
+        const idx = indexFromX(e.nativeEvent.locationX);
+        lastIndex.current = idx;
+        Haptics.selectionAsync();
+        setDragIndex(idx);
+      },
+      onPanResponderMove: (e) => {
+        const idx = indexFromX(e.nativeEvent.locationX);
+        if (idx !== lastIndex.current) {
+          lastIndex.current = idx;
+          Haptics.selectionAsync();
+          setDragIndex(idx);
+        }
+      },
+      onPanResponderRelease: () => {
+        Animated.spring(thumbScale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 8 }).start();
+        if (lastIndex.current >= 0) onChangeRef.current(MOODS[lastIndex.current]);
+        setDragIndex(null);
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(thumbScale, { toValue: 1, useNativeDriver: true, speed: 40 }).start();
+        setDragIndex(null);
+      },
+    })
+  ).current;
+
+  const valueIndex = MOODS.indexOf(value === '😔' ? '😞' : value);
+  const displayIndex = dragIndex !== null ? dragIndex : valueIndex;
+  const usable = Math.max(0, trackWidth - THUMB_W);
+  const thumbLeft = displayIndex >= 0 ? (displayIndex * usable) / 4 : usable / 2;
+
+  return (
+    <View
+      style={sliderStyles.track}
+      onLayout={e => { setTrackWidth(e.nativeEvent.layout.width); trackWidthRef.current = e.nativeEvent.layout.width; }}
+      {...pan.panHandlers}
+    >
+      <View style={sliderStyles.stopsRow} pointerEvents="none">
+        {MOODS.map((m, i) => (
+          <Text key={m} style={[sliderStyles.stopEmoji, i === displayIndex && { opacity: 0 }]}>{m}</Text>
+        ))}
+      </View>
+      {displayIndex >= 0 ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[sliderStyles.thumb, { left: thumbLeft, transform: [{ scale: thumbScale }] }]}
+        >
+          <Text style={sliderStyles.thumbEmoji}>{MOODS[displayIndex]}</Text>
+        </Animated.View>
+      ) : (
+        <Text style={sliderStyles.hint} pointerEvents="none">slide to set your mood</Text>
+      )}
+    </View>
+  );
+};
+
+const sliderStyles = StyleSheet.create({
+  track: { height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', marginTop: 4 },
+  stopsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12 },
+  stopEmoji: { fontSize: 20, opacity: 0.35 },
+  thumb: { position: 'absolute', width: THUMB_W, height: THUMB_W, borderRadius: THUMB_W / 2, backgroundColor: 'rgba(74,144,217,0.25)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.5)', justifyContent: 'center', alignItems: 'center', top: 2 },
+  thumbEmoji: { fontSize: 26 },
+  hint: { position: 'absolute', alignSelf: 'center', fontSize: 12, color: 'rgba(255,255,255,0.25)' },
+});
+
 export default function ThePresent() {
   const [fontsLoaded] = useFonts({ SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold });
   const [activeTab, setActiveTab] = useState<'today' | 'archive' | 'favourites'>('today');
@@ -167,8 +286,8 @@ export default function ThePresent() {
   const [fullScreenUri, setFullScreenUri] = useState<string | null>(null);
 
   const [archivedDays, setArchivedDays] = useState<{ key: string; entry: DayEntry }[]>([]);
-  const [selectedDay, setSelectedDay] = useState<{ key: string; entry: DayEntry } | null>(null);
   const [archiveCalYear, setArchiveCalYear] = useState('');
+  const [dayCardKey, setDayCardKey] = useState<string | null>(null);
 
   const [favourites, setFavourites] = useState<Favourite[]>([]);
   const [favFilter, setFavFilter] = useState('all');
@@ -183,6 +302,9 @@ export default function ThePresent() {
   const [capsules, setCapsules] = useState<Capsule[]>([]);
   const [showCreateCapsule, setShowCreateCapsule] = useState(false);
   const [revealingCapsule, setRevealingCapsule] = useState<Capsule | null>(null);
+  const [revealPhase, setRevealPhase] = useState<'capsule' | 'content'>('capsule');
+  const revealScale = useRef(new Animated.Value(0.6)).current;
+  const revealOpacity = useRef(new Animated.Value(0)).current;
   const [newCapsuleMessage, setNewCapsuleMessage] = useState('');
   const [newCapsulePhoto, setNewCapsulePhoto] = useState('');
   const [capsuleDay, setCapsuleDay] = useState(new Date().getDate());
@@ -190,17 +312,25 @@ export default function ThePresent() {
   const [capsuleYear, setCapsuleYear] = useState(new Date().getFullYear() + 1);
   const [capsuleAddToDay, setCapsuleAddToDay] = useState(false);
   const [capsuleContext, setCapsuleContext] = useState('');
-  const [todaySelfieUri, setTodaySelfieUri] = useState<string | null>(null);
-  const [selectedDaySelfieUri, setSelectedDaySelfieUri] = useState<string | null>(null);
-  const [selfieCameraOpen, setSelfieCameraOpen] = useState(false);
-  const [selfieCapturing, setSelfieCapturing] = useState(false);
-  const [selfieFacing, setSelfieFacing] = useState<'front' | 'back'>('front');
-  const selfieCameraRef = useRef<CameraView>(null);
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const selfieShutterScale = useRef(new Animated.Value(1)).current;
 
+  // Capture pair + new field local state
+  const [pairSwapped, setPairSwapped] = useState(false);
+  const [threeWordsLocal, setThreeWordsLocal] = useState<string[]>(['', '', '']);
+  const [dailyAnswerLocal, setDailyAnswerLocal] = useState('');
+  const [reflectionAnswerLocal, setReflectionAnswerLocal] = useState('');
+  const [watchedLocal, setWatchedLocal] = useState('');
+  const [cookedDishLocal, setCookedDishLocal] = useState('');
+  const [writeOpen, setWriteOpen] = useState(false);
+  const [dayDescLocal, setDayDescLocal] = useState('');
+  const [showAddLocation, setShowAddLocation] = useState(false);
+  const [locName, setLocName] = useState('');
+  const [locWith, setLocWith] = useState('');
+  const [savedToday, setSavedToday] = useState(false);
+
+  // In-app cameras
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [photoCameraOpen, setPhotoCameraOpen] = useState(false);
-  const [photoCameraMode, setPhotoCameraMode] = useState<'today' | 'extra'>('today');
+  const [photoCameraMode, setPhotoCameraMode] = useState<'today' | 'extra' | 'pair' | 'cooked'>('today');
   const [photoCameraFacing, setPhotoCameraFacing] = useState<'front' | 'back'>('back');
   const [photoCaptured, setPhotoCaptured] = useState<string | null>(null);
   const [photoCapturing, setPhotoCapturing] = useState(false);
@@ -216,8 +346,8 @@ export default function ThePresent() {
   const today = new Date();
   const dateString = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const todayKey = formatDateKey(today);
-  const highlightPrompt = getDayPrompt(highlightPrompts);
-  const learnPrompt = getDayPrompt(learnPrompts);
+  const dailyQuestion = getSeededPrompt(todayKey, dailyQuestions);
+  const reflectionQuestion = getSeededPrompt(todayKey, reflectionQuestions, 7);
 
   const archiveYears = [...new Set(archivedDays.map(d => d.key.split('-')[0]))].sort().reverse();
   const archiveDayMap: Record<string, DayEntry> = {};
@@ -236,6 +366,10 @@ export default function ThePresent() {
   const readyCapsules = capsules.filter(c => !c.opened && c.openDate <= todayKey);
   const sealedCapsules = capsules.filter(c => !c.opened && c.openDate > todayKey);
 
+  const recipeSavedToday = favourites.some(f =>
+    f.category === 'recipe' && f.dateKey === todayKey && f.name === (cookedDishLocal || '').trim()
+  );
+
   useEffect(() => {
     loadEntry(); checkNotificationStatus(); fetchWeather();
     loadFavourites(); loadCapsules(); loadKnownPeople();
@@ -251,131 +385,50 @@ export default function ThePresent() {
 
   useEffect(() => { return () => { if (sound) sound.unloadAsync(); }; }, [sound]);
 
-  const onSelfieShutterPressIn = () => Animated.spring(selfieShutterScale, {
-    toValue: 0.88, useNativeDriver: true, speed: 40,
-  }).start();
-  const onSelfieShutterPressOut = () => Animated.spring(selfieShutterScale, {
-    toValue: 1, useNativeDriver: true, speed: 40, bounciness: 14,
-  }).start();
-
-  const openSelfieCamera = async () => {
-    if (!cameraPermission?.granted) {
-      const { granted } = await requestCameraPermission();
-      if (!granted) {
-        Alert.alert('Camera access needed', 'Allow camera access in Settings to take your selfie.');
-        return;
-      }
+  // Capsule reveal — anticipation animation
+  useEffect(() => {
+    if (revealingCapsule) {
+      setRevealPhase('capsule');
+      revealScale.setValue(0.6);
+      revealOpacity.setValue(0);
+      Animated.spring(revealScale, { toValue: 1, useNativeDriver: true, speed: 12, bounciness: 12 }).start();
+      const t = setTimeout(() => {
+        setRevealPhase('content');
+        Animated.timing(revealOpacity, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+      }, 1200);
+      return () => clearTimeout(t);
     }
-    setSelfieCameraOpen(true);
-  };
+  }, [revealingCapsule]);
 
-  const onPhotoShutterPressIn = () => Animated.spring(photoShutterScale, { toValue: 0.88, useNativeDriver: true, speed: 40 }).start();
-  const onPhotoShutterPressOut = () => Animated.spring(photoShutterScale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 14 }).start();
-
-  const openPhotoCamera = async (mode: 'today' | 'extra') => {
-    if (!cameraPermission?.granted) {
-      const { granted } = await requestCameraPermission();
-      if (!granted) {
-        Alert.alert('Camera access needed', 'Allow camera access in Settings to take a photo.');
-        return;
-      }
-    }
-    setPhotoCameraMode(mode);
-    setPhotoCameraFacing('back');
-    setPhotoCaptured(null);
-    setPhotoCameraOpen(true);
-  };
-
-  const capturePhoto = async () => {
-    if (!photoCameraRef.current || photoCapturing) return;
-    setPhotoCapturing(true);
-    try {
-      const photo = await photoCameraRef.current.takePictureAsync({ quality: 0.85, base64: false });
-      if (photo?.uri) {
-        let uri = photo.uri;
-        if (photoCameraFacing === 'front') {
-          const flipped = await ImageManipulator.manipulateAsync(
-            photo.uri,
-            [{ flip: ImageManipulator.FlipType.Horizontal }],
-            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-          );
-          uri = flipped.uri;
-        }
-        setPhotoCaptured(uri);
-      }
-    } catch (e) { console.log('Camera error:', e); }
-    finally { setPhotoCapturing(false); }
-  };
-
-  const usePhotoCaptured = () => {
-    if (!photoCaptured) return;
-    if (photoCameraMode === 'today') saveEntry({ ...entry, photoUri: photoCaptured });
-    else if (photoCameraMode === 'extra') saveEntry({ ...entry, extraPhotos: [...entry.extraPhotos, photoCaptured] });
-    setPhotoCameraOpen(false);
-    setPhotoCaptured(null);
-  };
-
-  const takeCapsulePhoto = async () => {
-    if (!capsuleCameraRef.current || capsuleCameraCapturing) return;
-    setCapsuleCameraCapturing(true);
-    try {
-      const photo = await capsuleCameraRef.current.takePictureAsync({ quality: 0.85, base64: false });
-      if (photo?.uri) {
-        let uri = photo.uri;
-        if (capsuleCameraFacing === 'front') {
-          const flipped = await ImageManipulator.manipulateAsync(
-            photo.uri,
-            [{ flip: ImageManipulator.FlipType.Horizontal }],
-            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-          );
-          uri = flipped.uri;
-        }
-        setCapsuleCameraPreview(uri);
-      }
-    } catch (e) { console.log('Camera error:', e); }
-    finally { setCapsuleCameraCapturing(false); }
-  };
-
-  const takeSelfie = async () => {
-    if (!selfieCameraRef.current || selfieCapturing) return;
-    setSelfieCapturing(true);
-    try {
-      const photo = await selfieCameraRef.current.takePictureAsync({ quality: 0.85, base64: false });
-      if (photo?.uri) {
-        const flipped = await ImageManipulator.manipulateAsync(
-          photo.uri,
-          [{ flip: ImageManipulator.FlipType.Horizontal }],
-          { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-        );
-        await AsyncStorage.setItem(`selfie_${todayKey}`, flipped.uri);
-        setTodaySelfieUri(flipped.uri);
-        setSelfieCameraOpen(false);
-      }
-    } catch (e) { console.log('Camera error:', e); }
-    finally { setSelfieCapturing(false); }
-  };
+  // ── ENTRY LOAD / SAVE ────────────────────────────────────────────────────
 
   const loadEntry = async () => {
     const saved = await AsyncStorage.getItem(`day_entry_${todayKey}`);
     if (saved) {
-      const parsed = JSON.parse(saved);
-      setEntry({ ...emptyEntry, ...parsed, extraPhotos: parsed.extraPhotos || [], taggedPeople: parsed.taggedPeople || [] });
+      const parsed = normaliseEntry(JSON.parse(saved));
+      setEntry(parsed);
+      setThreeWordsLocal([parsed.threeWords[0] || '', parsed.threeWords[1] || '', parsed.threeWords[2] || '']);
+      setDailyAnswerLocal(parsed.dailyAnswer || '');
+      setReflectionAnswerLocal(parsed.reflectionAnswer || '');
+      setWatchedLocal(parsed.watched || '');
+      setCookedDishLocal(parsed.cookedDish || '');
+      setDayDescLocal(parsed.dayDescription || '');
     }
-    const selfieUri = await AsyncStorage.getItem(`selfie_${todayKey}`);
-    if (selfieUri) setTodaySelfieUri(selfieUri);
+    const savedFlag = await AsyncStorage.getItem(`saved_day_${todayKey}`);
+    setSavedToday(savedFlag === 'true');
   };
 
-  useEffect(() => {
-    if (selectedDay?.key) {
-      AsyncStorage.getItem(`selfie_${selectedDay.key}`).then(uri => setSelectedDaySelfieUri(uri || null));
-    } else {
-      setSelectedDaySelfieUri(null);
-    }
-  }, [selectedDay]);
+  const updateEntry = (patch: Partial<DayEntry>) => {
+    setEntry(prev => {
+      const updated = { ...prev, ...patch };
+      AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(updated));
+      return updated;
+    });
+  };
 
-  const saveEntry = async (updated: DayEntry) => {
-    setEntry(updated);
-    await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(updated));
+  const saveThreeWords = () => {
+    const words = threeWordsLocal.map(w => w.trim());
+    updateEntry({ threeWords: words.some(Boolean) ? words : [] });
   };
 
   const loadArchive = async () => {
@@ -387,11 +440,12 @@ export default function ThePresent() {
     for (const [key, val] of results) {
       if (val) {
         const parsed = JSON.parse(val);
-        if (parsed.photoUri || parsed.mood || parsed.highlight || parsed.learned || parsed.songName) {
-          days.push({
-            key: key.replace('day_entry_', ''),
-            entry: { ...emptyEntry, ...parsed, extraPhotos: parsed.extraPhotos || [], taggedPeople: parsed.taggedPeople || [], openedCapsules: parsed.openedCapsules || [], sealedCapsules: parsed.sealedCapsules || [] }
-          });
+        const hasContent = parsed.photoUri || parsed.mood || parsed.highlight || parsed.learned ||
+          parsed.songName || parsed.dayDescription || parsed.dailyAnswer || parsed.reflectionAnswer ||
+          parsed.watched || parsed.cookedDish || parsed.pairSelfieUri || parsed.voiceMemoUri ||
+          (parsed.threeWords || []).some(Boolean) || (parsed.locations || []).length > 0;
+        if (hasContent) {
+          days.push({ key: key.replace('day_entry_', ''), entry: normaliseEntry(parsed) });
         }
       }
     }
@@ -449,57 +503,144 @@ export default function ThePresent() {
       const data = await response.json();
       const weather = getWeatherInfo(data.current_weather.weathercode, data.current_weather.temperature);
       const saved2 = await AsyncStorage.getItem(`day_entry_${todayKey}`);
-      const existing = saved2 ? JSON.parse(saved2) : emptyEntry;
-      const updated = { ...emptyEntry, ...existing, extraPhotos: existing.extraPhotos || [], taggedPeople: existing.taggedPeople || [], weatherEmoji: weather.emoji, weatherDescription: weather.description, weatherTemp: weather.temp };
+      const existing = saved2 ? normaliseEntry(JSON.parse(saved2)) : emptyEntry;
+      const updated = { ...existing, weatherEmoji: weather.emoji, weatherDescription: weather.description, weatherTemp: weather.temp };
       setEntry(updated);
       await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(updated));
     } catch (e) { console.log('Weather error:', e); }
     setWeatherLoading(false);
   };
 
-  const pickPhoto = (isExtra = false) => {
-    Alert.alert(isExtra ? 'Add a photo' : "Today's photo", 'Choose a photo', [
-      { text: 'Take a photo', onPress: () => openPhotoCamera(isExtra ? 'extra' : 'today') },
-      { text: 'Choose from camera roll', onPress: async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
-        if (!result.canceled && result.assets[0]) {
-          if (isExtra) saveEntry({ ...entry, extraPhotos: [...entry.extraPhotos, result.assets[0].uri] });
-          else saveEntry({ ...entry, photoUri: result.assets[0].uri });
+  // ── CAMERAS & PHOTOS ─────────────────────────────────────────────────────
+
+  const onPhotoShutterPressIn = () => Animated.spring(photoShutterScale, { toValue: 0.88, useNativeDriver: true, speed: 40 }).start();
+  const onPhotoShutterPressOut = () => Animated.spring(photoShutterScale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 14 }).start();
+
+  const openPhotoCamera = async (mode: 'today' | 'extra' | 'pair' | 'cooked') => {
+    if (!cameraPermission?.granted) {
+      const { granted } = await requestCameraPermission();
+      if (!granted) {
+        Alert.alert('Camera access needed', 'Allow camera access in Settings to take a photo.');
+        return;
+      }
+    }
+    setPhotoCameraMode(mode);
+    setPhotoCameraFacing(mode === 'pair' ? 'front' : 'back');
+    setPhotoCaptured(null);
+    setPhotoCameraOpen(true);
+  };
+
+  const capturePhoto = async () => {
+    if (!photoCameraRef.current || photoCapturing) return;
+    setPhotoCapturing(true);
+    try {
+      const photo = await photoCameraRef.current.takePictureAsync({ quality: 0.85, base64: false });
+      if (photo?.uri) {
+        let uri = photo.uri;
+        if (photoCameraFacing === 'front') {
+          const flipped = await ImageManipulator.manipulateAsync(
+            photo.uri,
+            [{ flip: ImageManipulator.FlipType.Horizontal }],
+            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          uri = flipped.uri;
         }
-      }},
+        setPhotoCaptured(uri);
+      }
+    } catch (e) { console.log('Camera error:', e); }
+    finally { setPhotoCapturing(false); }
+  };
+
+  const usePhotoCaptured = () => {
+    if (!photoCaptured) return;
+    if (photoCameraMode === 'today') updateEntry({ photoUri: photoCaptured });
+    else if (photoCameraMode === 'extra') updateEntry({ extraPhotos: [...entry.extraPhotos, photoCaptured] });
+    else if (photoCameraMode === 'pair') updateEntry({ pairSelfieUri: photoCaptured });
+    else if (photoCameraMode === 'cooked') updateEntry({ cookedPhotoUri: photoCaptured });
+    setPhotoCameraOpen(false);
+    setPhotoCaptured(null);
+  };
+
+  const pickPhoto = (mode: 'today' | 'extra' | 'pair' | 'cooked') => {
+    const titles = { today: "Today's photo", extra: 'Add a photo', pair: 'Your selfie', cooked: 'Dish photo' };
+    Alert.alert(titles[mode], 'Choose a photo', [
+      { text: 'Take a photo', onPress: () => openPhotoCamera(mode) },
+      {
+        text: 'Choose from camera roll', onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            quality: 0.85,
+            allowsMultipleSelection: mode === 'extra',
+          });
+          if (!result.canceled && result.assets.length > 0) {
+            if (mode === 'extra') updateEntry({ extraPhotos: [...entry.extraPhotos, ...result.assets.map(a => a.uri)] });
+            else if (mode === 'today') updateEntry({ photoUri: result.assets[0].uri });
+            else if (mode === 'pair') updateEntry({ pairSelfieUri: result.assets[0].uri });
+            else if (mode === 'cooked') updateEntry({ cookedPhotoUri: result.assets[0].uri });
+          }
+        }
+      },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
+  const takeCapsulePhoto = async () => {
+    if (!capsuleCameraRef.current || capsuleCameraCapturing) return;
+    setCapsuleCameraCapturing(true);
+    try {
+      const photo = await capsuleCameraRef.current.takePictureAsync({ quality: 0.85, base64: false });
+      if (photo?.uri) {
+        let uri = photo.uri;
+        if (capsuleCameraFacing === 'front') {
+          const flipped = await ImageManipulator.manipulateAsync(
+            photo.uri,
+            [{ flip: ImageManipulator.FlipType.Horizontal }],
+            { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          uri = flipped.uri;
+        }
+        setCapsuleCameraPreview(uri);
+      }
+    } catch (e) { console.log('Camera error:', e); }
+    finally { setCapsuleCameraCapturing(false); }
+  };
+
   const pickFavPhoto = () => {
     Alert.alert('Add a photo', 'Choose a photo for this entry', [
-      { text: 'Take a photo', onPress: async () => {
-        const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-        if (!result.canceled && result.assets[0]) setNewFav(prev => ({ ...prev, photoUri: result.assets[0].uri }));
-      }},
-      { text: 'Choose from camera roll', onPress: async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
-        if (!result.canceled && result.assets[0]) setNewFav(prev => ({ ...prev, photoUri: result.assets[0].uri }));
-      }},
+      {
+        text: 'Take a photo', onPress: async () => {
+          const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+          if (!result.canceled && result.assets[0]) setNewFav(prev => ({ ...prev, photoUri: result.assets[0].uri }));
+        }
+      },
+      {
+        text: 'Choose from camera roll', onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
+          if (!result.canceled && result.assets[0]) setNewFav(prev => ({ ...prev, photoUri: result.assets[0].uri }));
+        }
+      },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
   const pickCapsulePhoto = () => {
     Alert.alert('Add a photo', 'Attach a photo to your capsule', [
-      { text: 'Take a photo', onPress: async () => {
-        if (!cameraPermission?.granted) {
-          const { granted } = await requestCameraPermission();
-          if (!granted) { Alert.alert('Camera access needed', 'Allow camera access in Settings.'); return; }
+      {
+        text: 'Take a photo', onPress: async () => {
+          if (!cameraPermission?.granted) {
+            const { granted } = await requestCameraPermission();
+            if (!granted) { Alert.alert('Camera access needed', 'Allow camera access in Settings.'); return; }
+          }
+          setCapsuleCameraFacing('back');
+          setCapsuleCameraPreview(null);
+          setCapsuleCameraOpen(true);
         }
-        setCapsuleCameraFacing('back');
-        setCapsuleCameraPreview(null);
-        setCapsuleCameraOpen(true);
-      }},
-      { text: 'Choose from camera roll', onPress: async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
-        if (!result.canceled && result.assets[0]) setNewCapsulePhoto(result.assets[0].uri);
-      }},
+      },
+      {
+        text: 'Choose from camera roll', onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
+          if (!result.canceled && result.assets[0]) setNewCapsulePhoto(result.assets[0].uri);
+        }
+      },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
@@ -507,27 +648,33 @@ export default function ThePresent() {
   const pickFavDetailPhoto = async () => {
     if (!selectedFav) return;
     Alert.alert('Add a photo', 'Choose a photo for this favourite', [
-      { text: 'Take a photo', onPress: async () => {
-        const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-        if (!result.canceled && result.assets[0]) {
-          const uri = result.assets[0].uri;
-          const updated = favourites.map(f => f.id === selectedFav.id ? { ...f, photoUri: uri } : f);
-          await saveFavourites(updated);
-          setSelectedFav({ ...selectedFav, photoUri: uri });
+      {
+        text: 'Take a photo', onPress: async () => {
+          const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+          if (!result.canceled && result.assets[0]) {
+            const uri = result.assets[0].uri;
+            const updated = favourites.map(f => f.id === selectedFav.id ? { ...f, photoUri: uri } : f);
+            await saveFavourites(updated);
+            setSelectedFav({ ...selectedFav, photoUri: uri });
+          }
         }
-      }},
-      { text: 'Choose from camera roll', onPress: async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
-        if (!result.canceled && result.assets[0]) {
-          const uri = result.assets[0].uri;
-          const updated = favourites.map(f => f.id === selectedFav.id ? { ...f, photoUri: uri } : f);
-          await saveFavourites(updated);
-          setSelectedFav({ ...selectedFav, photoUri: uri });
+      },
+      {
+        text: 'Choose from camera roll', onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({ quality: 0.85 });
+          if (!result.canceled && result.assets[0]) {
+            const uri = result.assets[0].uri;
+            const updated = favourites.map(f => f.id === selectedFav.id ? { ...f, photoUri: uri } : f);
+            await saveFavourites(updated);
+            setSelectedFav({ ...selectedFav, photoUri: uri });
+          }
         }
-      }},
+      },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
+
+  // ── VOICE MEMO ───────────────────────────────────────────────────────────
 
   const startRecording = async () => {
     try {
@@ -546,7 +693,7 @@ export default function ThePresent() {
     await recording.stopAndUnloadAsync();
     const uri = recording.getURI();
     setRecording(null);
-    if (uri) saveEntry({ ...entry, voiceMemoUri: uri });
+    if (uri) updateEntry({ voiceMemoUri: uri });
   };
 
   const playVoiceMemo = async (uri?: string) => {
@@ -563,19 +710,18 @@ export default function ThePresent() {
     } catch (e) { console.log('Playback error:', e); }
   };
 
+  // ── MODALS / TAGS / CAPSULES ─────────────────────────────────────────────
+
   const openModal = (field: string, currentValue: string, currentRating?: number) => {
     setTempText(currentValue); setTempRating(currentRating || 0); setActiveModal(field);
   };
 
   const saveModal = async () => {
     if (!activeModal) return;
-    let updated = { ...entry };
-    if (activeModal === 'highlight') updated.highlight = tempText;
-    if (activeModal === 'learned') updated.learned = tempText;
-    if (activeModal === 'dayDescription') updated.dayDescription = tempText;
-    if (activeModal === 'song') { updated.songName = tempText; updated.songRating = tempRating; }
-    if (activeModal === 'songMeaning') updated.songMeaning = tempText;
-    saveEntry(updated);
+    const patch: Partial<DayEntry> = {};
+    if (activeModal === 'song') { patch.songName = tempText; patch.songRating = tempRating; }
+    if (activeModal === 'songMeaning') patch.songMeaning = tempText;
+    updateEntry(patch);
     setActiveModal(null);
   };
 
@@ -585,14 +731,54 @@ export default function ThePresent() {
     const current = entry.taggedPeople || [];
     if (current.includes(trimmed)) { setPeopleInput(''); return; }
     const updated = [...current, trimmed];
-    saveEntry({ ...entry, taggedPeople: updated, withWho: updated.join(', ') });
+    updateEntry({ taggedPeople: updated, withWho: updated.join(', ') });
     if (!knownPeople.includes(trimmed)) setKnownPeople(prev => [...prev, trimmed].sort());
     setPeopleInput('');
   };
 
   const removePersonTag = (name: string) => {
     const updated = (entry.taggedPeople || []).filter(p => p !== name);
-    saveEntry({ ...entry, taggedPeople: updated, withWho: updated.join(', ') });
+    updateEntry({ taggedPeople: updated, withWho: updated.join(', ') });
+  };
+
+  const addLocation = () => {
+    const name = locName.trim();
+    if (!name) return;
+    const loc: { name: string; withWho?: string } = { name };
+    if (locWith.trim()) loc.withWho = locWith.trim();
+    updateEntry({ locations: [...(entry.locations || []), loc] });
+    setLocName('');
+    setLocWith('');
+    setShowAddLocation(false);
+  };
+
+  const removeLocation = (index: number) => {
+    updateEntry({ locations: (entry.locations || []).filter((_, i) => i !== index) });
+  };
+
+  const saveCookedToRecipes = async () => {
+    const dish = cookedDishLocal.trim();
+    if (!dish || recipeSavedToday) return;
+    const fav: Favourite = {
+      id: Date.now().toString(),
+      category: 'recipe',
+      name: dish,
+      rating: 0,
+      note: '',
+      photoUri: entry.cookedPhotoUri || '',
+      dateKey: todayKey,
+      displayDate: today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+    };
+    await saveFavourites([fav, ...favourites]);
+  };
+
+  const saveToday = async () => {
+    const finalEntry = { ...entry };
+    await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(finalEntry));
+    await AsyncStorage.setItem(`saved_day_${todayKey}`, 'true');
+    setSavedToday(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setTimeout(() => setDayCardKey(todayKey), 350);
   };
 
   const createCapsule = async () => {
@@ -607,17 +793,15 @@ export default function ThePresent() {
     await saveCapsules([...capsules, capsule]);
     if (capsuleAddToDay) {
       const savedEntry = await AsyncStorage.getItem(`day_entry_${todayKey}`);
-      const existing = savedEntry ? JSON.parse(savedEntry) : emptyEntry;
+      const existing = savedEntry ? normaliseEntry(JSON.parse(savedEntry)) : emptyEntry;
       const updatedEntry = {
-        ...emptyEntry, ...existing,
-        extraPhotos: existing.extraPhotos || [],
-        taggedPeople: existing.taggedPeople || [],
-        openedCapsules: existing.openedCapsules || [],
+        ...existing,
         sealedCapsules: [...(existing.sealedCapsules || []), {
           id: capsule.id, openDate: capsule.openDate, context: capsuleContext.trim(),
         }],
       };
       await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(updatedEntry));
+      setEntry(updatedEntry);
     }
     setNewCapsuleMessage(''); setNewCapsulePhoto(''); setCapsuleAddToDay(false); setCapsuleContext('');
     setShowCreateCapsule(false);
@@ -628,19 +812,23 @@ export default function ThePresent() {
     const updated = capsules.map(c => c.id === capsule.id ? { ...c, opened: true } : c);
     await saveCapsules(updated);
     const savedEntry = await AsyncStorage.getItem(`day_entry_${todayKey}`);
-    const existing = savedEntry ? JSON.parse(savedEntry) : emptyEntry;
+    const existing = savedEntry ? normaliseEntry(JSON.parse(savedEntry)) : emptyEntry;
     const updatedEntry = {
-      ...emptyEntry, ...existing,
-      extraPhotos: existing.extraPhotos || [],
-      taggedPeople: existing.taggedPeople || [],
-      sealedCapsules: existing.sealedCapsules || [],
+      ...existing,
       openedCapsules: [...(existing.openedCapsules || []), {
         id: capsule.id, message: capsule.message,
         photoUri: capsule.photoUri, createdDate: capsule.createdDate,
       }],
     };
     await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(updatedEntry));
+    setEntry(updatedEntry);
     setRevealingCapsule(null);
+  };
+
+  const daysUntil = (openDate: string) => {
+    const target = new Date(openDate + 'T12:00:00').getTime();
+    const now = new Date(todayKey + 'T12:00:00').getTime();
+    return Math.max(0, Math.round((target - now) / 86400000));
   };
 
   const checkNotificationStatus = async () => {
@@ -650,10 +838,9 @@ export default function ThePresent() {
 
   const enableNotifications = async () => {
     const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') { alert('Need notification permission.'); return; }
+    if (status !== 'granted') { Alert.alert('Permission needed', 'Chronicle needs notification permission.'); return; }
     await AsyncStorage.setItem('notifications_enabled', 'true');
     setNotificationsEnabled(true);
-    alert('Daily reminders enabled!');
   };
 
   const disableNotifications = async () => {
@@ -680,16 +867,14 @@ export default function ThePresent() {
   const deleteFavourite = async (id: string) => {
     Alert.alert('Delete', 'Remove this from your favourites?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        await saveFavourites(favourites.filter(f => f.id !== id));
-        setSelectedFav(null);
-      }},
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          await saveFavourites(favourites.filter(f => f.id !== id));
+          setSelectedFav(null);
+        }
+      },
     ]);
   };
-
-  const formatArchiveDate = (key: string) => new Date(key + 'T12:00:00').toLocaleDateString('en-GB', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-  });
 
   const filteredFavourites = favFilter === 'all' ? favourites : favourites.filter(f => f.category === favFilter);
   const getCategoryEmoji = (key: string) => favCategories.find(c => c.key === key)?.emoji || '⭐';
@@ -716,162 +901,242 @@ export default function ThePresent() {
       </View>
 
       {activeTab === 'today' && (
-        <ScrollView style={styles.container}>
+        <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.subHeader}>
-            <Text style={styles.headerSubtitle}>Today's entry becomes tomorrow's flashback.</Text>
+            <Text style={styles.headerSubtitle}>Today&apos;s entry becomes tomorrow&apos;s flashback.</Text>
           </View>
 
-          {/* BeReal-style top row: selfie left, main photo right */}
-          <View style={styles.beRealRow}>
-            <View style={styles.beRealSelfie}>
-              <TouchableOpacity style={{ flex: 1 }} onPress={openSelfieCamera} activeOpacity={0.85}>
-                {todaySelfieUri ? (
-                  <Image source={{ uri: todaySelfieUri }} style={styles.beRealSelfiePhoto} resizeMode="cover" />
-                ) : (
-                  <View style={styles.beRealSelfiePlaceholder}>
-                    <Text style={styles.selfiePlaceholderEmoji}>🤳</Text>
-                    <Text style={styles.selfiePlaceholderText}>Take selfie</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.viewAllSelfiesButton} onPress={() => router.push('/(tabs)/selfie')}>
-                <Text style={styles.viewAllSelfiesText}>View all selfies →</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={styles.beRealMain}
-              onPress={() => {
-                if (entry.photoUri) {
-                  Alert.alert("Today's photo", '', [
-                    { text: 'View photo', onPress: () => setFullScreenUri(entry.photoUri) },
-                    { text: 'Retake', onPress: () => openPhotoCamera('today') },
-                    { text: 'Remove photo', onPress: () => saveEntry({ ...entry, photoUri: '' }), style: 'destructive' },
+          {/* 3.1 THE CAPTURE PAIR */}
+          <View style={styles.card}>
+            {entry.photoUri || entry.pairSelfieUri ? (
+              <View style={styles.pairArea}>
+                <TouchableOpacity
+                  style={{ flex: 1 }}
+                  activeOpacity={0.9}
+                  onPress={() => {
+                    const bigUri = pairSwapped && entry.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri;
+                    if (!bigUri) { pickPhoto('today'); return; }
+                    Alert.alert('Photo', '', [
+                      { text: 'View photo', onPress: () => setFullScreenUri(bigUri) },
+                      { text: 'Retake', onPress: () => pickPhoto(pairSwapped && entry.pairSelfieUri ? 'pair' : 'today') },
+                      { text: 'Remove', style: 'destructive', onPress: () => updateEntry(pairSwapped && entry.pairSelfieUri ? { pairSelfieUri: '' } : { photoUri: '' }) },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]);
+                  }}
+                >
+                  {(pairSwapped && entry.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri) ? (
+                    <Image
+                      source={{ uri: pairSwapped && entry.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri }}
+                      style={styles.pairMainPhoto}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.pairMainPlaceholder}>
+                      <Text style={{ fontSize: 32 }}>📷</Text>
+                      <Text style={styles.pairPlaceholderText}>Add today&apos;s photo</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                {entry.pairSelfieUri || entry.photoUri ? (
+                  <TouchableOpacity
+                    style={styles.pairInset}
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      const insetUri = pairSwapped ? entry.photoUri : entry.pairSelfieUri;
+                      if (insetUri) setPairSwapped(s => !s);
+                      else pickPhoto(pairSwapped ? 'today' : 'pair');
+                    }}
+                  >
+                    {(pairSwapped ? entry.photoUri : entry.pairSelfieUri) ? (
+                      <Image
+                        source={{ uri: pairSwapped ? entry.photoUri : entry.pairSelfieUri }}
+                        style={{ width: '100%', height: '100%' }}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.pairInsetPlaceholder}>
+                        <Text style={{ fontSize: 20 }}>🤳</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : (
+              <View style={styles.pairPromptRow}>
+                <TouchableOpacity style={styles.pairPrompt} onPress={() => pickPhoto('today')}>
+                  <Text style={{ fontSize: 28 }}>📷</Text>
+                  <Text style={styles.pairPromptText}>Today&apos;s photo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.pairPrompt} onPress={() => pickPhoto('pair')}>
+                  <Text style={{ fontSize: 28 }}>🤳</Text>
+                  <Text style={styles.pairPromptText}>Add a selfie</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.extraStrip}>
+              {entry.extraPhotos.map((uri, index) => (
+                <TouchableOpacity key={index} onPress={() => {
+                  Alert.alert('Photo', '', [
+                    { text: 'View photo', onPress: () => setFullScreenUri(uri) },
+                    { text: 'Remove photo', onPress: () => updateEntry({ extraPhotos: entry.extraPhotos.filter((_, i) => i !== index) }), style: 'destructive' },
                     { text: 'Cancel', style: 'cancel' },
                   ]);
-                } else {
-                  pickPhoto(false);
-                }
-              }}
-              activeOpacity={0.85}>
-              {entry.photoUri ? (
-                <View style={{ flex: 1 }}>
-                  <Image source={{ uri: entry.photoUri }} style={styles.beRealMainPhoto} resizeMode="cover" />
-                  <View style={styles.photoEditOverlay}><Text style={styles.photoEditText}>Tap to manage</Text></View>
-                </View>
-              ) : (
-                <View style={styles.beRealMainPlaceholder}>
-                  <Text style={styles.photoPlaceholderEmoji}>🖼️</Text>
-                  <Text style={styles.photoPlaceholderTitle}>Add today's photo</Text>
-                  <Text style={styles.photoPlaceholderSubtitle}>Tap to add</Text>
-                </View>
-              )}
+                }}>
+                  <Image source={{ uri }} style={styles.extraPhoto} />
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={styles.addExtraTile} onPress={() => pickPhoto('extra')}>
+                <Text style={styles.addExtraText}>+</Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            <TouchableOpacity style={styles.viewAllSelfies} onPress={() => router.push('/(tabs)/selfie')}>
+              <Text style={styles.viewAllSelfiesText}>View all selfies →</Text>
             </TouchableOpacity>
           </View>
 
-          {(entry.photoUri || entry.extraPhotos.length > 0) && (
-            <View style={styles.photoSection}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.extraStrip} contentContainerStyle={styles.extraStripContent}>
-                {entry.extraPhotos.map((uri, index) => (
-                  <TouchableOpacity key={index} onPress={() => {
-                    Alert.alert('Photo', '', [
-                      { text: 'View photo', onPress: () => setFullScreenUri(uri) },
-                      { text: 'Remove photo', onPress: () => saveEntry({ ...entry, extraPhotos: entry.extraPhotos.filter((_, i) => i !== index) }), style: 'destructive' },
-                      { text: 'Cancel', style: 'cancel' },
-                    ]);
-                  }}>
-                    <Image source={{ uri }} style={styles.extraPhoto} />
-                  </TouchableOpacity>
-                ))}
-                <TouchableOpacity style={styles.addExtraButton} onPress={() => pickPhoto(true)}>
-                  <Text style={styles.addExtraText}>+</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-          )}
+          {/* 3.2 MOOD SLIDER */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>MOOD</Text>
+            <MoodSlider value={entry.mood} onChange={emoji => updateEntry({ mood: emoji })} />
+          </View>
 
-          <View style={styles.row}>
-            <View style={styles.moodCard}>
-              <Text style={styles.cardLabel}>MOOD</Text>
-              <View style={styles.moodRow}>
-                {moods.map(mood => (
-                  <TouchableOpacity key={mood.emoji} onPress={() => saveEntry({ ...entry, mood: mood.emoji })}
-                    style={[styles.moodButton, entry.mood === mood.emoji && styles.moodButtonActive]}>
-                    <Text style={styles.moodEmoji}>{mood.emoji}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {entry.mood ? <Text style={styles.moodSelected}>Feeling {moods.find(m => m.emoji === entry.mood)?.label}</Text>
-                : <Text style={styles.moodPrompt}>How are you feeling?</Text>}
-              <TouchableOpacity style={styles.dayDescButton} onPress={() => openModal('dayDescription', entry.dayDescription)}>
-                {entry.dayDescription ? <Text style={styles.dayDescText}>"{entry.dayDescription}"</Text>
-                  : <Text style={styles.dayDescPlaceholder}>+ Describe your day in a sentence</Text>}
-              </TouchableOpacity>
-            </View>
-            <View style={styles.weatherCard}>
-              <Text style={styles.cardLabel}>WEATHER</Text>
-              {weatherLoading ? <ActivityIndicator color="#4a90d9" size="small" style={{ marginTop: 12 }} />
-                : entry.weatherEmoji ? (
-                  <View style={styles.weatherContent}>
-                    <Text style={styles.weatherEmoji}>{entry.weatherEmoji}</Text>
-                    <Text style={styles.weatherTemp}>{entry.weatherTemp}°C</Text>
-                    <Text style={styles.weatherDesc}>{entry.weatherDescription}</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity onPress={fetchWeather} style={styles.weatherContent}>
-                    <Text style={styles.weatherEmoji}>🌍</Text>
-                    <Text style={styles.weatherDesc}>Tap to load</Text>
-                  </TouchableOpacity>
-                )}
+          {/* 3.3 THREE WORDS */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>TODAY IN THREE WORDS</Text>
+            <View style={styles.wordsRow}>
+              {[0, 1, 2].map(i => (
+                <TextInput
+                  key={i}
+                  style={[styles.wordChip, !!threeWordsLocal[i]?.trim() && styles.wordChipFilled]}
+                  placeholder="word"
+                  placeholderTextColor="rgba(255,255,255,0.25)"
+                  maxLength={16}
+                  value={threeWordsLocal[i]}
+                  onChangeText={text => setThreeWordsLocal(prev => prev.map((w, j) => j === i ? text : w))}
+                  onBlur={saveThreeWords}
+                />
+              ))}
             </View>
           </View>
 
-          <View style={styles.compactCard}>
-            <Text style={styles.cardLabel}>VOICE MEMO</Text>
-            <Text style={styles.voicePrompt}>Tell me about your day...</Text>
-            {entry.voiceMemoUri ? (
-              <View style={styles.voiceControls}>
-                <TouchableOpacity style={styles.voicePlayButton} onPress={() => playVoiceMemo()}>
-                  <Text style={styles.voicePlayText}>{isPlaying ? '⏸ Stop' : '▶ Play memo'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.voiceRerecordButton} onPress={isRecording ? stopRecording : startRecording}>
-                  <Text style={styles.voiceRerecordText}>{isRecording ? '⏹ Stop recording' : '🎙 Re-record'}</Text>
-                </TouchableOpacity>
+          {/* 3.4 TODAY'S QUESTION */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>TODAY&apos;S QUESTION</Text>
+            <Text style={styles.questionText}>{dailyQuestion}</Text>
+            <TextInput
+              style={styles.questionInput}
+              placeholder="Your answer..."
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              multiline
+              value={dailyAnswerLocal}
+              onChangeText={setDailyAnswerLocal}
+              onBlur={() => updateEntry({ dailyQuestion, dailyAnswer: dailyAnswerLocal })}
+            />
+          </View>
+
+          {/* 3.5 REFLECTION — FOR FUTURE YOU */}
+          <View style={[styles.card, styles.reflectionCard]}>
+            <Text style={styles.cardLabel}>FOR FUTURE YOU</Text>
+            <Text style={styles.questionText}>{reflectionQuestion}</Text>
+            <TextInput
+              style={styles.questionInput}
+              placeholder="Future you will read this..."
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              multiline
+              value={reflectionAnswerLocal}
+              onChangeText={setReflectionAnswerLocal}
+              onBlur={() => updateEntry({ reflectionQuestion, reflectionAnswer: reflectionAnswerLocal })}
+            />
+          </View>
+
+          {/* 3.6 YOUR DAY — write or speak */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>YOUR DAY</Text>
+            <View style={styles.dayActionsRow}>
+              <TouchableOpacity
+                style={[styles.dayActionBtn, writeOpen && styles.dayActionBtnActive]}
+                onPress={() => setWriteOpen(o => !o)}
+              >
+                <Text style={styles.dayActionText}>✍️ Write</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.dayActionBtn, isRecording && styles.dayActionBtnRecording]}
+                onPress={isRecording ? stopRecording : startRecording}
+              >
+                <Text style={styles.dayActionText}>{isRecording ? '⏹ Stop' : '🎙 Speak'}</Text>
+              </TouchableOpacity>
+            </View>
+            {isRecording && (
+              <View style={styles.recordingRow}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingText}>Recording... tap Stop when done</Text>
               </View>
-            ) : (
-              <TouchableOpacity style={[styles.voiceRecordButton, isRecording && styles.voiceRecordButtonActive]} onPress={isRecording ? stopRecording : startRecording}>
-                <Text style={styles.voiceRecordEmoji}>{isRecording ? '⏹' : '🎙'}</Text>
-                <Text style={styles.voiceRecordText}>{isRecording ? 'Tap to stop recording' : 'Tap to start recording'}</Text>
-                {isRecording && <View style={styles.recordingDot} />}
+            )}
+            {(writeOpen || !!dayDescLocal) && (
+              <TextInput
+                style={styles.questionInput}
+                placeholder="Tell future you about today..."
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                multiline
+                value={dayDescLocal}
+                onChangeText={setDayDescLocal}
+                onBlur={() => updateEntry({ dayDescription: dayDescLocal })}
+              />
+            )}
+            {!!entry.voiceMemoUri && !isRecording && (
+              <TouchableOpacity style={styles.voicePlayRow} onPress={() => playVoiceMemo()}>
+                <Ionicons name={isPlaying ? 'stop' : 'play'} size={16} color="#4a90d9" />
+                <Text style={styles.voicePlayText}>{isPlaying ? 'Playing...' : 'Play voice memo'}</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {/* Featured daily prompt */}
-          <AnimatedCard onPress={() => openModal('highlight', entry.highlight)} style={styles.featuredCard}>
-            <Text style={styles.featuredCardLabel}>TODAY'S PROMPT</Text>
-            <Text style={styles.featuredPromptText}>{highlightPrompt}</Text>
-            {entry.highlight
-              ? <Text style={styles.featuredAnswer}>"{entry.highlight}"</Text>
-              : <Text style={styles.featuredAddText}>Write your answer →</Text>}
-          </AnimatedCard>
+          {/* 3.7 WHAT I COOKED */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>WHAT I COOKED</Text>
+            <View style={styles.cookedRow}>
+              <TextInput
+                style={[styles.inlineInput, { flex: 1 }]}
+                placeholder="Dish name..."
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                value={cookedDishLocal}
+                onChangeText={setCookedDishLocal}
+                onBlur={() => updateEntry({ cookedDish: cookedDishLocal.trim() })}
+              />
+              <TouchableOpacity style={styles.cookedPhotoSlot} onPress={() => pickPhoto('cooked')}>
+                {entry.cookedPhotoUri ? (
+                  <Image source={{ uri: entry.cookedPhotoUri }} style={{ width: '100%', height: '100%', borderRadius: 10 }} resizeMode="cover" />
+                ) : (
+                  <Ionicons name="camera-outline" size={20} color="rgba(255,255,255,0.35)" />
+                )}
+              </TouchableOpacity>
+            </View>
+            {!!cookedDishLocal.trim() && (
+              <TouchableOpacity
+                style={[styles.recipeSaveBtn, recipeSavedToday && styles.recipeSaveBtnDone]}
+                onPress={saveCookedToRecipes}
+                disabled={recipeSavedToday}
+              >
+                <Text style={[styles.recipeSaveText, recipeSavedToday && { color: 'rgba(255,255,255,0.5)' }]}>
+                  {recipeSavedToday ? 'Saved ✓' : 'Save to recipes ★'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-          {/* Compact entry cards */}
-          <AnimatedCard onPress={() => openModal('learned', entry.learned)} style={styles.compactCard}>
-            <Text style={styles.cardLabel}>WHAT I LEARNED</Text>
-            <Text style={styles.entryPrompt}>{learnPrompt}</Text>
-            {entry.learned ? <Text style={styles.entryAnswer}>"{entry.learned}"</Text> : <Text style={styles.entryAddText}>+ Write something</Text>}
-          </AnimatedCard>
-
-          <AnimatedCard onPress={() => openModal('song', entry.songName, entry.songRating)} style={styles.compactCard}>
-            <Text style={styles.cardLabel}>TODAY'S SONG</Text>
+          {/* 3.8 THE SOUNDTRACK */}
+          <AnimatedCard onPress={() => openModal('song', entry.songName, entry.songRating)} style={styles.card}>
+            <Text style={styles.cardLabel}>THE SOUNDTRACK</Text>
             {entry.songName ? (
               <View>
                 <Text style={styles.songName}>🎵 {entry.songName}</Text>
                 <View style={styles.ratingRow}>
-                  {[1,2,3,4,5,6,7,8,9,10].map(n => <View key={n} style={[styles.ratingDot, n <= entry.songRating && styles.ratingDotFilled]} />)}
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => <View key={n} style={[styles.ratingDot, n <= entry.songRating && styles.ratingDotFilled]} />)}
                   <Text style={styles.ratingNumber}>{entry.songRating}/10</Text>
                 </View>
-                {entry.songMeaning ? <Text style={styles.entryAnswer}>"{entry.songMeaning}"</Text>
+                {entry.songMeaning ? <Text style={styles.entryAnswer}>{`"${entry.songMeaning}"`}</Text>
                   : <TouchableOpacity onPress={() => openModal('songMeaning', entry.songMeaning)}><Text style={styles.entryAddText}>+ What does it mean to you?</Text></TouchableOpacity>}
               </View>
             ) : (
@@ -882,8 +1147,22 @@ export default function ThePresent() {
             )}
           </AnimatedCard>
 
-          <AnimatedCard onPress={() => setShowPeopleModal(true)} style={styles.compactCard}>
-            <Text style={styles.cardLabel}>WHO I WAS WITH</Text>
+          {/* 3.9 WHAT I WATCHED */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>WHAT I WATCHED</Text>
+            <TextInput
+              style={styles.inlineInput}
+              placeholder="Series, film, video..."
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              value={watchedLocal}
+              onChangeText={setWatchedLocal}
+              onBlur={() => updateEntry({ watched: watchedLocal.trim() })}
+            />
+          </View>
+
+          {/* 3.10 WHO MADE TODAY BETTER */}
+          <AnimatedCard onPress={() => setShowPeopleModal(true)} style={styles.card}>
+            <Text style={styles.cardLabel}>WHO MADE TODAY BETTER</Text>
             {(entry.taggedPeople || []).length > 0 ? (
               <View>
                 <View style={styles.peopleChipsRow}>
@@ -895,11 +1174,6 @@ export default function ThePresent() {
                 </View>
                 <Text style={styles.entryAddText}>+ Add more people</Text>
               </View>
-            ) : entry.withWho ? (
-              <View>
-                <Text style={styles.entryAnswer}>👥 {entry.withWho}</Text>
-                <Text style={styles.entryAddText}>+ Update</Text>
-              </View>
             ) : (
               <View>
                 <Text style={styles.entryPrompt}>Who mattered today?</Text>
@@ -908,49 +1182,87 @@ export default function ThePresent() {
             )}
           </AnimatedCard>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Daily reminders</Text>
-            <View style={styles.notificationCard}>
+          {/* 3.11 WHERE TODAY TOOK YOU */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>WHERE TODAY TOOK YOU</Text>
+            {(entry.locations || []).map((loc, i) => (
+              <View key={i} style={styles.locationRow}>
+                <View style={styles.locationDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.locationName}>{loc.name}</Text>
+                  {!!loc.withWho && <Text style={styles.locationWith}>with {loc.withWho}</Text>}
+                </View>
+                <TouchableOpacity onPress={() => removeLocation(i)} style={{ padding: 4 }}>
+                  <Ionicons name="close" size={14} color="rgba(255,255,255,0.3)" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity style={styles.addLocationRow} onPress={() => setShowAddLocation(true)}>
+              <Text style={styles.addLocationText}>+ Add a place</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Weather */}
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>WEATHER</Text>
+            {weatherLoading ? <ActivityIndicator color="#4a90d9" size="small" style={{ marginTop: 8 }} />
+              : entry.weatherEmoji ? (
+                <View style={styles.weatherRow}>
+                  <Text style={styles.weatherEmoji}>{entry.weatherEmoji}</Text>
+                  <Text style={styles.weatherTemp}>{entry.weatherTemp}°C</Text>
+                  <Text style={styles.weatherDesc}>{entry.weatherDescription}</Text>
+                </View>
+              ) : (
+                <TouchableOpacity onPress={fetchWeather} style={styles.weatherRow}>
+                  <Text style={styles.weatherEmoji}>🌍</Text>
+                  <Text style={styles.weatherDesc}>Tap to load today&apos;s weather</Text>
+                </TouchableOpacity>
+              )}
+          </View>
+
+          {/* Daily reminders */}
+          <View style={styles.card}>
+            <View style={styles.notificationRow}>
               <Text style={styles.notificationEmoji}>🔔</Text>
-              <View style={styles.notificationText}>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.notificationTitle}>{notificationsEnabled ? 'Reminders on' : 'Get daily reminders'}</Text>
                 <Text style={styles.notificationSubtitle}>{notificationsEnabled ? "You'll get a daily prompt every evening" : 'A daily nudge to document your life'}</Text>
               </View>
-              <TouchableOpacity style={[styles.notificationToggle, notificationsEnabled && styles.notificationToggleOn]} onPress={notificationsEnabled ? disableNotifications : enableNotifications}>
-                <Text style={styles.notificationToggleText}>{notificationsEnabled ? 'On' : 'Off'}</Text>
-              </TouchableOpacity>
+              <Switch
+                value={notificationsEnabled}
+                onValueChange={v => v ? enableNotifications() : disableNotifications()}
+                trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(74,144,217,0.6)' }}
+                thumbColor="#ffffff"
+              />
             </View>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Future Capsules</Text>
-            <Text style={styles.sectionSubtitle}>Seal a message for future you. It unlocks on the date you choose.</Text>
+          {/* 3.12 FUTURE CAPSULES — gold */}
+          <View style={styles.capsuleSection}>
+            <Text style={styles.capsuleSectionTitle}>Future Capsules</Text>
+            <Text style={styles.capsuleSectionSubtitle}>Seal a message for future you. It unlocks on the date you choose.</Text>
 
-            {readyCapsules.length > 0 && (
-              <View style={styles.capsuleReadySection}>
-                <Text style={styles.capsuleReadyLabel}>🔓 READY TO OPEN</Text>
-                {readyCapsules.map(capsule => (
-                  <TouchableOpacity key={capsule.id} style={styles.capsuleReadyCard} onPress={() => setRevealingCapsule(capsule)}>
-                    <Text style={styles.capsuleReadyEmoji}>🎁</Text>
-                    <View style={styles.capsuleCardInfo}>
-                      <Text style={styles.capsuleReadyTitle}>A message from your past self</Text>
-                      <Text style={styles.capsuleReadyDate}>Sealed {new Date(capsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
-                    </View>
-                    <Text style={styles.capsuleArrow}>→</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+            {readyCapsules.map(capsule => (
+              <TouchableOpacity key={capsule.id} style={styles.capsuleReadyCard} onPress={() => setRevealingCapsule(capsule)}>
+                <Text style={styles.capsuleEmoji}>🎁</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.capsuleReadyTitle}>Ready to open</Text>
+                  <Text style={styles.capsuleReadyDate}>Sealed {new Date(capsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#f5c842" />
+              </TouchableOpacity>
+            ))}
 
-            {sealedCapsules.length > 0 && (
-              <Text style={styles.capsuleSealedLabel}>🔒 SEALED</Text>
-            )}
             {sealedCapsules.map(capsule => (
               <View key={capsule.id} style={styles.capsuleSealedCard}>
-                <Text style={styles.capsuleSealedEmoji}>🔒</Text>
-                <View style={styles.capsuleCardInfo}>
-                  <Text style={styles.capsuleSealedTitle}>Opens {new Date(capsule.openDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
-                  <Text style={styles.capsuleSealedDate}>Sealed {new Date(capsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}</Text>
+                <Text style={styles.capsuleEmoji}>🔒</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.capsuleSealedTitle}>
+                    Opens in {daysUntil(capsule.openDate)} day{daysUntil(capsule.openDate) === 1 ? '' : 's'}
+                  </Text>
+                  <Text style={styles.capsuleSealedDate}>
+                    {new Date(capsule.openDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </Text>
                 </View>
               </View>
             ))}
@@ -961,7 +1273,14 @@ export default function ThePresent() {
             </TouchableOpacity>
           </View>
 
-          <View style={{ height: 100 }} />
+          {/* 3.13 SAVE DAY */}
+          <TouchableOpacity style={[styles.saveDayButton, savedToday && styles.saveDayButtonDone]} onPress={saveToday}>
+            <Text style={styles.saveDayButtonText}>
+              {savedToday ? '✓ Saved — view your day' : 'Save today to your days'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={{ height: 110 }} />
         </ScrollView>
       )}
 
@@ -983,9 +1302,6 @@ export default function ThePresent() {
                 ))}
               </ScrollView>
               <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-                <View style={styles.archiveCalSubtitle}>
-                  <Text style={styles.archiveCalSubtitleText}>Every day you've documented.</Text>
-                </View>
                 {archiveMonthsInYear.map(month => {
                   const year = parseInt(archiveCalYear);
                   const daysInMonth = getDaysInMonth(year, month);
@@ -1011,7 +1327,7 @@ export default function ThePresent() {
                             <TouchableOpacity
                               key={day}
                               style={styles.calSlot}
-                              onPress={() => archiveDay ? setSelectedDay({ key: dateKey, entry: archiveDay }) : null}
+                              onPress={() => archiveDay ? setDayCardKey(dateKey) : null}
                               activeOpacity={archiveDay ? 0.8 : 1}
                             >
                               <View style={[
@@ -1045,7 +1361,7 @@ export default function ThePresent() {
                     </View>
                   );
                 })}
-                <View style={{ height: 40 }} />
+                <View style={{ height: 100 }} />
               </ScrollView>
             </>
           )}
@@ -1072,7 +1388,8 @@ export default function ThePresent() {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.favGrid}>
               {filteredFavourites.map(fav => (
                 <TouchableOpacity key={fav.id} style={styles.favCard} onPress={() => setSelectedFav(fav)}>
-                  {fav.photoUri ? <Image source={{ uri: fav.photoUri }} style={styles.favPhoto} />
+                  {fav.photoUri
+                    ? <Image source={{ uri: fav.photoUri }} style={[styles.favPhoto, fav.category === 'recipe' && styles.favPhotoRecipe]} />
                     : <View style={styles.favPhotoEmpty}><Text style={styles.favCategoryEmoji}>{getCategoryEmoji(fav.category)}</Text></View>}
                   <View style={styles.favInfo}>
                     <View style={styles.favInfoTop}>
@@ -1080,7 +1397,7 @@ export default function ThePresent() {
                       {fav.rating > 0 && <Text style={styles.favRatingTag}>{fav.rating}/10</Text>}
                     </View>
                     <Text style={styles.favName} numberOfLines={1}>{fav.name}</Text>
-                    {fav.note ? <Text style={styles.favNote} numberOfLines={2}>"{fav.note}"</Text> : null}
+                    {fav.note ? <Text style={styles.favNote} numberOfLines={2}>{`"${fav.note}"`}</Text> : null}
                     <Text style={styles.favDate}>{fav.displayDate}</Text>
                   </View>
                 </TouchableOpacity>
@@ -1093,99 +1410,14 @@ export default function ThePresent() {
         </View>
       )}
 
-      {/* YOUR DAYS — day detail modal */}
-      <Modal visible={selectedDay !== null} animationType="slide">
-        <View style={styles.dayModal}>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {selectedDaySelfieUri && (
-              <Image source={{ uri: selectedDaySelfieUri }} style={styles.daySelfiePhoto} resizeMode="cover" />
-            )}
-            {selectedDay?.entry.photoUri ? (
-              <TouchableOpacity onPress={() => setFullScreenUri(selectedDay.entry.photoUri)}>
-                <Image source={{ uri: selectedDay.entry.photoUri }} style={styles.dayModalPhoto} />
-                <View style={styles.photoTapHint}><Text style={styles.photoTapHintText}>Tap to view full screen</Text></View>
-              </TouchableOpacity>
-            ) : null}
-            <View style={styles.dayModalContent}>
-              <View style={styles.dayTitleRow}>
-                <View style={styles.dayYearBadge}>
-                  <Text style={styles.dayYearBadgeText}>{selectedDay?.key ? new Date(selectedDay.key + 'T12:00:00').getFullYear() : ''}</Text>
-                </View>
-                <Text style={styles.dayDateText}>{selectedDay?.key ? formatArchiveDate(selectedDay.key) : ''}</Text>
-              </View>
-              <View style={styles.dayModalRow}>
-                {selectedDay?.entry.mood && <View style={styles.dayModalChip}><Text style={styles.dayModalChipText}>{selectedDay.entry.mood} {moods.find(m => m.emoji === selectedDay.entry.mood)?.label}</Text></View>}
-                {selectedDay?.entry.weatherEmoji && <View style={styles.dayModalChip}><Text style={styles.dayModalChipText}>{selectedDay.entry.weatherEmoji} {selectedDay.entry.weatherTemp}°C</Text></View>}
-              </View>
-              {selectedDay?.entry.dayDescription ? <Text style={styles.dayModalDescription}>"{selectedDay.entry.dayDescription}"</Text> : null}
-              {[
-                { key: 'highlight', label: 'HIGHLIGHT', emoji: '✨', value: selectedDay?.entry.highlight },
-                { key: 'learned', label: 'WHAT I LEARNED', emoji: '💡', value: selectedDay?.entry.learned },
-                { key: 'withWho', label: 'WHO I WAS WITH', emoji: '👥', value: (selectedDay?.entry.taggedPeople || []).join(', ') || selectedDay?.entry.withWho },
-              ].map(field => field.value ? (
-                <View key={field.key} style={styles.dayModalSection}>
-                  <Text style={styles.dayModalLabel}>{field.emoji} {field.label}</Text>
-                  <Text style={styles.dayModalText}>"{field.value}"</Text>
-                </View>
-              ) : null)}
-              {selectedDay?.entry.songName ? (
-                <View style={styles.dayModalSection}>
-                  <Text style={styles.dayModalLabel}>🎵 SONG</Text>
-                  <Text style={styles.dayModalText}>{selectedDay.entry.songName}</Text>
-                  {selectedDay.entry.songRating > 0 && <Text style={styles.dayModalSubtext}>{selectedDay.entry.songRating}/10</Text>}
-                </View>
-              ) : null}
-              {(selectedDay?.entry.extraPhotos?.length ?? 0) > 0 && (
-                <View style={styles.dayModalSection}>
-                  <Text style={styles.dayModalLabel}>📷 MORE PHOTOS</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {(selectedDay?.entry.extraPhotos ?? []).map((uri, i) => (
-                      <TouchableOpacity key={i} onPress={() => setFullScreenUri(uri)}>
-                        <Image source={{ uri }} style={styles.dayModalExtraPhoto} />
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-              {selectedDay?.entry.voiceMemoUri ? (
-                <View style={styles.dayModalSection}>
-                  <Text style={styles.dayModalLabel}>🎙 VOICE MEMO</Text>
-                  <TouchableOpacity style={styles.voicePlayButton} onPress={() => playVoiceMemo(selectedDay.entry.voiceMemoUri)}>
-                    <Text style={styles.voicePlayText}>{isPlaying ? '⏸ Stop' : '▶ Play memo'}</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-              {((selectedDay?.entry.sealedCapsules?.length ?? 0) > 0 || (selectedDay?.entry.openedCapsules?.length ?? 0) > 0) && (
-                <View style={styles.dayModalSection}>
-                  <Text style={styles.dayModalLabel}>📬 CAPSULES</Text>
-                  {(selectedDay?.entry.sealedCapsules ?? []).map((cap, i) => (
-                    <View key={`sealed-${i}`} style={styles.capsuleSealedRecord}>
-                      <Text style={styles.capsuleRecordMeta}>Capsule sealed · Opens {new Date(cap.openDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
-                      {cap.context ? <Text style={styles.capsuleRecordContext}>{cap.context}</Text> : null}
-                    </View>
-                  ))}
-                  {(selectedDay?.entry.openedCapsules ?? []).map((cap, i) => (
-                    <View key={`opened-${i}`} style={styles.capsuleOpenedRecord}>
-                      <Text style={styles.capsuleRecordMeta}>Capsule opened · Written on {new Date(cap.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
-                      <Text style={styles.capsuleOpenedMessage}>"{cap.message}"</Text>
-                      {cap.photoUri ? <Image source={{ uri: cap.photoUri }} style={styles.capsuleOpenedPhoto} /> : null}
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          </ScrollView>
-          <TouchableOpacity style={styles.dayModalClose} onPress={() => setSelectedDay(null)}>
-            <Text style={styles.dayModalCloseText}>← Back to The Present</Text>
-          </TouchableOpacity>
-          <Modal visible={fullScreenUri !== null} transparent animationType="fade">
-            <TouchableOpacity style={styles.fullScreenOverlay} activeOpacity={1} onPress={() => setFullScreenUri(null)}>
-              {fullScreenUri && <Image source={{ uri: fullScreenUri }} style={styles.fullScreenImage} resizeMode="contain" />}
-              <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
-            </TouchableOpacity>
-          </Modal>
-        </View>
-      </Modal>
+      {/* ═══ DAY CARD ═══ */}
+      <DayCard
+        dateKey={dayCardKey || ''}
+        accent="present"
+        visible={dayCardKey !== null}
+        onClose={() => { setDayCardKey(null); loadArchive(); loadEntry(); }}
+        onOpenDate={(dk) => setDayCardKey(dk)}
+      />
 
       {/* Favourite detail modal */}
       <Modal visible={selectedFav !== null} animationType="fade" transparent>
@@ -1193,7 +1425,7 @@ export default function ThePresent() {
           <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
           <View style={styles.favDetailBox} onStartShouldSetResponder={() => true}>
             <TouchableOpacity style={styles.favDetailCloseBtn} onPress={() => setSelectedFav(null)}>
-              <Text style={styles.favDetailCloseBtnText}>✕</Text>
+              <Ionicons name="close" size={18} color="rgba(255,255,255,0.6)" />
             </TouchableOpacity>
             <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
               {selectedFav?.photoUri ? (
@@ -1214,7 +1446,7 @@ export default function ThePresent() {
                 {selectedFav?.rating && selectedFav.rating > 0 ? <Text style={styles.favDetailRating}>{selectedFav.rating}/10</Text> : null}
               </View>
               <Text style={styles.favDetailName}>{selectedFav?.name}</Text>
-              {selectedFav?.note ? <Text style={styles.favDetailNote}>"{selectedFav.note}"</Text> : null}
+              {selectedFav?.note ? <Text style={styles.favDetailNote}>{`"${selectedFav.note}"`}</Text> : null}
               <Text style={styles.favDetailDate}>{selectedFav?.displayDate}</Text>
               <TouchableOpacity style={styles.favDetailDelete} onPress={() => deleteFavourite(selectedFav?.id || '')}>
                 <Text style={styles.favDetailDeleteText}>Remove from favourites</Text>
@@ -1224,7 +1456,7 @@ export default function ThePresent() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Add favourite modal — full screen, no blur needed */}
+      {/* Add favourite modal */}
       <Modal visible={showAddFav} animationType="slide">
         <View style={styles.addFavModal}>
           <ScrollView showsVerticalScrollIndicator={false}>
@@ -1246,17 +1478,17 @@ export default function ThePresent() {
             <Text style={styles.addFavLabel}>Name</Text>
             <TextInput style={styles.addFavInput}
               placeholder={newFav.category === 'song' ? 'Song name and artist...' : newFav.category === 'movie' ? 'Movie or TV show name...' : newFav.category === 'book' ? 'Book title and author...' : newFav.category === 'restaurant' ? 'Restaurant name and location...' : newFav.category === 'recipe' ? 'Recipe name...' : 'Place name...'}
-              placeholderTextColor="#555555" value={newFav.name} onChangeText={text => setNewFav(prev => ({ ...prev, name: text }))} />
+              placeholderTextColor="rgba(255,255,255,0.25)" value={newFav.name} onChangeText={text => setNewFav(prev => ({ ...prev, name: text }))} />
             <Text style={styles.addFavLabel}>Rating: {(newFav.rating || 0) > 0 ? `${newFav.rating}/10` : 'tap to rate'}</Text>
             <View style={styles.addFavRatingRow}>
-              {[1,2,3,4,5,6,7,8,9,10].map(n => (
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
                 <TouchableOpacity key={n} style={[styles.addFavRatingButton, (newFav.rating || 0) >= n && styles.addFavRatingButtonActive]} onPress={() => setNewFav(prev => ({ ...prev, rating: n }))}>
                   <Text style={[styles.addFavRatingText, (newFav.rating || 0) >= n && styles.addFavRatingTextActive]}>{n}</Text>
                 </TouchableOpacity>
               ))}
             </View>
             <Text style={styles.addFavLabel}>Note (optional)</Text>
-            <TextInput style={[styles.addFavInput, { minHeight: 80 }]} placeholder="Why does this mean something to you?" placeholderTextColor="#555555" multiline value={newFav.note} onChangeText={text => setNewFav(prev => ({ ...prev, note: text }))} />
+            <TextInput style={[styles.addFavInput, { minHeight: 80 }]} placeholder="Why does this mean something to you?" placeholderTextColor="rgba(255,255,255,0.25)" multiline value={newFav.note} onChangeText={text => setNewFav(prev => ({ ...prev, note: text }))} />
             <TouchableOpacity style={styles.addFavSave} onPress={addFavourite}><Text style={styles.addFavSaveText}>Save to Favourites</Text></TouchableOpacity>
             <TouchableOpacity style={styles.addFavCancel} onPress={() => { setNewFav({ category: 'song', name: '', rating: 0, note: '', photoUri: '' }); setShowAddFav(false); }}>
               <Text style={styles.addFavCancelText}>Cancel</Text>
@@ -1265,13 +1497,13 @@ export default function ThePresent() {
         </View>
       </Modal>
 
-      {/* People tagging modal — with blur */}
+      {/* People tagging modal */}
       <Modal visible={showPeopleModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
             <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Who were you with?</Text>
+              <Text style={styles.modalTitle}>Who made today better?</Text>
               {(entry.taggedPeople || []).length > 0 && (
                 <View style={styles.peopleChipsRow}>
                   {(entry.taggedPeople || []).map(person => (
@@ -1283,7 +1515,7 @@ export default function ThePresent() {
                 </View>
               )}
               <View style={styles.peopleInputRow}>
-                <TextInput style={styles.peopleTextInput} placeholder="Type a name..." placeholderTextColor="#555555" value={peopleInput} onChangeText={setPeopleInput} autoFocus />
+                <TextInput style={styles.peopleTextInput} placeholder="Type a name..." placeholderTextColor="rgba(255,255,255,0.25)" value={peopleInput} onChangeText={setPeopleInput} autoFocus />
                 <TouchableOpacity style={styles.peopleAddButton} onPress={() => addPersonTag(peopleInput)}>
                   <Text style={styles.peopleAddButtonText}>Add</Text>
                 </TouchableOpacity>
@@ -1308,35 +1540,67 @@ export default function ThePresent() {
         </View>
       </Modal>
 
-      {/* Create capsule — full screen, no blur */}
+      {/* Add location modal */}
+      <Modal visible={showAddLocation} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>Where did today take you?</Text>
+              <TextInput
+                style={[styles.textInput, { minHeight: 48 }]}
+                placeholder="Place name..."
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                value={locName}
+                onChangeText={setLocName}
+                autoFocus
+              />
+              <TextInput
+                style={[styles.textInput, { minHeight: 48 }]}
+                placeholder="Who with? (optional)"
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                value={locWith}
+                onChangeText={setLocWith}
+              />
+              <TouchableOpacity style={styles.saveButton} onPress={addLocation}>
+                <Text style={styles.saveButtonText}>Add</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => { setShowAddLocation(false); setLocName(''); setLocWith(''); }}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Create capsule */}
       <Modal visible={showCreateCapsule} animationType="slide">
         <View style={styles.capsuleModal}>
-          {/* Capsule in-app camera — nested here so it layers above the open modal */}
           {capsuleCameraOpen && (
             <View style={[StyleSheet.absoluteFillObject, { zIndex: 10, backgroundColor: '#000000' }]}>
               {!capsuleCameraPreview ? (
                 <>
                   <CameraView ref={capsuleCameraRef} style={StyleSheet.absoluteFillObject} facing={capsuleCameraFacing} />
-                  <View style={styles.selfieCameraTop}>
-                    <TouchableOpacity style={styles.selfieCameraTopButton} onPress={() => setCapsuleCameraOpen(false)}>
-                      <Text style={styles.selfieCameraTopButtonText}>✕</Text>
+                  <View style={styles.cameraTop}>
+                    <TouchableOpacity style={styles.cameraTopButton} onPress={() => setCapsuleCameraOpen(false)}>
+                      <Text style={styles.cameraTopButtonText}>✕</Text>
                     </TouchableOpacity>
                   </View>
-                  <View style={styles.selfieCameraBottom}>
-                    <TouchableOpacity style={styles.selfieFlipButton} onPress={() => setCapsuleCameraFacing(f => f === 'front' ? 'back' : 'front')}>
-                      <Text style={styles.selfieFlipButtonText}>⟳</Text>
+                  <View style={styles.cameraBottom}>
+                    <TouchableOpacity style={styles.cameraFlipButton} onPress={() => setCapsuleCameraFacing(f => f === 'front' ? 'back' : 'front')}>
+                      <Text style={styles.cameraFlipButtonText}>⟳</Text>
                     </TouchableOpacity>
                     <Animated.View style={{ transform: [{ scale: photoShutterScale }] }}>
                       <TouchableOpacity
-                        style={[styles.selfieShutterButton, capsuleCameraCapturing && { opacity: 0.6 }]}
+                        style={[styles.cameraShutterButton, capsuleCameraCapturing && { opacity: 0.6 }]}
                         onPress={takeCapsulePhoto}
                         onPressIn={onPhotoShutterPressIn}
                         onPressOut={onPhotoShutterPressOut}
                         activeOpacity={1}>
-                        <View style={styles.selfieShutterInner} />
+                        <View style={styles.cameraShutterInner} />
                       </TouchableOpacity>
                     </Animated.View>
-                    <View style={styles.selfieFlipButton} />
+                    <View style={styles.cameraFlipButton} />
                   </View>
                 </>
               ) : (
@@ -1360,9 +1624,9 @@ export default function ThePresent() {
           )}
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.capsuleModalTitle}>Seal a Capsule ✉️</Text>
-            <Text style={styles.capsuleModalSubtitle}>Write something for future you. It'll be waiting.</Text>
+            <Text style={styles.capsuleModalSubtitle}>Write something for future you. It&apos;ll be waiting.</Text>
             <Text style={styles.addFavLabel}>Your message</Text>
-            <TextInput style={[styles.addFavInput, { minHeight: 120, color: 'rgba(255,255,255,0.9)' }]} placeholder="Dear future me... What do you want to remember? What are you hoping for?" placeholderTextColor="rgba(255,255,255,0.5)" multiline value={newCapsuleMessage} onChangeText={setNewCapsuleMessage} />
+            <TextInput style={[styles.addFavInput, { minHeight: 120 }]} placeholder="Dear future me... What do you want to remember? What are you hoping for?" placeholderTextColor="rgba(255,255,255,0.35)" multiline value={newCapsuleMessage} onChangeText={setNewCapsuleMessage} />
             <Text style={styles.addFavLabel}>Photo (optional)</Text>
             <TouchableOpacity
               style={styles.addFavPhotoButton}
@@ -1402,11 +1666,11 @@ export default function ThePresent() {
             </View>
             <Text style={styles.capsuleDatePreview}>Opens on {MONTH_NAMES[capsuleMonth - 1]} {Math.min(capsuleDay, capsuleMaxDay)}, {capsuleYear}</Text>
             <View style={styles.capsuleToggleRow}>
-              <Text style={styles.capsuleToggleLabel}>Add to today's entry</Text>
+              <Text style={styles.capsuleToggleLabel}>Add to today&apos;s entry</Text>
               <Switch
                 value={capsuleAddToDay}
                 onValueChange={setCapsuleAddToDay}
-                trackColor={{ false: 'rgba(255,255,255,0.2)', true: '#4a90d9' }}
+                trackColor={{ false: 'rgba(255,255,255,0.2)', true: '#f5c842' }}
                 thumbColor="#ffffff"
               />
             </View>
@@ -1420,7 +1684,7 @@ export default function ThePresent() {
                 onChangeText={setCapsuleContext}
               />
             )}
-            <TouchableOpacity style={styles.addFavSave} onPress={createCapsule}><Text style={styles.addFavSaveText}>🔒 Seal Capsule</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.capsuleSealButton} onPress={createCapsule}><Text style={styles.capsuleSealButtonText}>🔒 Seal Capsule</Text></TouchableOpacity>
             <TouchableOpacity style={styles.addFavCancel} onPress={() => { setNewCapsuleMessage(''); setNewCapsulePhoto(''); setCapsuleAddToDay(false); setCapsuleContext(''); setShowCreateCapsule(false); }}>
               <Text style={styles.addFavCancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -1428,63 +1692,49 @@ export default function ThePresent() {
         </View>
       </Modal>
 
-      {/* Capsule reveal modal — with blur */}
+      {/* Capsule reveal — the opening moment */}
       <Modal visible={revealingCapsule !== null} animationType="fade" transparent>
         <View style={styles.capsuleRevealOverlay}>
           <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFillObject} />
-          <View style={styles.capsuleRevealBox}>
-            <Text style={styles.capsuleRevealEmoji}>🎁</Text>
-            <Text style={styles.capsuleRevealTitle}>A message from your past self</Text>
-            {revealingCapsule?.createdDate && (
-              <Text style={styles.capsuleRevealDate}>Sealed {new Date(revealingCapsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
-            )}
-            <ScrollView style={styles.capsuleRevealMessage} showsVerticalScrollIndicator={false}>
-              {revealingCapsule?.photoUri ? <Image source={{ uri: revealingCapsule.photoUri }} style={styles.capsuleRevealPhoto} /> : null}
-              <Text style={styles.capsuleRevealText}>{revealingCapsule?.message}</Text>
-            </ScrollView>
-            <View style={styles.capsuleRevealButtons}>
-              <TouchableOpacity style={[styles.addFavSave, { flex: 1 }]} onPress={() => revealingCapsule && addCapsuleToDay(revealingCapsule)}>
-                <Text style={styles.addFavSaveText}>Add to today's day</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.addFavCancel, { flex: 1 }]} onPress={() => setRevealingCapsule(null)}>
-                <Text style={styles.addFavCancelText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          {revealPhase === 'capsule' ? (
+            <Animated.View style={[styles.capsuleGraphic, { transform: [{ scale: revealScale }] }]}>
+              <Text style={styles.capsuleGraphicEmoji}>🎁</Text>
+            </Animated.View>
+          ) : (
+            <Animated.View style={[styles.capsuleRevealBox, { opacity: revealOpacity }]}>
+              <Text style={styles.capsuleRevealEmoji}>🎁</Text>
+              <Text style={styles.capsuleRevealTitle}>A message from your past self</Text>
+              {revealingCapsule?.createdDate && (
+                <Text style={styles.capsuleRevealDate}>Sealed {new Date(revealingCapsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+              )}
+              <ScrollView style={styles.capsuleRevealMessage} showsVerticalScrollIndicator={false}>
+                {revealingCapsule?.photoUri ? <Image source={{ uri: revealingCapsule.photoUri }} style={styles.capsuleRevealPhoto} /> : null}
+                <Text style={styles.capsuleRevealText}>{revealingCapsule?.message}</Text>
+              </ScrollView>
+              <View style={styles.capsuleRevealButtons}>
+                <TouchableOpacity style={[styles.capsuleSealButton, { flex: 1 }]} onPress={() => revealingCapsule && addCapsuleToDay(revealingCapsule)}>
+                  <Text style={styles.capsuleSealButtonText}>Add to today</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.addFavCancel, { flex: 1 }]} onPress={() => setRevealingCapsule(null)}>
+                  <Text style={styles.addFavCancelText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          )}
         </View>
       </Modal>
 
-      {/* Text entry modals — with blur */}
-      <Modal visible={activeModal !== null && activeModal !== 'song'} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
-            <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>
-                {activeModal === 'highlight' && "Today's highlight"}
-                {activeModal === 'learned' && "What I learned"}
-                {activeModal === 'dayDescription' && "Describe your day"}
-                {activeModal === 'songMeaning' && "What it means to you"}
-              </Text>
-              <TextInput style={styles.textInput} placeholder="Write something for future you..." placeholderTextColor="#555555" multiline value={tempText} onChangeText={setTempText} autoFocus />
-              <TouchableOpacity style={styles.saveButton} onPress={saveModal}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setActiveModal(null)}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      {/* Song modal — with blur */}
+      {/* Song modal */}
       <Modal visible={activeModal === 'song'} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
             <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Today's song</Text>
-              <TextInput style={styles.textInput} placeholder="Song name and artist..." placeholderTextColor="#555555" value={tempText} onChangeText={setTempText} autoFocus />
+              <Text style={styles.modalTitle}>The soundtrack</Text>
+              <TextInput style={styles.textInput} placeholder="Song name and artist..." placeholderTextColor="rgba(255,255,255,0.25)" value={tempText} onChangeText={setTempText} autoFocus />
               <Text style={styles.ratingLabel}>Rating: {tempRating > 0 ? `${tempRating}/10` : 'tap to rate'}</Text>
               <View style={styles.ratingButtons}>
-                {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
                   <TouchableOpacity key={n} style={[styles.ratingNumberButton, n <= tempRating && styles.ratingNumberButtonActive]} onPress={() => setTempRating(n)}>
                     <Text style={[styles.ratingNumberText, n <= tempRating && styles.ratingNumberTextActive]}>{n}</Text>
                   </TouchableOpacity>
@@ -1497,40 +1747,55 @@ export default function ThePresent() {
         </View>
       </Modal>
 
+      {/* Song meaning modal */}
+      <Modal visible={activeModal === 'songMeaning'} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>What it means to you</Text>
+              <TextInput style={styles.textInput} placeholder="Write something for future you..." placeholderTextColor="rgba(255,255,255,0.25)" multiline value={tempText} onChangeText={setTempText} autoFocus />
+              <TouchableOpacity style={styles.saveButton} onPress={saveModal}><Text style={styles.saveButtonText}>Save</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setActiveModal(null)}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
       {/* Full screen image */}
-      <Modal visible={fullScreenUri !== null && selectedDay === null} transparent animationType="fade">
+      <Modal visible={fullScreenUri !== null} transparent animationType="fade">
         <TouchableOpacity style={styles.fullScreenOverlay} activeOpacity={1} onPress={() => setFullScreenUri(null)}>
           {fullScreenUri && <Image source={{ uri: fullScreenUri }} style={styles.fullScreenImage} resizeMode="contain" />}
           <Text style={styles.fullScreenDismiss}>Tap anywhere to close</Text>
         </TouchableOpacity>
       </Modal>
 
-      {/* In-app photo camera modal */}
+      {/* In-app photo camera */}
       <Modal visible={photoCameraOpen} animationType="slide" statusBarTranslucent>
-        <View style={styles.selfieCameraContainer}>
+        <View style={styles.cameraContainer}>
           {!photoCaptured ? (
             <>
               <CameraView ref={photoCameraRef} style={StyleSheet.absoluteFillObject} facing={photoCameraFacing} />
-              <View style={styles.selfieCameraTop}>
-                <TouchableOpacity style={styles.selfieCameraTopButton} onPress={() => setPhotoCameraOpen(false)}>
-                  <Text style={styles.selfieCameraTopButtonText}>✕</Text>
+              <View style={styles.cameraTop}>
+                <TouchableOpacity style={styles.cameraTopButton} onPress={() => setPhotoCameraOpen(false)}>
+                  <Text style={styles.cameraTopButtonText}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <View style={styles.selfieCameraBottom}>
-                <TouchableOpacity style={styles.selfieFlipButton} onPress={() => setPhotoCameraFacing(f => f === 'front' ? 'back' : 'front')}>
-                  <Text style={styles.selfieFlipButtonText}>⟳</Text>
+              <View style={styles.cameraBottom}>
+                <TouchableOpacity style={styles.cameraFlipButton} onPress={() => setPhotoCameraFacing(f => f === 'front' ? 'back' : 'front')}>
+                  <Text style={styles.cameraFlipButtonText}>⟳</Text>
                 </TouchableOpacity>
                 <Animated.View style={{ transform: [{ scale: photoShutterScale }] }}>
                   <TouchableOpacity
-                    style={[styles.selfieShutterButton, photoCapturing && { opacity: 0.6 }]}
+                    style={[styles.cameraShutterButton, photoCapturing && { opacity: 0.6 }]}
                     onPress={capturePhoto}
                     onPressIn={onPhotoShutterPressIn}
                     onPressOut={onPhotoShutterPressOut}
                     activeOpacity={1}>
-                    <View style={styles.selfieShutterInner} />
+                    <View style={styles.cameraShutterInner} />
                   </TouchableOpacity>
                 </Animated.View>
-                <View style={styles.selfieFlipButton} />
+                <View style={styles.cameraFlipButton} />
               </View>
             </>
           ) : (
@@ -1549,200 +1814,148 @@ export default function ThePresent() {
         </View>
       </Modal>
 
-      {/* Selfie camera modal */}
-      <Modal visible={selfieCameraOpen} animationType="slide" statusBarTranslucent>
-        <View style={styles.selfieCameraContainer}>
-          <CameraView ref={selfieCameraRef} style={StyleSheet.absoluteFillObject} facing={selfieFacing} />
-          <View style={styles.selfieCameraTop}>
-            <TouchableOpacity style={styles.selfieCameraTopButton} onPress={() => setSelfieCameraOpen(false)}>
-              <Text style={styles.selfieCameraTopButtonText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.selfieCameraBottom}>
-            <TouchableOpacity style={styles.selfieFlipButton} onPress={() => setSelfieFacing(f => f === 'front' ? 'back' : 'front')}>
-              <Text style={styles.selfieFlipButtonText}>⟳</Text>
-            </TouchableOpacity>
-            <Animated.View style={{ transform: [{ scale: selfieShutterScale }] }}>
-              <TouchableOpacity
-                style={[styles.selfieShutterButton, selfieCapturing && { opacity: 0.6 }]}
-                onPress={takeSelfie}
-                onPressIn={onSelfieShutterPressIn}
-                onPressOut={onSelfieShutterPressOut}
-                activeOpacity={1}>
-                <View style={styles.selfieShutterInner} />
-              </TouchableOpacity>
-            </Animated.View>
-            <View style={styles.selfieFlipButton} />
-          </View>
-        </View>
-      </Modal>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#1a4fd4' },
+  outerContainer: { flex: 1, backgroundColor: '#08090f' },
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 24, paddingBottom: 12, backgroundColor: '#1a4fd4' },
-  headerTitle: { fontSize: 28, fontFamily: 'SpaceGrotesk_600SemiBold', color: '#ffffff', marginBottom: 2, textAlign: 'center', letterSpacing: 2 },
-  headerDate: { fontSize: 16, fontFamily: 'SpaceGrotesk_600SemiBold', color: 'rgba(255,255,255,0.7)', marginBottom: 16, letterSpacing: 1, textAlign: 'center' },
+  header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#08090f' },
+  headerTitle: { fontSize: 32, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff' },
+  headerDate: { fontSize: 14, color: 'rgba(255,255,255,0.4)', marginTop: 2, marginBottom: 14 },
   tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
-  tabButton: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  tabButtonActive: { backgroundColor: '#ffffff' },
-  tabButtonText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
-  tabButtonTextActive: { color: '#1a4fd4' },
-  subHeader: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 8 },
+  tabButton: { flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center', borderWidth: 1, borderColor: 'transparent' },
+  tabButtonActive: { backgroundColor: 'rgba(74,144,217,0.18)', borderColor: 'rgba(74,144,217,0.35)' },
+  tabButtonText: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.3)' },
+  tabButtonTextActive: { color: '#ffffff', fontWeight: '700' },
+  subHeader: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12 },
   headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' },
-  photoSection: { marginHorizontal: 16, marginBottom: 16 },
-  photoCard: { borderRadius: 16, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.05)' },
-  todayPhoto: { width: '100%', height: 240 },
-  photoEditOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', padding: 10, alignItems: 'center' },
-  photoEditText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
-  photoPlaceholder: { padding: 32, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 16, borderStyle: 'dashed' },
-  photoPlaceholderEmoji: { fontSize: 36, marginBottom: 10 },
-  photoPlaceholderTitle: { fontSize: 16, fontWeight: '600', color: '#ffffff', marginBottom: 6 },
-  photoPlaceholderSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
-  extraStrip: { marginTop: 10 },
-  extraStripContent: { gap: 8, paddingRight: 8 },
-  extraPhoto: { width: 80, height: 80, borderRadius: 10 },
-  addExtraButton: { width: 80, height: 80, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center' },
-  addExtraText: { color: '#4a90d9', fontSize: 28, fontWeight: '300' },
-  row: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 16, gap: 12 },
-  moodCard: { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  weatherCard: { width: 100, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center' },
+
+  // Card base
+  card: { backgroundColor: '#0d1220', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(74,144,217,0.2)', marginHorizontal: 16, marginBottom: 14, padding: 14 },
   cardLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '800', letterSpacing: 2, marginBottom: 10 },
-  moodRow: { flexDirection: 'row', gap: 4, marginBottom: 8 },
-  moodButton: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)' },
-  moodButtonActive: { backgroundColor: '#4a90d9' },
-  moodEmoji: { fontSize: 17 },
-  moodSelected: { fontSize: 11, color: '#4a90d9', fontWeight: '600', marginBottom: 8 },
-  moodPrompt: { fontSize: 11, color: 'rgba(255,255,255,0.35)', marginBottom: 8 },
-  dayDescButton: { marginTop: 4, padding: 8, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 8 },
-  dayDescText: { fontSize: 12, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', lineHeight: 18 },
-  dayDescPlaceholder: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
-  weatherContent: { alignItems: 'center' },
-  weatherEmoji: { fontSize: 28, marginBottom: 4 },
-  weatherTemp: { fontSize: 16, fontWeight: 'bold', color: '#ffffff', marginBottom: 2 },
-  weatherDesc: { fontSize: 10, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
-  voiceCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  voicePrompt: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 14 },
-  beRealRow: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, gap: 8, height: 220 },
-  beRealSelfie: { flex: 1, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(255,255,255,0.05)' },
-  beRealSelfiePhoto: { width: '100%', height: '100%' },
-  beRealSelfiePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 6 },
-  viewAllSelfiesButton: { backgroundColor: 'rgba(0,0,0,0.55)', paddingVertical: 7, alignItems: 'center' },
-  viewAllSelfiesText: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '500' },
-  selfieCameraContainer: { flex: 1, backgroundColor: '#000000' },
-  selfieCameraTop: { position: 'absolute', top: 60, left: 0, right: 0, paddingHorizontal: 24 },
-  selfieCameraTopButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  selfieCameraTopButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '600' },
-  selfieCameraBottom: { position: 'absolute', bottom: 60, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 48 },
-  selfieFlipButton: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  selfieFlipButtonText: { color: '#ffffff', fontSize: 26, fontWeight: '300' },
-  selfieShutterButton: { width: 84, height: 84, borderRadius: 42, borderWidth: 4, borderColor: '#ffffff', justifyContent: 'center', alignItems: 'center' },
-  selfieShutterInner: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#ffffff' },
-  beRealMain: { flex: 2, borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(255,255,255,0.05)' },
-  beRealMainPhoto: { width: '100%', height: '100%' },
-  beRealMainPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 6, padding: 16 },
-  selfieSectionToday: { marginHorizontal: 16, marginBottom: 16, borderRadius: 16, overflow: 'hidden', height: 200 },
-  selfiePhotoToday: { width: '100%', height: '100%' },
-  selfiePlaceholderToday: { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 16, justifyContent: 'center', alignItems: 'center', gap: 8, height: 200 },
-  selfiePlaceholderEmoji: { fontSize: 32 },
-  selfiePlaceholderText: { color: 'rgba(255,255,255,0.5)', fontSize: 15, fontWeight: '500' },
-  daySelfiePhoto: { width: '100%', height: 240, marginBottom: 2 },
-  featuredCard: { marginHorizontal: 16, marginBottom: 24, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 20, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', minHeight: 140 },
-  featuredCardLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '800', letterSpacing: 2, marginBottom: 14 },
-  featuredPromptText: { fontSize: 22, fontWeight: '700', color: '#ffffff', lineHeight: 30, marginBottom: 16, letterSpacing: -0.3 },
-  featuredAnswer: { fontSize: 16, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 24 },
-  featuredAddText: { color: 'rgba(255,255,255,0.4)', fontSize: 15, fontWeight: '500' },
-  compactCard: { marginHorizontal: 16, marginBottom: 22, paddingVertical: 16, paddingHorizontal: 18, borderLeftWidth: 3, borderLeftColor: 'rgba(74,144,217,0.6)', borderTopRightRadius: 8, borderBottomRightRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)' },
-  voiceRecordButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 14, gap: 10 },
-  voiceRecordButtonActive: { backgroundColor: '#3a1a1a', borderWidth: 1, borderColor: '#ff4444' },
-  voiceRecordEmoji: { fontSize: 22 },
-  voiceRecordText: { flex: 1, fontSize: 14, color: 'rgba(255,255,255,0.6)' },
-  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ff4444' },
-  voiceControls: { gap: 10 },
-  voicePlayButton: { backgroundColor: '#4a90d9', borderRadius: 12, padding: 12, alignItems: 'center' },
-  voicePlayText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
-  voiceRerecordButton: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 12, padding: 12, alignItems: 'center' },
-  voiceRerecordText: { color: 'rgba(255,255,255,0.35)', fontSize: 14 },
-  entryCard: { marginHorizontal: 16, marginBottom: 22, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  entryPrompt: { fontSize: 15, color: 'rgba(255,255,255,0.6)', marginBottom: 10, lineHeight: 22 },
-  entryAnswer: { fontSize: 15, color: '#ffffff', fontStyle: 'italic', lineHeight: 22, marginTop: 4 },
-  entryAddText: { color: '#4a90d9', fontSize: 14, fontWeight: '600', marginTop: 4 },
-  songName: { fontSize: 16, color: '#ffffff', fontWeight: '600', marginBottom: 10 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
-  ratingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.15)' },
+
+  // 3.1 Capture pair
+  pairArea: { height: 300, borderRadius: 12, overflow: 'hidden' },
+  pairMainPhoto: { width: '100%', height: '100%' },
+  pairMainPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(74,144,217,0.25)', borderStyle: 'dashed', borderRadius: 12 },
+  pairPlaceholderText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 8 },
+  pairInset: { position: 'absolute', top: 10, left: 10, width: 100, height: 133, borderRadius: 12, borderWidth: 2, borderColor: '#ffffff', overflow: 'hidden', backgroundColor: '#0d1220', shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6 },
+  pairInsetPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', borderStyle: 'dashed', borderRadius: 10 },
+  pairPromptRow: { flexDirection: 'row', gap: 12, height: 300 },
+  pairPrompt: { flex: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', borderStyle: 'dashed', borderRadius: 12, backgroundColor: 'rgba(74,144,217,0.05)' },
+  pairPromptText: { fontSize: 14, color: 'rgba(255,255,255,0.6)', fontWeight: '600', marginTop: 10 },
+  extraStrip: { gap: 8, paddingTop: 12 },
+  extraPhoto: { width: 64, height: 64, borderRadius: 10 },
+  addExtraTile: { width: 64, height: 64, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', justifyContent: 'center', alignItems: 'center' },
+  addExtraText: { color: '#4a90d9', fontSize: 26, fontWeight: '300' },
+  viewAllSelfies: { marginTop: 10, alignSelf: 'flex-end' },
+  viewAllSelfiesText: { fontSize: 12, color: 'rgba(74,144,217,0.8)', fontWeight: '600' },
+
+  // 3.3 Three words
+  wordsRow: { flexDirection: 'row', gap: 8 },
+  wordChip: { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, color: 'rgba(255,255,255,0.8)', fontSize: 14, borderWidth: 1, borderColor: 'transparent', textAlign: 'center' },
+  wordChipFilled: { borderColor: 'rgba(74,144,217,0.5)', color: '#ffffff', fontWeight: '600' },
+
+  // 3.4 / 3.5 Questions
+  questionText: { fontSize: 17, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', lineHeight: 24, marginBottom: 10 },
+  questionInput: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.15)', paddingTop: 10, color: '#ffffff', fontSize: 15, lineHeight: 21, minHeight: 60, textAlignVertical: 'top' },
+  reflectionCard: { borderColor: 'rgba(74,144,217,0.35)', shadowColor: '#4a90d9', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
+
+  // 3.6 Your day
+  dayActionsRow: { flexDirection: 'row', gap: 10 },
+  dayActionBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.06)' },
+  dayActionBtnActive: { backgroundColor: 'rgba(74,144,217,0.2)', borderColor: 'rgba(74,144,217,0.5)' },
+  dayActionBtnRecording: { backgroundColor: 'rgba(255,68,68,0.15)', borderColor: 'rgba(255,68,68,0.5)' },
+  dayActionText: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
+  recordingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ff4444' },
+  recordingText: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
+  voicePlayRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, backgroundColor: 'rgba(74,144,217,0.1)' },
+  voicePlayText: { fontSize: 13, color: '#4a90d9', fontWeight: '600' },
+
+  // 3.7 Cooked
+  cookedRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  inlineInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', fontSize: 15 },
+  cookedPhotoSlot: { width: 44, height: 44, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  recipeSaveBtn: { marginTop: 10, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.15)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.35)' },
+  recipeSaveBtnDone: { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.15)' },
+  recipeSaveText: { fontSize: 13, color: '#4a90d9', fontWeight: '700' },
+
+  // 3.8 Soundtrack
+  songName: { fontSize: 16, color: '#ffffff', fontWeight: '600', marginBottom: 8 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 8 },
+  ratingDot: { width: 14, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
   ratingDotFilled: { backgroundColor: '#4a90d9' },
-  ratingNumber: { fontSize: 13, color: '#4a90d9', fontWeight: '600', marginLeft: 4 },
-  peopleChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-  personChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 4, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  personChipRemovable: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 4, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  personChipText: { color: '#4a90d9', fontSize: 13, fontWeight: '600' },
-  personChipRemove: { color: '#4a90d9', fontSize: 12, fontWeight: '600' },
-  peopleInputRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  peopleTextInput: { flex: 1, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 12, color: '#ffffff', fontSize: 16 },
-  peopleAddButton: { backgroundColor: '#4a90d9', borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center' },
-  peopleAddButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
-  peopleSuggestionsBox: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, marginBottom: 12, overflow: 'hidden' },
-  peopleSuggestion: { padding: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.4)' },
-  peopleSuggestionText: { color: 'rgba(255,255,255,0.6)', fontSize: 15 },
-  section: { paddingHorizontal: 16, marginBottom: 24 },
-  sectionTitle: { fontSize: 22, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
-  sectionSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', marginBottom: 14 },
-  notificationCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  notificationEmoji: { fontSize: 28, marginRight: 14 },
-  notificationText: { flex: 1 },
-  notificationTitle: { fontSize: 16, fontWeight: '600', color: '#ffffff', marginBottom: 4 },
-  notificationSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 18 },
-  notificationToggle: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16 },
-  notificationToggleOn: { backgroundColor: '#4a90d9' },
-  notificationToggleText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
-  capsuleReadySection: { marginBottom: 12 },
-  capsuleReadyLabel: { fontSize: 11, color: '#f5c842', fontWeight: '700', letterSpacing: 1, marginBottom: 8 },
-  capsuleReadyCard: { backgroundColor: 'rgba(245,200,66,0.1)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  capsuleReadyEmoji: { fontSize: 28, marginRight: 12 },
-  capsuleCardInfo: { flex: 1 },
-  capsuleReadyTitle: { fontSize: 15, fontWeight: '600', color: '#f5c842', marginBottom: 2 },
-  capsuleReadyDate: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
-  capsuleArrow: { color: '#f5c842', fontSize: 16, marginLeft: 8 },
-  capsuleSealedLabel: { fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: '700', letterSpacing: 1, marginBottom: 8, marginTop: 4 },
-  capsuleSealedCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  capsuleSealedEmoji: { fontSize: 24, marginRight: 12 },
-  capsuleSealedTitle: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.6)', marginBottom: 2 },
-  capsuleSealedDate: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
-  createCapsuleButton: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderStyle: 'dashed', borderRadius: 14, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 4 },
-  createCapsuleEmoji: { fontSize: 20 },
-  createCapsuleText: { color: '#4a90d9', fontSize: 15, fontWeight: '600' },
-  capsuleModal: { flex: 1, backgroundColor: '#1a4fd4', padding: 24, paddingTop: 60 },
-  capsuleModalTitle: { fontSize: 28, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 8, letterSpacing: -0.5 },
-  capsuleModalSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', marginBottom: 24 },
-  capsuleDatePicker: { flexDirection: 'row', gap: 12, marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  capsuleDateColumn: { flex: 1, alignItems: 'center', gap: 8 },
-  capsuleDateArrow: { padding: 4 },
-  capsuleDateArrowText: { color: '#4a90d9', fontSize: 26, fontWeight: '300' },
-  capsuleDateValue: { fontSize: 18, fontWeight: '700', color: '#ffffff', minWidth: 50, textAlign: 'center' },
-  capsuleDatePreview: { fontSize: 13, color: '#4a90d9', textAlign: 'center', marginBottom: 24 },
-  capsuleRevealOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  capsuleRevealBox: { backgroundColor: 'rgba(14,18,26,0.98)', borderRadius: 24, padding: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center', width: '100%', maxHeight: '85%' },
-  capsuleRevealEmoji: { fontSize: 48, marginBottom: 12 },
-  capsuleRevealTitle: { fontSize: 20, fontWeight: '800', color: '#f5c842', marginBottom: 4, textAlign: 'center' },
-  capsuleRevealDate: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 20 },
-  capsuleRevealMessage: { width: '100%', marginBottom: 24, maxHeight: 260 },
-  capsuleRevealPhoto: { width: '100%', height: 160, borderRadius: 14, marginBottom: 16 },
-  capsuleRevealText: { fontSize: 16, color: '#ffffff', lineHeight: 26, fontStyle: 'italic', textAlign: 'center' },
+  ratingNumber: { fontSize: 12, color: 'rgba(255,255,255,0.5)', marginLeft: 6 },
+  entryAnswer: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 20 },
+  entryAddText: { fontSize: 13, color: 'rgba(74,144,217,0.8)', marginTop: 6 },
+  entryPrompt: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 2 },
+
+  // People
+  peopleChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
+  personChip: { backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)' },
+  personChipText: { color: '#ffffff', fontSize: 13 },
+  personChipRemovable: { flexDirection: 'row', backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', alignItems: 'center' },
+  personChipRemove: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
+
+  // 3.11 Locations
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  locationDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4a90d9' },
+  locationName: { fontSize: 15, color: '#ffffff', fontWeight: '600' },
+  locationWith: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1 },
+  addLocationRow: { paddingVertical: 8 },
+  addLocationText: { fontSize: 13, color: 'rgba(74,144,217,0.8)', fontWeight: '600' },
+
+  // Weather
+  weatherRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  weatherEmoji: { fontSize: 26 },
+  weatherTemp: { fontSize: 20, color: '#ffffff', fontWeight: '700' },
+  weatherDesc: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
+
+  // Notifications
+  notificationRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  notificationEmoji: { fontSize: 22 },
+  notificationTitle: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
+  notificationSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1 },
+
+  // 3.12 Capsules — GOLD
+  capsuleSection: { marginHorizontal: 16, marginBottom: 14, marginTop: 8 },
+  capsuleSectionTitle: { fontSize: 20, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842', marginBottom: 4 },
+  capsuleSectionSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 12 },
+  capsuleReadyCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(245,200,66,0.12)', borderWidth: 1, borderColor: 'rgba(245,200,66,0.5)', borderRadius: 14, padding: 14, marginBottom: 8 },
+  capsuleEmoji: { fontSize: 24 },
+  capsuleReadyTitle: { fontSize: 15, color: '#f5c842', fontWeight: '700' },
+  capsuleReadyDate: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 1 },
+  capsuleSealedCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#0d1220', borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', borderRadius: 14, padding: 14, marginBottom: 8 },
+  capsuleSealedTitle: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
+  capsuleSealedDate: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1 },
+  createCapsuleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', borderStyle: 'dashed', borderRadius: 14, padding: 14 },
+  createCapsuleEmoji: { fontSize: 16 },
+  createCapsuleText: { fontSize: 14, color: '#f5c842', fontWeight: '600' },
+
+  // 3.13 Save day
+  saveDayButton: { marginHorizontal: 16, backgroundColor: '#4a90d9', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 8 },
+  saveDayButtonDone: { backgroundColor: 'rgba(74,144,217,0.35)' },
+  saveDayButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
+
+  // Empty states
+  emptyState: { padding: 40, alignItems: 'center', marginTop: 40 },
+  emptyEmoji: { fontSize: 48, marginBottom: 16 },
+  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
+  emptySubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
+
+  // Calendar
   yearPickerStrip: { maxHeight: 56 },
   yearPickerContent: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
-  yearPickerItem: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  yearPickerItemActive: { backgroundColor: '#4a90d9', borderColor: 'rgba(255,255,255,0.4)' },
+  yearPickerItem: { paddingHorizontal: 24, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.2)' },
+  yearPickerItemActive: { backgroundColor: 'rgba(74,144,217,0.25)', borderColor: 'rgba(74,144,217,0.45)' },
   yearPickerText: { fontSize: 16, fontWeight: '700', color: 'rgba(255,255,255,0.35)' },
   yearPickerTextActive: { color: '#ffffff' },
-  archiveCalSubtitle: { paddingHorizontal: 16, paddingVertical: 8 },
-  archiveCalSubtitleText: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' },
-  calendarMonth: { paddingHorizontal: 16, marginBottom: 32 },
-  calendarMonthTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff', marginBottom: 12 },
-  calendarDayHeaders: { flexDirection: 'row', marginBottom: 6 },
+  calendarMonth: { paddingHorizontal: 16, marginBottom: 28 },
+  calendarMonthTitle: { fontSize: 22, fontFamily: 'SpaceGrotesk_600SemiBold', color: '#ffffff', marginBottom: 8 },
+  calendarDayHeaders: { flexDirection: 'row', marginBottom: 4 },
   calendarDayHeader: { width: CAL_SLOT_WIDTH, textAlign: 'center', fontSize: 9, color: '#ffffff', fontWeight: '700' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calSlot: { width: CAL_SLOT_WIDTH, alignItems: 'center', marginBottom: 8 },
@@ -1752,122 +1965,148 @@ const styles = StyleSheet.create({
   calCardToday: { borderWidth: 2, borderColor: '#ffffff' },
   calDayNumFilled: { position: 'absolute', bottom: 4, left: 5, color: '#ffffff', fontSize: 12, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
   calDayNumEmpty: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' },
-  emptyState: { padding: 40, alignItems: 'center', marginTop: 40 },
-  emptyEmoji: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
-  emptySubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
-  favFilterStrip: { maxHeight: 56 },
+
+  // Favourites
+  favFilterStrip: { maxHeight: 54 },
   favFilterContent: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
-  favFilterPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  favFilterPillActive: { backgroundColor: '#4a90d9', borderColor: 'rgba(255,255,255,0.4)' },
-  favFilterEmoji: { fontSize: 14 },
-  favFilterText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
+  favFilterPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'transparent' },
+  favFilterPillActive: { backgroundColor: 'rgba(74,144,217,0.25)', borderColor: 'rgba(74,144,217,0.45)' },
+  favFilterEmoji: { fontSize: 13 },
+  favFilterText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
   favFilterTextActive: { color: '#ffffff' },
-  favGrid: { paddingHorizontal: 16, paddingBottom: 100, gap: 12 },
-  favCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', flexDirection: 'row' },
-  favPhoto: { width: 100, height: 100 },
-  favPhotoEmpty: { width: 100, height: 100, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  favGrid: { paddingHorizontal: 16, paddingBottom: 140, gap: 12 },
+  favCard: { backgroundColor: '#0d1220', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(74,144,217,0.2)', overflow: 'hidden' },
+  favPhoto: { width: '100%', height: 140 },
+  favPhotoRecipe: { height: 200 },
+  favPhotoEmpty: { width: '100%', height: 90, backgroundColor: 'rgba(74,144,217,0.06)', justifyContent: 'center', alignItems: 'center' },
   favCategoryEmoji: { fontSize: 32 },
-  favInfo: { flex: 1, padding: 14, justifyContent: 'center' },
+  favInfo: { padding: 12 },
   favInfoTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  favCategoryTag: { fontSize: 11, color: '#4a90d9', fontWeight: '700' },
-  favRatingTag: { fontSize: 12, color: '#4a90d9', fontWeight: '700' },
-  favName: { fontSize: 16, fontWeight: '700', color: '#ffffff', marginBottom: 4 },
-  favNote: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', marginBottom: 4, lineHeight: 18 },
-  favDate: { fontSize: 11, color: 'rgba(255,255,255,0.35)' },
-  addFavButton: { position: 'absolute', bottom: 100, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#4a90d9', justifyContent: 'center', alignItems: 'center', shadowColor: '#4a90d9', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
-  addFavButtonText: { color: '#ffffff', fontSize: 28, fontWeight: '300' },
-  favDetailOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  favDetailBox: { backgroundColor: 'rgba(10,14,22,0.98)', borderRadius: 24, padding: 24, paddingBottom: 28, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)', width: '90%', maxHeight: '80%' },
-  favDetailCloseBtn: { position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-  favDetailCloseBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
-  favDetailPhoto: { width: '100%', height: 220, borderRadius: 16, marginBottom: 16 },
-  favDetailPhotoEditBadge: { position: 'absolute', bottom: 24, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  favDetailPhotoEditText: { color: '#ffffff', fontSize: 12, fontWeight: '600' },
-  favDetailPhotoEmpty: { width: '100%', height: 120, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', borderStyle: 'dashed' },
-  favDetailAddPhotoLabel: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 6 },
-  favDetailEmoji: { fontSize: 48 },
-  favDetailInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  favDetailCategory: { fontSize: 13, color: '#4a90d9', fontWeight: '700' },
-  favDetailRating: { fontSize: 16, fontWeight: '800', color: '#4a90d9' },
-  favDetailName: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 8, letterSpacing: -0.3 },
-  favDetailNote: { fontSize: 15, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', lineHeight: 22, marginBottom: 8 },
-  favDetailDate: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginBottom: 20 },
-  favDetailDelete: { alignItems: 'center', padding: 12 },
-  favDetailDeleteText: { color: '#ff4444', fontSize: 14 },
-  addFavModal: { flex: 1, backgroundColor: '#1a4fd4', padding: 24, paddingTop: 60 },
-  addFavTitle: { fontSize: 28, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 24, letterSpacing: -0.5 },
-  addFavLabel: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontWeight: '600', marginBottom: 10, marginTop: 16 },
+  favCategoryTag: { fontSize: 11, color: 'rgba(74,144,217,0.9)', fontWeight: '700' },
+  favRatingTag: { fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
+  favName: { fontSize: 16, color: '#ffffff', fontWeight: '700', marginBottom: 2 },
+  favNote: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontStyle: 'italic', marginBottom: 4 },
+  favDate: { fontSize: 11, color: 'rgba(255,255,255,0.3)' },
+  addFavButton: { position: 'absolute', bottom: 100, right: 16, width: 52, height: 52, borderRadius: 26, backgroundColor: '#4a90d9', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
+  addFavButtonText: { color: '#ffffff', fontSize: 28, fontWeight: '300', marginTop: -2 },
+
+  // Fav detail
+  favDetailOverlay: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  favDetailBox: { backgroundColor: 'rgba(10,14,22,0.98)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)', padding: 20, maxHeight: '75%' },
+  favDetailCloseBtn: { position: 'absolute', top: 12, right: 12, zIndex: 2, padding: 6 },
+  favDetailPhoto: { width: '100%', height: 220, borderRadius: 14, marginBottom: 4 },
+  favDetailPhotoEditBadge: { position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  favDetailPhotoEditText: { color: '#ffffff', fontSize: 11, fontWeight: '600' },
+  favDetailPhotoEmpty: { width: '100%', height: 140, borderRadius: 14, backgroundColor: 'rgba(74,144,217,0.06)', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  favDetailEmoji: { fontSize: 40 },
+  favDetailAddPhotoLabel: { fontSize: 12, color: 'rgba(74,144,217,0.8)', marginTop: 6 },
+  favDetailInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 4 },
+  favDetailCategory: { fontSize: 12, color: 'rgba(74,144,217,0.9)', fontWeight: '700' },
+  favDetailRating: { fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: '700' },
+  favDetailName: { fontSize: 22, color: '#ffffff', fontFamily: 'SpaceGrotesk_700Bold', marginBottom: 6 },
+  favDetailNote: { fontSize: 14, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', lineHeight: 21, marginBottom: 8 },
+  favDetailDate: { fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 16 },
+  favDetailDelete: { alignItems: 'center', paddingVertical: 10 },
+  favDetailDeleteText: { color: '#ff4444', fontSize: 13, fontWeight: '600' },
+
+  // Add favourite modal
+  addFavModal: { flex: 1, backgroundColor: '#08090f', paddingTop: 70, paddingHorizontal: 20 },
+  addFavTitle: { fontSize: 26, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 20 },
+  addFavLabel: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 8, marginTop: 12 },
   addFavCategoryRow: { gap: 8, paddingBottom: 4 },
-  addFavCatPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  addFavCatPillActive: { backgroundColor: '#4a90d9', borderColor: 'rgba(255,255,255,0.4)' },
-  addFavCatEmoji: { fontSize: 16 },
-  addFavCatText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
+  addFavCatPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'transparent' },
+  addFavCatPillActive: { backgroundColor: 'rgba(74,144,217,0.25)', borderColor: 'rgba(74,144,217,0.45)' },
+  addFavCatEmoji: { fontSize: 13 },
+  addFavCatText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
   addFavCatTextActive: { color: '#ffffff' },
-  addFavPhotoButton: { borderRadius: 16, overflow: 'hidden', marginBottom: 4 },
-  addFavPhotoPreview: { width: '100%', height: 180, borderRadius: 16 },
-  addFavPhotoEmpty: { width: '100%', height: 100, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', gap: 8 },
-  addFavPhotoEmoji: { fontSize: 28 },
-  addFavPhotoText: { color: 'rgba(255,255,255,0.35)', fontSize: 14 },
-  addFavInput: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  addFavRatingRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  addFavRatingButton: { width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  addFavRatingButtonActive: { backgroundColor: '#4a90d9', borderColor: 'rgba(255,255,255,0.4)' },
-  addFavRatingText: { color: 'rgba(255,255,255,0.35)', fontWeight: '600', fontSize: 14 },
+  addFavPhotoButton: { borderRadius: 14, overflow: 'hidden' },
+  addFavPhotoPreview: { width: '100%', height: 160, borderRadius: 14 },
+  addFavPhotoEmpty: { height: 100, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.04)' },
+  addFavPhotoEmoji: { fontSize: 24 },
+  addFavPhotoText: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 },
+  addFavInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, color: '#ffffff', fontSize: 15, borderWidth: 1, borderColor: 'rgba(74,144,217,0.2)' },
+  addFavRatingRow: { flexDirection: 'row', gap: 6 },
+  addFavRatingButton: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center' },
+  addFavRatingButtonActive: { backgroundColor: '#4a90d9' },
+  addFavRatingText: { fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
   addFavRatingTextActive: { color: '#ffffff' },
-  addFavSave: { backgroundColor: '#4a90d9', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 24, marginBottom: 12 },
+  addFavSave: { backgroundColor: '#4a90d9', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 20 },
   addFavSaveText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
-  addFavCancel: { alignItems: 'center', padding: 12, marginBottom: 40 },
+  addFavCancel: { alignItems: 'center', padding: 14 },
   addFavCancelText: { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
-  dayModal: { flex: 1, backgroundColor: '#1a4fd4' },
-  dayModalPhoto: { width: '100%', height: 300 },
-  photoTapHint: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.4)', padding: 8, alignItems: 'center' },
-  photoTapHintText: { color: '#ffffff', fontSize: 12 },
-  dayModalContent: { padding: 24, paddingBottom: 100 },
-  dayTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' },
-  dayYearBadge: { backgroundColor: '#4a90d9', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 16 },
-  dayYearBadgeText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
-  dayDateText: { fontSize: 16, fontWeight: '700', color: '#ffffff', flex: 1, flexWrap: 'wrap' },
-  dayModalRow: { flexDirection: 'row', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
-  dayModalChip: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  dayModalChipText: { fontSize: 14, color: '#ffffff' },
-  dayModalDescription: { fontSize: 17, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', marginBottom: 20, lineHeight: 26 },
-  dayModalSection: { marginBottom: 20 },
-  dayModalLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '800', letterSpacing: 2, marginBottom: 8 },
-  dayModalText: { fontSize: 16, color: '#ffffff', lineHeight: 24 },
-  dayModalSubtext: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginTop: 4 },
-  dayModalExtraPhoto: { width: 120, height: 120, borderRadius: 10, marginRight: 8 },
-  dayModalClose: { margin: 16, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, padding: 16, alignItems: 'center' },
-  dayModalCloseText: { color: '#ffffff', fontWeight: '600', fontSize: 16 },
+
+  // Modals — glass
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalBox: { backgroundColor: 'rgba(10,14,22,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  modalTitle: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 16, letterSpacing: -0.3 },
-  textInput: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
-  ratingLabel: { fontSize: 14, color: 'rgba(255,255,255,0.35)', marginBottom: 12 },
-  ratingButtons: { flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' },
-  ratingNumberButton: { width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
-  ratingNumberButtonActive: { backgroundColor: '#4a90d9' },
-  ratingNumberText: { color: 'rgba(255,255,255,0.35)', fontWeight: '600', fontSize: 14 },
-  ratingNumberTextActive: { color: '#ffffff' },
+  modalBox: { backgroundColor: 'rgba(10,14,22,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)' },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginBottom: 12, letterSpacing: -0.3 },
+  textInput: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
   saveButton: { backgroundColor: '#4a90d9', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
   saveButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
   cancelButton: { alignItems: 'center', padding: 10 },
   cancelButtonText: { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
-  photoCaptureActions: { position: 'absolute', bottom: 60, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 16, paddingHorizontal: 32 },
-  photoCaptureBtn: { flex: 1, paddingVertical: 16, borderRadius: 14, borderWidth: 1.5, borderColor: '#ffffff', alignItems: 'center' },
-  photoCaptureBtnPrimary: { backgroundColor: '#ffffff', borderColor: '#ffffff' },
-  photoCaptureBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  photoCaptureBtnTextPrimary: { color: '#000000' },
+  ratingLabel: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 8 },
+  ratingButtons: { flexDirection: 'row', gap: 6, marginBottom: 16 },
+  ratingNumberButton: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center' },
+  ratingNumberButtonActive: { backgroundColor: '#4a90d9' },
+  ratingNumberText: { fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
+  ratingNumberTextActive: { color: '#ffffff' },
+
+  // People modal
+  peopleInputRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  peopleTextInput: { flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 14, color: '#ffffff', fontSize: 15 },
+  peopleAddButton: { backgroundColor: '#4a90d9', borderRadius: 12, paddingHorizontal: 18, justifyContent: 'center' },
+  peopleAddButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
+  peopleSuggestionsBox: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, marginBottom: 10 },
+  peopleSuggestion: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  peopleSuggestionText: { color: '#ffffff', fontSize: 14 },
+
+  // Capsule modal
+  capsuleModal: { flex: 1, backgroundColor: '#08090f', paddingTop: 70, paddingHorizontal: 20 },
+  capsuleModalTitle: { fontSize: 26, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842', marginBottom: 4 },
+  capsuleModalSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 16 },
+  capsuleDatePicker: { flexDirection: 'row', gap: 10, justifyContent: 'center' },
+  capsuleDateColumn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(245,200,66,0.25)' },
+  capsuleDateArrow: { paddingHorizontal: 12, paddingVertical: 12 },
+  capsuleDateArrowText: { color: '#f5c842', fontSize: 20, fontWeight: '600' },
+  capsuleDateValue: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  capsuleDatePreview: { fontSize: 13, color: 'rgba(245,200,66,0.8)', textAlign: 'center', marginTop: 10 },
+  capsuleToggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 8 },
+  capsuleToggleLabel: { fontSize: 14, color: '#ffffff' },
+  capsuleSealButton: { backgroundColor: '#f5c842', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 16 },
+  capsuleSealButtonText: { color: '#1a1405', fontWeight: '800', fontSize: 16 },
+
+  // Capsule reveal
+  capsuleRevealOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  capsuleGraphic: { width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(245,200,66,0.15)', borderWidth: 2, borderColor: '#f5c842', justifyContent: 'center', alignItems: 'center', shadowColor: '#f5c842', shadowOpacity: 0.4, shadowRadius: 24, shadowOffset: { width: 0, height: 0 } },
+  capsuleGraphicEmoji: { fontSize: 64 },
+  capsuleRevealBox: { width: '100%', backgroundColor: 'rgba(10,14,22,0.98)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', padding: 24, maxHeight: '75%', alignItems: 'center' },
+  capsuleRevealEmoji: { fontSize: 40, marginBottom: 8 },
+  capsuleRevealTitle: { fontSize: 18, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842', textAlign: 'center' },
+  capsuleRevealDate: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4, marginBottom: 12 },
+  capsuleRevealMessage: { alignSelf: 'stretch', marginBottom: 16 },
+  capsuleRevealPhoto: { width: '100%', height: 180, borderRadius: 14, marginBottom: 12 },
+  capsuleRevealText: { fontSize: 16, color: '#ffffff', lineHeight: 24 },
+  capsuleRevealButtons: { flexDirection: 'row', gap: 10, alignSelf: 'stretch', alignItems: 'center' },
+
+  // Fullscreen
   fullScreenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
-  fullScreenImage: { width: '100%', height: '85%' },
-  fullScreenDismiss: { color: 'rgba(255,255,255,0.35)', fontSize: 13, marginTop: 16 },
-  capsuleOpenedRecord: { backgroundColor: 'rgba(245,200,66,0.08)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(245,200,66,0.3)', marginBottom: 8 },
-  capsuleSealedRecord: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', marginBottom: 8 },
-  capsuleRecordMeta: { fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 6 },
-  capsuleRecordContext: { fontSize: 14, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', lineHeight: 20 },
-  capsuleOpenedMessage: { fontSize: 15, color: '#ffffff', fontStyle: 'italic', lineHeight: 22 },
-  capsuleOpenedPhoto: { width: '100%', height: 160, borderRadius: 10, marginTop: 10 },
-  capsuleToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, marginTop: 8 },
-  capsuleToggleLabel: { fontSize: 15, color: '#ffffff', fontWeight: '600' },
-  capsuleRevealButtons: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  fullScreenImage: { width: '100%', height: '72%' },
+  fullScreenDismiss: { color: 'rgba(255,255,255,0.35)', fontSize: 13, marginTop: 12 },
+
+  // Cameras
+  cameraContainer: { flex: 1, backgroundColor: '#000000' },
+  cameraTop: { position: 'absolute', top: 60, left: 20 },
+  cameraTopButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  cameraTopButtonText: { color: '#ffffff', fontSize: 18 },
+  cameraBottom: { position: 'absolute', bottom: 50, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 40 },
+  cameraFlipButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  cameraFlipButtonText: { color: '#ffffff', fontSize: 22 },
+  cameraShutterButton: { width: 76, height: 76, borderRadius: 38, borderWidth: 4, borderColor: '#ffffff', justifyContent: 'center', alignItems: 'center' },
+  cameraShutterInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#ffffff' },
+  photoCaptureActions: { position: 'absolute', bottom: 50, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 16 },
+  photoCaptureBtn: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.15)' },
+  photoCaptureBtnPrimary: { backgroundColor: '#ffffff' },
+  photoCaptureBtnText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  photoCaptureBtnTextPrimary: { color: '#000000' },
 });
+
