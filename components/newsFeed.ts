@@ -5,14 +5,17 @@ const FOOTBALL_API_KEY = process.env.EXPO_PUBLIC_FOOTBALL_API_KEY;
 
 export type WikiEvent = { year: number; text: string };
 
+export type Headline = { title: string; domain: string; url?: string };
+
 export type NewsCache = {
   fetchedAt: number;
   wikipedia: { events: WikiEvent[]; birth: WikiEvent | null } | null;
   football: any[] | null;
   weather: { max: number; min: number; emoji: string } | null;
+  headlines?: Headline[] | null;
 };
 
-export type NewsSettings = { wiki: boolean; football: boolean; weather: boolean };
+export type NewsSettings = { wiki: boolean; football: boolean; weather: boolean; news: boolean };
 
 export const wmoEmoji = (code: number | null | undefined): string => {
   if (code == null) return '🌤️';
@@ -102,7 +105,34 @@ export const getNewsSettings = async (): Promise<NewsSettings> => {
   const wiki = (await AsyncStorage.getItem('show_wikipedia_feed')) !== 'false';
   const football = (await AsyncStorage.getItem('show_football_feed')) === 'true';
   const weather = (await AsyncStorage.getItem('show_weather_feed')) !== 'false';
-  return { wiki, football, weather };
+  const news = (await AsyncStorage.getItem('show_news_feed')) !== 'false';
+  return { wiki, football, weather, news };
+};
+
+// GDELT — free live/archive headlines, no API key. Only has data from ~2017 onwards.
+export const fetchHeadlines = async (dateKey: string): Promise<Headline[] | null> => {
+  try {
+    const ymd = dateKey.replace(/-/g, '');
+    const res = await fetch(
+      `https://api.gdeltproject.org/api/v2/doc/doc?query=sourcelang:english&mode=artlist&maxrecords=5&format=json&startdatetime=${ymd}000000&enddatetime=${ymd}235959`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const articles = data?.articles;
+    if (!Array.isArray(articles)) return null;
+    const seen = new Set<string>();
+    const headlines: Headline[] = [];
+    for (const a of articles) {
+      const title = (a.title || '').trim();
+      if (!title || seen.has(title)) continue;
+      seen.add(title);
+      headlines.push({ title, domain: a.domain || a.sourcecountry || 'News', url: a.url });
+      if (headlines.length >= 4) break;
+    }
+    return headlines;
+  } catch {
+    return null;
+  }
 };
 
 // Loads the full news bundle for a date, using the 30-day cache when valid.
@@ -117,28 +147,50 @@ export const loadNewsForDay = async (
     try {
       const cached: NewsCache = JSON.parse(cachedRaw);
       if (cached.fetchedAt && Date.now() - cached.fetchedAt < 30 * 24 * 60 * 60 * 1000) {
-        if (settings.football && !cached.football) {
+        let merged = cached;
+        let changed = false;
+        if (settings.football && !merged.football) {
           const fb = await fetchFootball(dateKey);
-          if (fb) {
-            const merged = { ...cached, football: fb };
-            await AsyncStorage.setItem(`news_cache_${dateKey}`, JSON.stringify(merged));
-            return { cache: merged, settings };
-          }
+          if (fb) { merged = { ...merged, football: fb }; changed = true; }
         }
-        return { cache: cached, settings };
+        if (settings.news && merged.headlines === undefined) {
+          const hl = await fetchHeadlines(dateKey);
+          merged = { ...merged, headlines: hl };
+          changed = true;
+        }
+        if (changed) await AsyncStorage.setItem(`news_cache_${dateKey}`, JSON.stringify(merged));
+        return { cache: merged, settings };
       }
     } catch { }
   }
 
-  const [wiki, football, weather] = await Promise.all([
+  const [wiki, football, weather, headlines] = await Promise.all([
     settings.wiki ? fetchWikipedia(dateKey, year) : Promise.resolve(null),
     settings.football ? fetchFootball(dateKey) : Promise.resolve(null),
     settings.weather ? fetchHistoricWeather(dateKey) : Promise.resolve(null),
+    settings.news ? fetchHeadlines(dateKey) : Promise.resolve(null),
   ]);
 
-  const cache: NewsCache = { fetchedAt: Date.now(), wikipedia: wiki, football, weather };
+  const cache: NewsCache = { fetchedAt: Date.now(), wikipedia: wiki, football, weather, headlines };
   await AsyncStorage.setItem(`news_cache_${dateKey}`, JSON.stringify(cache));
   return { cache, settings };
+};
+
+// Enable headlines and merge results into an existing cache (used by the inline toggle).
+export const enableHeadlinesAndMerge = async (
+  dateKey: string,
+  cache: NewsCache | null
+): Promise<NewsCache | null> => {
+  await AsyncStorage.setItem('show_news_feed', 'true');
+  if (cache && !cache.headlines) {
+    const hl = await fetchHeadlines(dateKey);
+    if (hl) {
+      const merged = { ...cache, headlines: hl };
+      await AsyncStorage.setItem(`news_cache_${dateKey}`, JSON.stringify(merged));
+      return merged;
+    }
+  }
+  return cache;
 };
 
 // Enable football and merge results into an existing cache (used by the inline toggle).

@@ -10,7 +10,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -31,7 +30,8 @@ import {
   View,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import DayCard from '../../components/DayCard';
+import DailySelfie from '../../components/DailySelfie';
+import DayCard, { hashUri } from '../../components/DayCard';
 
 const { width } = Dimensions.get('window');
 const CAL_SLOT_WIDTH = Math.floor((width - 32) / 7);
@@ -322,8 +322,7 @@ const sliderStyles = StyleSheet.create({
 
 export default function ThePresent() {
   const [fontsLoaded] = useFonts({ SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold });
-  const [activeTab, setActiveTab] = useState<'today' | 'archive' | 'favourites'>('today');
-  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'today' | 'archive' | 'selfie' | 'favourites'>('today');
 
   const [entry, setEntry] = useState<DayEntry>(emptyEntry);
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -384,6 +383,8 @@ export default function ThePresent() {
   const [locName, setLocName] = useState('');
   const [locWith, setLocWith] = useState('');
   const [savedToday, setSavedToday] = useState(false);
+  const [showCaptionsSheet, setShowCaptionsSheet] = useState(false);
+  const [photoCaptions, setPhotoCaptions] = useState<Record<string, string>>({});
 
   // In-app cameras
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -843,6 +844,26 @@ export default function ThePresent() {
     await saveFavourites([fav, ...favourites]);
   };
 
+  const todayPhotoRows: { uri: string; label: string }[] = [
+    ...(entry.photoUri ? [{ uri: entry.photoUri, label: 'Main photo' }] : []),
+    ...(entry.pairSelfieUri ? [{ uri: entry.pairSelfieUri, label: 'Selfie' }] : []),
+    ...(entry.extraPhotos || []).map((uri, i) => ({ uri, label: `Photo ${i + 1}` })),
+  ];
+
+  const openCaptionsSheet = async () => {
+    const caps: Record<string, string> = {};
+    for (const row of todayPhotoRows) {
+      const c = await AsyncStorage.getItem(`caption_${hashUri(row.uri)}`);
+      if (c) caps[row.uri] = c;
+    }
+    setPhotoCaptions(caps);
+    setShowCaptionsSheet(true);
+  };
+
+  const savePhotoCaption = async (uri: string) => {
+    await AsyncStorage.setItem(`caption_${hashUri(uri)}`, photoCaptions[uri] || '');
+  };
+
   const saveToday = async () => {
     const finalEntry = { ...entry };
     await AsyncStorage.setItem(`day_entry_${todayKey}`, JSON.stringify(finalEntry));
@@ -979,6 +1000,9 @@ export default function ThePresent() {
           <TouchableOpacity style={[styles.tabButton, activeTab === 'archive' && styles.tabButtonActive]} onPress={() => setActiveTab('archive')}>
             <Text style={[styles.tabButtonText, activeTab === 'archive' && styles.tabButtonTextActive]}>Your Days</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.tabButton, activeTab === 'selfie' && styles.tabButtonActive]} onPress={() => setActiveTab('selfie')}>
+            <Text style={[styles.tabButtonText, activeTab === 'selfie' && styles.tabButtonTextActive]}>Daily Selfie</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.tabButton, activeTab === 'favourites' && styles.tabButtonActive]} onPress={() => setActiveTab('favourites')}>
             <Text style={[styles.tabButtonText, activeTab === 'favourites' && styles.tabButtonTextActive]}>Favourites</Text>
           </TouchableOpacity>
@@ -1079,8 +1103,8 @@ export default function ThePresent() {
               </View>
             )}
           </View>
-          <TouchableOpacity style={styles.viewAllSelfiesRow} onPress={() => router.push('/(tabs)/selfie')}>
-            <Text style={styles.viewAllSelfiesText}>View all selfies →</Text>
+          <TouchableOpacity style={styles.storyLinkRow} onPress={openCaptionsSheet}>
+            <Text style={styles.storyLinkText}>✍️ Tell the story of these photos →</Text>
           </TouchableOpacity>
 
           {/* 3.3 THREE WORDS + MOOD */}
@@ -1368,6 +1392,8 @@ export default function ThePresent() {
           )}
         </View>
       )}
+
+      {activeTab === 'selfie' && <DailySelfie />}
 
       {activeTab === 'favourites' && (
         <View style={styles.container}>
@@ -1901,6 +1927,49 @@ export default function ThePresent() {
         </View>
       </Modal>
 
+      {/* Photo captions sheet — tell the story of today's photos */}
+      <Modal visible={showCaptionsSheet} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>The story of these photos</Text>
+              {todayPhotoRows.length === 0 ? (
+                <Text style={styles.capSheetEmpty}>Add some photos to today first.</Text>
+              ) : (
+                <ScrollView style={{ maxHeight: 380 }} keyboardShouldPersistTaps="handled">
+                  {todayPhotoRows.map(row => (
+                    <View key={row.uri} style={styles.capSheetRow}>
+                      <Image source={{ uri: row.uri }} style={styles.capSheetThumb} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.capSheetLabel}>{row.label}</Text>
+                        <TextInput
+                          style={styles.capSheetInput}
+                          placeholder="What's happening here?"
+                          placeholderTextColor="rgba(255,255,255,0.25)"
+                          multiline
+                          value={photoCaptions[row.uri] || ''}
+                          onChangeText={text => setPhotoCaptions(prev => ({ ...prev, [row.uri]: text }))}
+                          onBlur={() => savePhotoCaption(row.uri)}
+                        />
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+              <TouchableOpacity style={styles.saveButton} onPress={async () => {
+                for (const row of todayPhotoRows) {
+                  await savePhotoCaption(row.uri);
+                }
+                setShowCaptionsSheet(false);
+              }}>
+                <Text style={styles.saveButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
       {/* Song modal */}
       <Modal visible={activeModal === 'song'} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -2028,8 +2097,13 @@ const styles = StyleSheet.create({
   heroAddThumbTile: { width: 46, height: 46, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(74,144,217,0.6)', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(16,28,51,0.6)' },
   addExtraText: { color: '#4a90d9', fontSize: 22, fontWeight: '300' },
   heroPhotoCount: { fontSize: 12, fontWeight: '600', color: '#ffffff', marginLeft: 10 },
-  viewAllSelfiesRow: { marginHorizontal: 16, marginTop: 8, marginBottom: 14, alignSelf: 'flex-end' },
-  viewAllSelfiesText: { fontSize: 12, color: 'rgba(74,144,217,0.8)', fontWeight: '600' },
+  storyLinkRow: { marginHorizontal: 16, marginTop: 8, marginBottom: 14, alignSelf: 'flex-end' },
+  storyLinkText: { fontSize: 13, color: 'rgba(74,144,217,0.9)', fontWeight: '600' },
+  capSheetRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  capSheetThumb: { width: 56, height: 56, borderRadius: 10 },
+  capSheetLabel: { fontSize: 11, color: 'rgba(74,144,217,0.8)', fontWeight: '700', marginBottom: 4 },
+  capSheetInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, color: '#ffffff', fontSize: 14, minHeight: 40 },
+  capSheetEmpty: { fontSize: 14, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', paddingVertical: 12 },
 
   // 3.3 Three words
   wordsRow: { flexDirection: 'row', gap: 8 },

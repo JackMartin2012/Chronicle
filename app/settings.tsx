@@ -12,6 +12,7 @@ export default function Settings() {
   const [footballFeed, setFootballFeed] = useState(false);
   const [wikipediaFeed, setWikipediaFeed] = useState(true);
   const [weatherFeed, setWeatherFeed] = useState(true);
+  const [newsFeed, setNewsFeed] = useState(true);
 
   useEffect(() => {
     loadSettings();
@@ -24,6 +25,8 @@ export default function Settings() {
     setWikipediaFeed(wikipedia !== 'false');
     const weather = await AsyncStorage.getItem('show_weather_feed');
     setWeatherFeed(weather !== 'false');
+    const news = await AsyncStorage.getItem('show_news_feed');
+    setNewsFeed(news !== 'false');
   };
 
   const saveToggle = async (key: string, value: boolean) => {
@@ -47,6 +50,11 @@ export default function Settings() {
       label: 'Historical weather',
       value: weatherFeed,
       onChange: (v) => { setWeatherFeed(v); saveToggle('show_weather_feed', v); },
+    },
+    {
+      label: 'World headlines',
+      value: newsFeed,
+      onChange: (v) => { setNewsFeed(v); saveToggle('show_news_feed', v); },
     },
   ];
 

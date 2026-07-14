@@ -23,9 +23,20 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { enableFootballAndMerge, loadNewsForDay, NewsCache, NewsSettings } from './newsFeed';
+import { enableFootballAndMerge, enableHeadlinesAndMerge, loadNewsForDay, NewsCache, NewsSettings } from './newsFeed';
 
-const { width } = Dimensions.get('window');
+const { width, height: SCREEN_H } = Dimensions.get('window');
+
+// Stable key for ImagePicker URIs (they aren't MediaLibrary asset ids)
+export const hashUri = (uri: string): string => {
+  let h = 5381;
+  for (let i = 0; i < uri.length; i++) {
+    h = ((h << 5) + h + uri.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h).toString(36);
+};
+
+const QUICK_TAGS = ['Family', 'Friends'];
 
 type Accent = 'past' | 'present';
 
@@ -39,8 +50,8 @@ const ACCENTS = {
     font600: 'Fraunces_600SemiBold',
   },
   present: {
-    bg: '#08090f',
-    card: '#0d1220',
+    bg: '#0b1526',
+    card: '#101c33',
     hex: '#4a90d9',
     rgb: '74,144,217',
     font800: 'SpaceGrotesk_700Bold',
@@ -108,15 +119,15 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
   const [photos, setPhotos] = useState<TcPhoto[]>([]);
   const [captions, setCaptions] = useState<Record<string, string>>({});
   const [peopleTags, setPeopleTags] = useState<Record<string, string[]>>({});
+  const [photoCats, setPhotoCats] = useState<Record<string, string[]>>({});
+  const [entryCaptions, setEntryCaptions] = useState<Record<string, string>>({});
   const [hiddenPhotos, setHiddenPhotos] = useState<string[]>([]);
   const [coverId, setCoverId] = useState('');
-  const [focusedPhotoId, setFocusedPhotoId] = useState('');
   const [places, setPlaces] = useState<Place[]>([]);
   const [knownPeople, setKnownPeople] = useState<string[]>([]);
   const [news, setNews] = useState<NewsCache | null>(null);
-  const [newsSettings, setNewsSettings] = useState<NewsSettings>({ wiki: true, football: false, weather: true });
+  const [newsSettings, setNewsSettings] = useState<NewsSettings>({ wiki: true, football: false, weather: true, news: true });
   const [lastYear, setLastYear] = useState<{ dateKey: string; thumbUri: string | null; mood: string; threeWords: string[] } | null>(null);
-  const [pairSwapped, setPairSwapped] = useState(false);
 
   // Nested modal state
   const [fullscreenUri, setFullscreenUri] = useState<string | null>(null);
@@ -124,6 +135,7 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
   const [captionModalId, setCaptionModalId] = useState<string | null>(null);
   const [tagModalId, setTagModalId] = useState<string | null>(null);
   const [tagSelected, setTagSelected] = useState<string[]>([]);
+  const [tagCategories, setTagCategories] = useState<string[]>([]);
   const [tagText, setTagText] = useState('');
   const [placeModalTarget, setPlaceModalTarget] = useState<string | null>(null);
   const [placeScope, setPlaceScope] = useState<'photo' | 'day'>('photo');
@@ -144,7 +156,6 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
       loadAll();
     } else {
       setEditMode(false);
-      setPairSwapped(false);
       setNews(null);
       if (sound) { sound.unloadAsync(); setSound(null); setIsPlaying(false); }
     }
@@ -158,12 +169,26 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
     listRef.current?.scrollToOffset?.({ offset: 0, animated: false });
 
     const entryRaw = await AsyncStorage.getItem(`day_entry_${dateKey}`);
-    setEntry(entryRaw ? JSON.parse(entryRaw) : null);
+    const loadedEntry = entryRaw ? JSON.parse(entryRaw) : null;
+    setEntry(loadedEntry);
     setTcDescription((await AsyncStorage.getItem(`tc_description_${dateKey}`)) || '');
     setTcLocation((await AsyncStorage.getItem(`tc_location_${dateKey}`)) || '');
     const ctxRaw = await AsyncStorage.getItem(`day_context_${dateKey}`);
     setDayContext(ctxRaw ? JSON.parse(ctxRaw) : {});
-    setSaved((await AsyncStorage.getItem(`saved_day_${dateKey}`)) === 'true');
+    const savedFlag = (await AsyncStorage.getItem(`saved_day_${dateKey}`)) === 'true';
+    setSaved(savedFlag);
+    // Past days that aren't in the vault yet open straight into edit mode —
+    // the whole point of opening them is adding context.
+    setEditMode(accent === 'past' && !savedFlag);
+
+    // Captions for entry photos (ImagePicker URIs, keyed by uri hash)
+    const entryUris: string[] = [loadedEntry?.photoUri, loadedEntry?.pairSelfieUri, ...(loadedEntry?.extraPhotos || [])].filter(Boolean);
+    const eCaps: Record<string, string> = {};
+    for (const uri of entryUris) {
+      const c = await AsyncStorage.getItem(`caption_${hashUri(uri)}`);
+      if (c) eCaps[uri] = c;
+    }
+    setEntryCaptions(eCaps);
     const hiddenRaw = await AsyncStorage.getItem('hidden_photos');
     setHiddenPhotos(hiddenRaw ? JSON.parse(hiddenRaw) : []);
     const coverRaw = await AsyncStorage.getItem('cover_photos');
@@ -176,7 +201,8 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
     loadPhotos();
     loadKnownPeople();
     loadNews();
-    loadLastYear();
+    if (accent === 'present') loadLastYear();
+    else setLastYear(null);
   };
 
   const loadPhotos = async () => {
@@ -194,6 +220,7 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
       const found: TcPhoto[] = [];
       const caps: Record<string, string> = {};
       const ppl: Record<string, string[]> = {};
+      const cats: Record<string, string[]> = {};
       for (const asset of result.assets) {
         let uri = asset.uri;
         try {
@@ -204,12 +231,14 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
         if (cap) caps[asset.id] = cap;
         const p = await AsyncStorage.getItem(`people_${asset.id}`);
         if (p) ppl[asset.id] = JSON.parse(p);
+        const pc = await AsyncStorage.getItem(`photo_tags_${asset.id}`);
+        if (pc) cats[asset.id] = JSON.parse(pc);
         found.push({ id: asset.id, uri, mediaType: asset.mediaType === 'video' ? 'video' : 'photo' });
       }
       setPhotos(found);
       setCaptions(caps);
       setPeopleTags(ppl);
-      setFocusedPhotoId('');
+      setPhotoCats(cats);
     } catch {
       setPhotos([]);
     }
@@ -300,14 +329,22 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
     await AsyncStorage.setItem(`day_entry_${dateKey}`, JSON.stringify(updated));
   };
 
+  const computeDaySummary = () => {
+    const people = [...new Set(Object.values(peopleTags).flat())];
+    const categories = [...new Set(Object.values(photoCats).flat())];
+    return { people, categories, location: tcLocation };
+  };
+
   const saveDay = async () => {
     await AsyncStorage.setItem(`saved_day_${dateKey}`, 'true');
     await AsyncStorage.setItem(`tc_description_${dateKey}`, tcDescription);
     await AsyncStorage.setItem(`tc_location_${dateKey}`, tcLocation);
+    await AsyncStorage.setItem(`day_summary_${dateKey}`, JSON.stringify(computeDaySummary()));
     const visible = photos.filter(p => !hiddenPhotos.includes(p.id));
     const thumb = visible.find(p => p.id === coverId) || visible[0];
     if (thumb) await AsyncStorage.setItem(`tc_thumb_${dateKey}`, thumb.id);
     setSaved(true);
+    setEditMode(false);
   };
 
   const openFieldEditor = (key: string, label: string, current: string, placeholder?: string) => {
@@ -354,7 +391,6 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
     await AsyncStorage.setItem('hidden_photos', JSON.stringify(hidden));
     setHiddenPhotos(hidden);
     setPhotoMenuId(null);
-    if (focusedPhotoId === assetId) setFocusedPhotoId('');
   };
 
   const sharePhoto = async (assetId: string) => {
@@ -380,8 +416,16 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
 
   const saveCaption = async () => {
     if (!captionModalId) return;
-    await AsyncStorage.setItem(`caption_${captionModalId}`, fieldText);
-    setCaptions(prev => ({ ...prev, [captionModalId]: fieldText }));
+    if (captionModalId.startsWith('uri:')) {
+      const h = captionModalId.slice(4);
+      await AsyncStorage.setItem(`caption_${h}`, fieldText);
+      const uris: string[] = [entry?.photoUri, entry?.pairSelfieUri, ...(entry?.extraPhotos || [])].filter(Boolean);
+      const uri = uris.find(u => hashUri(u) === h);
+      if (uri) setEntryCaptions(prev => ({ ...prev, [uri]: fieldText }));
+    } else {
+      await AsyncStorage.setItem(`caption_${captionModalId}`, fieldText);
+      setCaptions(prev => ({ ...prev, [captionModalId]: fieldText }));
+    }
     setCaptionModalId(null);
   };
 
@@ -394,7 +438,9 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
 
     const doSave = async (finalNames: string[]) => {
       await AsyncStorage.setItem(`people_${assetId}`, JSON.stringify(finalNames));
+      await AsyncStorage.setItem(`photo_tags_${assetId}`, JSON.stringify(tagCategories));
       setPeopleTags(prev => ({ ...prev, [assetId]: finalNames }));
+      setPhotoCats(prev => ({ ...prev, [assetId]: tagCategories }));
       setKnownPeople(prev => [...new Set([...prev, ...finalNames])].sort());
       setTagModalId(null);
       setTagText('');
@@ -462,6 +508,16 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
     setPlaceModalTarget(null);
   };
 
+  const toggleHeadlines = async (value: boolean) => {
+    setNewsSettings(prev => ({ ...prev, news: value }));
+    if (value) {
+      const merged = await enableHeadlinesAndMerge(dateKey, news);
+      setNews(merged);
+    } else {
+      await AsyncStorage.setItem('show_news_feed', 'false');
+    }
+  };
+
   const toggleFootball = async (value: boolean) => {
     setNewsSettings(prev => ({ ...prev, football: value }));
     if (value) {
@@ -492,10 +548,8 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
   const visiblePhotos = photos
     .filter(p => !hiddenPhotos.includes(p.id))
     .sort((a, b) => (a.id === coverId ? -1 : b.id === coverId ? 1 : 0));
-  const focusedPhoto = visiblePhotos.find(p => p.id === focusedPhotoId) || visiblePhotos[0];
-  const entryExtraPhotos: string[] = entry?.extraPhotos || [];
-  const hasEntryPair = !!entry?.photoUri;
-  const hasPhotos = hasEntryPair || entryExtraPhotos.length > 0 || visiblePhotos.length > 0;
+  const entryPhotoUris: string[] = [entry?.photoUri, entry?.pairSelfieUri, ...(entry?.extraPhotos || [])].filter(Boolean);
+  const totalPhotoCount = entryPhotoUris.length + visiblePhotos.length;
 
   const description = entry?.dayDescription || tcDescription;
   const anyContext = Object.values(dayContext).some(v => v);
@@ -503,19 +557,27 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
   const locations: { name: string; withWho?: string }[] = entry?.locations || [];
   const headlineLocation = locations[0]?.name || tcLocation;
 
+  // Aggregated tags across the day's photos (A4)
+  const summaryPeople = [...new Set(Object.values(peopleTags).flat())];
+  const summaryCats = [...new Set(Object.values(photoCats).flat())];
+  const spentWith = [...summaryCats, ...summaryPeople];
+  const spentWithLine = spentWith.length > 0 ? spentWith.join(', ') : (dayContext.with || '');
+
   const hasYourDay = !!(
     description || entry?.voiceMemoUri || entry?.dailyAnswer || entry?.reflectionAnswer ||
     entry?.songName || entry?.watched || entry?.cookedDish || entry?.taggedPeople?.length ||
     entry?.highlight || entry?.learned || anyContext
   );
-  const anyNewsOn = newsSettings.wiki || newsSettings.football || newsSettings.weather;
+  const anyNewsOn = newsSettings.wiki || newsSettings.football || newsSettings.weather || newsSettings.news;
 
   const slides: string[] = ['cover'];
-  if (hasPhotos) slides.push('photos');
+  entryPhotoUris.forEach((_, i) => slides.push(`ephoto:${i}`));
+  visiblePhotos.forEach(p => slides.push(`photo:${p.id}`));
   if (hasYourDay || editMode) slides.push('day');
   if (locations.length >= 2) slides.push('locations');
   if (anyNewsOn && (accent === 'past' || saved)) slides.push('world');
-  if (lastYear) slides.push('lastYear');
+  if (accent === 'present' && lastYear) slides.push('lastYear');
+  const photoSlideKeys = slides.filter(s => s.startsWith('photo:') || s.startsWith('ephoto:'));
 
   const weatherPill = entry?.weatherEmoji
     ? `${entry.weatherEmoji} ${entry.weatherTemp}°C`
@@ -526,140 +588,196 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
 
   // ── SLIDE RENDERERS ──────────────────────────────────────────────────────
 
-  const renderCover = () => (
-    <ScrollView style={{ width }} contentContainerStyle={styles.slideContent} showsVerticalScrollIndicator={false}>
-      {entry?.mood ? (
-        <View pointerEvents="none" style={styles.ghostWrap}>
-          <Text style={styles.ghostEmoji}>{entry.mood}</Text>
-        </View>
-      ) : null}
-      <Text style={[styles.trackedCaps, { color: A.hex }]}>
-        {date?.toLocaleDateString('en-GB', { weekday: 'long' }).toUpperCase()}
-      </Text>
-      <Text style={[styles.coverDate, { fontFamily: A.font800 }]}>
-        {date?.getDate()} {date?.toLocaleDateString('en-GB', { month: 'long' })}{'\n'}{year}
-      </Text>
-      <View style={styles.pillRow}>
-        {!!weatherPill && (
-          <View style={styles.pill}><Text style={styles.pillText}>{weatherPill}</Text></View>
-        )}
-        {(!!headlineLocation || editMode) && (
-          <TouchableOpacity
-            style={styles.pill}
-            disabled={!editMode}
-            onPress={() => openFieldEditor('location', 'Where were you?', tcLocation)}
-          >
-            <Ionicons name="location-outline" size={13} color="rgba(255,255,255,0.6)" />
-            <Text style={[styles.pillText, !headlineLocation && styles.pillTextMuted]}>
-              {headlineLocation || 'Add location'}
-            </Text>
-          </TouchableOpacity>
-        )}
-        {!!entry?.mood && (
-          <View style={styles.pill}><Text style={styles.pillText}>{entry.mood}</Text></View>
-        )}
-        {saved && (
-          <View style={[styles.pill, { backgroundColor: `rgba(${A.rgb},0.2)`, borderColor: `rgba(${A.rgb},0.4)` }]}>
-            <Text style={[styles.pillText, { fontWeight: '700' }]}>In Vault</Text>
+  const renderCover = () => {
+    if (accent === 'past') {
+      return (
+        <ScrollView style={{ width }} contentContainerStyle={styles.slideContent} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.trackedCaps, { color: A.hex }]}>ON THIS DAY IN {year}</Text>
+          <Text style={[styles.coverDate, { fontFamily: A.font800 }]}>
+            {date?.toLocaleDateString('en-GB', { weekday: 'long' })}{'\n'}{date?.getDate()} {date?.toLocaleDateString('en-GB', { month: 'long' })} {year}
+          </Text>
+          <View style={styles.pillRow}>
+            {!!weatherPill && (
+              <View style={styles.pill}><Text style={styles.pillText}>{weatherPill}</Text></View>
+            )}
+            {totalPhotoCount > 0 && (
+              <View style={styles.pill}>
+                <Text style={styles.pillText}>{totalPhotoCount} photo{totalPhotoCount === 1 ? '' : 's'}</Text>
+              </View>
+            )}
+            {saved && (
+              <View style={[styles.pill, { backgroundColor: `rgba(${A.rgb},0.2)`, borderColor: `rgba(${A.rgb},0.4)` }]}>
+                <Text style={[styles.pillText, { fontWeight: '700' }]}>In Vault</Text>
+              </View>
+            )}
           </View>
-        )}
-      </View>
-      {threeWords.length > 0 && (
-        <Text style={styles.threeWords}>{threeWords.join(' · ')}</Text>
-      )}
-      {slides.length > 1 && (
-        <Text style={styles.swipeHint}>Swipe →</Text>
-      )}
-    </ScrollView>
-  );
-
-  const renderPhotos = () => (
-    <ScrollView style={{ width }} contentContainerStyle={styles.slideContentTight} showsVerticalScrollIndicator={false}>
-      {hasEntryPair ? (
-        <View style={[styles.pairCard, { backgroundColor: A.card }]}>
-          <TouchableOpacity activeOpacity={0.9} onPress={() => setFullscreenUri(pairSwapped && entry?.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri)}>
-            <Image
-              source={{ uri: pairSwapped && entry?.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri }}
-              style={styles.pairMain}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
-          {!!entry?.pairSelfieUri && (
-            <TouchableOpacity style={styles.pairInset} onPress={() => setPairSwapped(s => !s)} activeOpacity={0.9}>
-              <Image
-                source={{ uri: pairSwapped ? entry.photoUri : entry.pairSelfieUri }}
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="cover"
-              />
+          {!!spentWithLine && (
+            <Text style={styles.spentWithLine}>👥 With {spentWithLine}</Text>
+          )}
+          {(!!tcLocation || editMode) && (
+            <TouchableOpacity
+              disabled={!editMode}
+              onPress={() => openFieldEditor('location', 'Where were you?', tcLocation)}
+            >
+              <Text style={[styles.spentWithLine, !tcLocation && { color: 'rgba(255,255,255,0.3)' }]}>
+                📍 {tcLocation || 'Add a location...'}
+              </Text>
             </TouchableOpacity>
           )}
+          {slides.length > 1 && (
+            <Text style={styles.swipeHint}>{editMode ? 'Swipe to add your story →' : 'Swipe →'}</Text>
+          )}
+        </ScrollView>
+      );
+    }
+    // Present accent
+    const coverThumbs = [...entryPhotoUris, ...visiblePhotos.map(p => p.uri)].slice(0, 4);
+    return (
+      <ScrollView style={{ width }} contentContainerStyle={styles.slideContent} showsVerticalScrollIndicator={false}>
+        {entry?.mood ? (
+          <View pointerEvents="none" style={styles.ghostWrap}>
+            <Text style={styles.ghostEmoji}>{entry.mood}</Text>
+          </View>
+        ) : null}
+        <Text style={[styles.trackedCaps, { color: A.hex }]}>
+          {date?.toLocaleDateString('en-GB', { weekday: 'long' }).toUpperCase()}
+        </Text>
+        <Text style={[styles.coverDate, { fontFamily: A.font800 }]}>
+          {date?.getDate()} {date?.toLocaleDateString('en-GB', { month: 'long' })}{'\n'}{year}
+        </Text>
+        {threeWords.length > 0 && (
+          <Text style={[styles.threeWordsBig, { color: `rgba(${A.rgb},0.95)` }]}>{threeWords.join(' · ')}</Text>
+        )}
+        <View style={styles.pillRow}>
+          {!!weatherPill && (
+            <View style={styles.pill}><Text style={styles.pillText}>{weatherPill}</Text></View>
+          )}
+          {(!!headlineLocation || editMode) && (
+            <TouchableOpacity
+              style={styles.pill}
+              disabled={!editMode}
+              onPress={() => openFieldEditor('location', 'Where were you?', tcLocation)}
+            >
+              <Ionicons name="location-outline" size={13} color="rgba(255,255,255,0.6)" />
+              <Text style={[styles.pillText, !headlineLocation && styles.pillTextMuted]}>
+                {headlineLocation || 'Add location'}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {!!entry?.mood && (
+            <View style={styles.pill}><Text style={styles.pillText}>{entry.mood}</Text></View>
+          )}
+          {saved && (
+            <View style={[styles.pill, { backgroundColor: `rgba(${A.rgb},0.2)`, borderColor: `rgba(${A.rgb},0.4)` }]}>
+              <Text style={[styles.pillText, { fontWeight: '700' }]}>In Vault</Text>
+            </View>
+          )}
         </View>
-      ) : focusedPhoto ? (
-        <View style={[styles.pairCard, { backgroundColor: A.card }]}>
-          <TouchableOpacity activeOpacity={0.9} onPress={() => setFullscreenUri(focusedPhoto.uri)}>
-            <Image source={{ uri: focusedPhoto.uri }} style={styles.pairMain} resizeMode="cover" />
+        {coverThumbs.length > 0 && (
+          <View style={styles.coverThumbRow}>
+            {coverThumbs.map((uri, i) => (
+              <Image key={i} source={{ uri }} style={styles.coverThumb} />
+            ))}
+          </View>
+        )}
+        {slides.length > 1 && (
+          <Text style={styles.swipeHint}>Swipe →</Text>
+        )}
+      </ScrollView>
+    );
+  };
+
+  const renderPhotoSlide = (slideKey: string) => {
+    const isEntry = slideKey.startsWith('ephoto:');
+    let uri = '';
+    let assetId: string | null = null;
+    if (isEntry) {
+      uri = entryPhotoUris[parseInt(slideKey.split(':')[1])] || '';
+    } else {
+      assetId = slideKey.slice('photo:'.length);
+      uri = visiblePhotos.find(p => p.id === assetId)?.uri || '';
+    }
+    const idx = photoSlideKeys.indexOf(slideKey);
+    const caption = assetId ? captions[assetId] : entryCaptions[uri];
+    const names = assetId ? (peopleTags[assetId] || []) : [];
+    const cats = assetId ? (photoCats[assetId] || []) : [];
+    const whoChips = [...cats, ...names];
+    const linkedPlace = assetId ? places.find(pl => pl.photoUris.includes(uri)) : undefined;
+
+    const fieldRow = (emoji: string, label: string, content: React.ReactNode, hasValue: boolean, onPress: () => void) => (
+      <TouchableOpacity
+        style={[styles.dayBlock, { backgroundColor: A.card, borderColor: `rgba(${A.rgb},${hasValue ? 0.35 : 0.2})` }]}
+        disabled={!editMode}
+        onPress={onPress}
+      >
+        <Text style={[styles.trackedCapsSmall, { color: A.hex }]}>{emoji} {label}</Text>
+        {content}
+      </TouchableOpacity>
+    );
+
+    return (
+      <ScrollView style={{ width }} contentContainerStyle={styles.slideContentTight} showsVerticalScrollIndicator={false}>
+        <Text style={styles.photoSlideHeader}>Photo {idx + 1} of {photoSlideKeys.length}</Text>
+        <View style={[styles.photoSlideImageWrap, { backgroundColor: A.card }]}>
+          <TouchableOpacity style={{ width: '100%', height: '100%' }} activeOpacity={0.9} onPress={() => setFullscreenUri(uri)}>
+            <Image source={{ uri }} style={styles.photoSlideImage} resizeMode="contain" />
           </TouchableOpacity>
-          {focusedPhoto.id === coverId && (
+          {assetId && (
+            <TouchableOpacity style={styles.photoMenuBtn} onPress={() => setPhotoMenuId(assetId)}>
+              <Ionicons name="ellipsis-horizontal" size={16} color="#ffffff" />
+            </TouchableOpacity>
+          )}
+          {assetId && assetId === coverId && (
             <View style={[styles.coverBadge, { backgroundColor: `rgba(${A.rgb},0.85)` }]}>
               <Text style={styles.coverBadgeText}>Cover</Text>
             </View>
           )}
-          {editMode && (
-            <TouchableOpacity style={styles.photoMenuBtn} onPress={() => setPhotoMenuId(focusedPhoto.id)}>
-              <Ionicons name="ellipsis-horizontal" size={16} color="#ffffff" />
-            </TouchableOpacity>
-          )}
         </View>
-      ) : null}
 
-      {!hasEntryPair && focusedPhoto && editMode && (
-        <View style={[styles.actionRow, { backgroundColor: A.card }]}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => { setFieldText(captions[focusedPhoto.id] || ''); setCaptionModalId(focusedPhoto.id); }}>
-            <Ionicons name="chatbubble-outline" size={16} color={captions[focusedPhoto.id] ? A.hex : 'rgba(255,255,255,0.4)'} />
-            <Text style={[styles.actionText, captions[focusedPhoto.id] ? { color: A.hex } : null]}>Add context</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => { setTagSelected(peopleTags[focusedPhoto.id] || []); setTagText(''); setTagModalId(focusedPhoto.id); }}>
-            <Ionicons name="people-outline" size={16} color={peopleTags[focusedPhoto.id]?.length ? A.hex : 'rgba(255,255,255,0.4)'} />
-            <Text style={[styles.actionText, peopleTags[focusedPhoto.id]?.length ? { color: A.hex } : null]}>Tag people</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => { setPlaceScope('photo'); setNewPlaceMode(false); setPlaceModalTarget(focusedPhoto.id); }}>
-            <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.4)" />
-            <Text style={styles.actionText}>Add to place</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      {!hasEntryPair && focusedPhoto && captions[focusedPhoto.id] ? (
-        <Text style={styles.captionText}>{`"${captions[focusedPhoto.id]}"`}</Text>
-      ) : null}
-      {!hasEntryPair && focusedPhoto && peopleTags[focusedPhoto.id]?.length ? (
-        <View style={styles.chipRow}>
-          {peopleTags[focusedPhoto.id].map(name => (
-            <View key={name} style={[styles.chip, { backgroundColor: `rgba(${A.rgb},0.15)` }]}>
-              <Text style={[styles.chipText, { color: A.hex }]}>{name}</Text>
+        {fieldRow('💬', 'CAPTION',
+          caption
+            ? <Text style={styles.dayBlockValue}>{caption}</Text>
+            : <Text style={styles.dayBlockEmpty}>Tap to add...</Text>,
+          !!caption,
+          () => {
+            setFieldText(caption || '');
+            setCaptionModalId(assetId || `uri:${hashUri(uri)}`);
+          }
+        )}
+
+        {assetId && fieldRow('👥', "WHO'S IN THIS",
+          whoChips.length > 0 ? (
+            <View style={[styles.chipRow, { marginBottom: 0 }]}>
+              {whoChips.map(name => (
+                <View key={name} style={[styles.chip, { backgroundColor: `rgba(${A.rgb},0.15)` }]}>
+                  <Text style={[styles.chipText, { color: A.hex }]}>{name}</Text>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
-      ) : null}
+          ) : <Text style={styles.dayBlockEmpty}>Tap to add...</Text>,
+          whoChips.length > 0,
+          () => {
+            setTagSelected(names);
+            setTagCategories(cats);
+            setTagText('');
+            setTagModalId(assetId);
+          }
+        )}
 
-      {(entryExtraPhotos.length > 0 || visiblePhotos.length > (hasEntryPair ? 0 : 1)) && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbStrip}>
-          {entryExtraPhotos.map((uri, i) => (
-            <TouchableOpacity key={`e-${i}`} onPress={() => setFullscreenUri(uri)}>
-              <Image source={{ uri }} style={styles.thumb} />
-            </TouchableOpacity>
-          ))}
-          {visiblePhotos.filter(p => hasEntryPair || p.id !== focusedPhoto?.id).map(p => (
-            <TouchableOpacity
-              key={p.id}
-              onPress={() => hasEntryPair ? setFullscreenUri(p.uri) : setFocusedPhotoId(p.id)}
-            >
-              <Image source={{ uri: p.uri }} style={styles.thumb} />
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
-    </ScrollView>
-  );
+        {assetId && fieldRow('📍', 'WHERE',
+          linkedPlace
+            ? <Text style={styles.dayBlockValue}>{linkedPlace.name}</Text>
+            : <Text style={styles.dayBlockEmpty}>Tap to add...</Text>,
+          !!linkedPlace,
+          () => {
+            setPlaceScope('photo');
+            setNewPlaceMode(false);
+            setPlaceModalTarget(assetId);
+          }
+        )}
+      </ScrollView>
+    );
+  };
 
   const dayBlock = (label: string, value: string, fieldKey: string | null, glow = false, extra?: React.ReactNode) => {
     if (!value && !(editMode && fieldKey)) return null;
@@ -768,6 +886,7 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
   const renderWorld = () => (
     <ScrollView style={{ width }} contentContainerStyle={styles.slideContentTight} showsVerticalScrollIndicator={false}>
       <Text style={[styles.trackedCaps, { color: A.hex, marginBottom: 4 }]}>THE WORLD THAT DAY</Text>
+      <Text style={[styles.worldTitle, { fontFamily: A.font600 }]}>What was happening in the world</Text>
       <Text style={styles.worldSubheader}>
         {date?.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
       </Text>
@@ -775,6 +894,31 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
         <ActivityIndicator size="small" color={A.hex} style={{ marginVertical: 24 }} />
       ) : (
         <>
+          <View style={styles.footballHeaderRow}>
+            <Text style={[styles.footballHeaderText, { fontFamily: A.font600 }]}>📰 Headlines</Text>
+            <Switch
+              value={newsSettings.news}
+              onValueChange={toggleHeadlines}
+              trackColor={{ false: 'rgba(255,255,255,0.15)', true: `rgba(${A.rgb},0.6)` }}
+              thumbColor="#ffffff"
+            />
+          </View>
+          {newsSettings.news && (news.headlines || []).slice(0, 4).map((h, i) => (
+            <View key={`hl-${i}`} style={[styles.newsCard, { backgroundColor: A.card }]}>
+              <View style={styles.newsTopRow}>
+                <Text style={styles.newsSource}>{h.domain}</Text>
+                <Text style={styles.newsIcon}>📰</Text>
+              </View>
+              <Text style={styles.newsText}>{h.title}</Text>
+            </View>
+          ))}
+          {newsSettings.news && (!news.headlines || news.headlines.length === 0) && (
+            <Text style={styles.mutedNote}>No headlines found for this day.</Text>
+          )}
+
+          {newsSettings.wiki && (
+            <Text style={[styles.footballHeaderText, styles.worldSectionLabel, { fontFamily: A.font600 }]}>📅 On this day in history</Text>
+          )}
           {newsSettings.wiki && wikiEvents.map((ev, i) => (
             <View key={`ev-${i}`} style={[styles.newsCard, { backgroundColor: A.card }]}>
               <View style={styles.newsTopRow}>
@@ -823,10 +967,13 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
             <Text style={styles.mutedNote}>No football results for this day.</Text>
           )}
           {newsSettings.weather && news.weather && (
-            <View style={[styles.newsCard, { backgroundColor: A.card }]}>
-              <Text style={styles.newsText}>🌤️ The weather that day</Text>
-              <Text style={styles.weatherBig}>{news.weather.emoji} {news.weather.max}°C / {news.weather.min}°C</Text>
-            </View>
+            <>
+              <Text style={[styles.footballHeaderText, styles.worldSectionLabel, { fontFamily: A.font600 }]}>🌤 Weather</Text>
+              <View style={[styles.newsCard, { backgroundColor: A.card }]}>
+                <Text style={styles.newsText}>The weather that day</Text>
+                <Text style={styles.weatherBig}>{news.weather.emoji} {news.weather.max}°C / {news.weather.min}°C</Text>
+              </View>
+            </>
           )}
         </>
       )}
@@ -866,9 +1013,9 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
   };
 
   const renderSlide = ({ item }: { item: string }) => {
+    if (item.startsWith('photo:') || item.startsWith('ephoto:')) return renderPhotoSlide(item);
     switch (item) {
       case 'cover': return renderCover();
-      case 'photos': return renderPhotos();
       case 'day': return renderDay();
       case 'locations': return renderLocations();
       case 'world': return renderWorld();
@@ -891,17 +1038,18 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
           <Ionicons name="chevron-down" size={26} color="#ffffff" />
         </TouchableOpacity>
         <View style={styles.headerRight}>
-          {accent === 'past' && !saved && (
+          {accent === 'past' && !saved ? (
             <TouchableOpacity style={[styles.saveBtn, { backgroundColor: A.hex }]} onPress={saveDay}>
-              <Text style={styles.saveBtnText}>Save</Text>
+              <Text style={styles.saveBtnText}>Save to Vault</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.editBtn, { borderColor: `rgba(${A.rgb},0.45)` }, editMode && { backgroundColor: `rgba(${A.rgb},0.25)` }]}
+              onPress={() => setEditMode(e => !e)}
+            >
+              <Text style={styles.editBtnText}>{editMode ? 'Done' : 'Edit'}</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity
-            style={[styles.editBtn, { borderColor: `rgba(${A.rgb},0.45)` }, editMode && { backgroundColor: `rgba(${A.rgb},0.25)` }]}
-            onPress={() => setEditMode(e => !e)}
-          >
-            <Text style={styles.editBtnText}>{editMode ? 'Done' : 'Edit'}</Text>
-          </TouchableOpacity>
         </View>
 
         {loading ? (
@@ -1028,6 +1176,22 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
               <View style={[styles.modalBox, { borderColor: `rgba(${A.rgb},0.15)` }]}>
                 <Text style={styles.modalTitle}>Tag people</Text>
+                <View style={[styles.chipRow, { marginBottom: 14 }]}>
+                  {QUICK_TAGS.map(cat => {
+                    const isSel = tagCategories.includes(cat);
+                    return (
+                      <TouchableOpacity
+                        key={cat}
+                        style={[styles.quickTagChip, { borderColor: `rgba(${A.rgb},0.4)` }, isSel && { backgroundColor: `rgba(${A.rgb},0.3)`, borderColor: A.hex }]}
+                        onPress={() => setTagCategories(prev => isSel ? prev.filter(c => c !== cat) : [...prev, cat])}
+                      >
+                        <Text style={[styles.quickTagChipText, isSel && { color: '#ffffff' }]}>
+                          {cat === 'Family' ? '👨‍👩‍👧 Family' : '⭐ Friends'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
                 {[...new Set([...knownPeople, ...tagSelected])].length > 0 && (
                   <View style={styles.chipRow}>
                     {[...new Set([...knownPeople, ...tagSelected])].map(name => {
@@ -1071,7 +1235,7 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
                 <TouchableOpacity style={[styles.modalSave, { backgroundColor: A.hex, marginTop: 16 }]} onPress={saveTags}>
                   <Text style={styles.modalSaveText}>Save</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.modalCancel} onPress={() => { setTagModalId(null); setTagText(''); }}>
+                <TouchableOpacity style={styles.modalCancel} onPress={() => { setTagModalId(null); setTagText(''); setTagCategories([]); }}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
               </View>
@@ -1202,7 +1366,16 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 13, color: '#ffffff' },
   pillTextMuted: { color: 'rgba(255,255,255,0.35)' },
   threeWords: { fontSize: 20, fontWeight: '700', color: '#ffffff', marginTop: 24, lineHeight: 28 },
+  threeWordsBig: { fontSize: 24, fontWeight: '800', marginTop: 16, lineHeight: 32 },
+  spentWithLine: { fontSize: 15, color: 'rgba(255,255,255,0.85)', marginTop: 16, lineHeight: 22 },
+  coverThumbRow: { flexDirection: 'row', gap: 8, marginTop: 20 },
+  coverThumb: { width: 48, height: 48, borderRadius: 10 },
   swipeHint: { fontSize: 13, color: 'rgba(255,255,255,0.3)', marginTop: 40 },
+
+  // Per-photo slides
+  photoSlideHeader: { fontSize: 12, color: 'rgba(255,255,255,0.35)', fontWeight: '600', marginBottom: 10, textAlign: 'center' },
+  photoSlideImageWrap: { width: '90%', alignSelf: 'center', height: SCREEN_H * 0.45, maxHeight: SCREEN_H * 0.55, borderRadius: 16, overflow: 'hidden', marginBottom: 14 },
+  photoSlideImage: { width: '100%', height: '100%' },
 
   // Photos slide
   pairCard: { width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 12 },
@@ -1238,7 +1411,9 @@ const styles = StyleSheet.create({
   locationWith: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
 
   // World slide
-  worldSubheader: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 16, marginTop: 4 },
+  worldTitle: { fontSize: 20, color: '#ffffff', marginTop: 8 },
+  worldSubheader: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 8, marginTop: 4 },
+  worldSectionLabel: { marginTop: 18, marginBottom: 8 },
   newsCard: { borderRadius: 12, padding: 14, marginBottom: 8 },
   newsTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   newsYearPill: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 },
@@ -1286,6 +1461,8 @@ const styles = StyleSheet.create({
   modalCancel: { alignItems: 'center', padding: 10 },
   modalCancelText: { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
   tagChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+  quickTagChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1.5 },
+  quickTagChipText: { fontSize: 13, color: 'rgba(255,255,255,0.6)', fontWeight: '700' },
   tagChipText: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
   tagInputRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   tagAddBtn: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },

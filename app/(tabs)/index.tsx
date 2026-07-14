@@ -221,6 +221,7 @@ export default function OnThisDay() {
   const [editingPlaceField, setEditingPlaceField] = useState<string | null>(null);
   const [placeFieldText, setPlaceFieldText] = useState('');
   const [placesView, setPlacesView] = useState<'map' | 'list'>('map');
+  const [managePlace, setManagePlace] = useState<Place | null>(null);
   const [placeSearch, setPlaceSearch] = useState('');
   const [placeSearchResults, setPlaceSearchResults] = useState<any[]>([]);
   const [selectedMapPlace, setSelectedMapPlace] = useState<Place | null>(null);
@@ -678,6 +679,24 @@ export default function OnThisDay() {
     );
   };
 
+  const deletePlaceById = (place: Place) => {
+    Alert.alert(
+      `Delete ${place.name}?`,
+      'Photos and days stay in your library — only the place is removed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            const updated = places.filter(p => p.id !== place.id);
+            await savePlaces(updated);
+            setManagePlace(null);
+            setSelectedMapPlace(prev => prev && prev.id === place.id ? null : prev);
+          }
+        },
+      ]
+    );
+  };
+
   const deletePlace = () => {
     if (!selectedPlace) return;
     const placeId = selectedPlace.id;
@@ -1092,7 +1111,7 @@ export default function OnThisDay() {
                         onPress={() => { setSelectedMapPlace(place); setSelectedPlace(place); setShowPlaceProfile(true); }}
                         style={[
                           styles.placeCard,
-                          { height: Math.round(height * 0.5) },
+                          { height: Math.min(Math.round(height * 0.28), 220) },
                           horizontal ? { width: Math.round(width * 0.72), marginRight: 12 } : null,
                           !place.coverPhotoUri && { borderColor: PIN_COLOURS[place.type] + '4D' },
                         ]}
@@ -1104,6 +1123,9 @@ export default function OnThisDay() {
                         <View style={styles.placeTypeBadge}>
                           <Text style={styles.placeTypeBadgeText}>{place.type.toUpperCase()}</Text>
                         </View>
+                        <TouchableOpacity style={styles.placeManageBtn} onPress={() => setManagePlace(place)}>
+                          <Ionicons name="ellipsis-horizontal" size={16} color="#ffffff" />
+                        </TouchableOpacity>
                         <View style={styles.placeCardBottom}>
                           <Text style={styles.placeCardName}>{place.name}</Text>
                           {!!place.locationName && <Text style={styles.placeCardLocation} numberOfLines={1}>{place.locationName}</Text>}
@@ -1222,6 +1244,41 @@ export default function OnThisDay() {
           )}
         </View>
       )}
+
+      {/* ═══ MANAGE PLACE SHEET ═══ */}
+      <Modal visible={managePlace !== null} animationType="slide" transparent>
+        <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setManagePlace(null)}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <View style={styles.menuBox}>
+            <Text style={styles.menuTitle}>{managePlace?.name}</Text>
+            <TouchableOpacity style={styles.menuItem} onPress={() => {
+              const place = managePlace;
+              setManagePlace(null);
+              if (place) {
+                setSelectedMapPlace(place);
+                setSelectedPlace(place);
+                setShowPlaceProfile(true);
+              }
+            }}>
+              <Text style={styles.menuItemEmoji}>✏️</Text>
+              <View>
+                <Text style={styles.menuItemText}>Edit details</Text>
+                <Text style={styles.menuItemSub}>Open the place profile — tap any field to edit</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.menuItem, styles.menuItemDanger]} onPress={() => managePlace && deletePlaceById(managePlace)}>
+              <Text style={styles.menuItemEmoji}>🗑️</Text>
+              <View>
+                <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete place</Text>
+                <Text style={styles.menuItemSub}>Photos and days stay in your library</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuCancel} onPress={() => setManagePlace(null)}>
+              <Text style={styles.menuCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ═══ DAY CARD ═══ */}
       <DayCard
@@ -1739,14 +1796,14 @@ const styles = StyleSheet.create({
   yearCardBg: { ...StyleSheet.absoluteFillObject, opacity: 0.88 },
   yearGhostWrap: { position: 'absolute', top: -10, right: -6 },
   yearGhost: { fontSize: 108, fontFamily: 'Fraunces_800ExtraBold', color: 'rgba(155,114,255,0.08)' },
-  yearBadge: { position: 'absolute', top: 14, left: 14, backgroundColor: 'rgba(13,10,20,0.55)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.45)', borderRadius: 20, paddingHorizontal: 13, paddingVertical: 5 },
-  yearBadgeText: { fontSize: 14, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff', letterSpacing: 1.5 },
+  yearBadge: { position: 'absolute', top: 14, left: 14, backgroundColor: 'rgba(13,10,20,0.55)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.45)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 7 },
+  yearBadgeText: { fontSize: 17, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff', letterSpacing: 1.5 },
   yearCardBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 12 },
   yearCardDivider: { height: 1, backgroundColor: 'rgba(155,114,255,0.2)', marginHorizontal: 14, marginBottom: 10 },
   yearCardBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14 },
-  yearDateLabel: { color: '#ffffff', fontSize: 13 },
+  yearDateLabel: { color: '#ffffff', fontSize: 15 },
   yearDateDay: { fontWeight: '700' },
-  yearPhotoCount: { color: 'rgba(155,114,255,0.75)', fontSize: 12 },
+  yearPhotoCount: { color: 'rgba(155,114,255,0.75)', fontSize: 14 },
   yearEmptyRow: { height: 80, backgroundColor: 'rgba(255,255,255,0.03)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.1)', borderRadius: 18, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 12 },
   yearEmptyPill: { backgroundColor: 'rgba(155,114,255,0.08)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.15)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 5 },
   yearEmptyPillText: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '700' },
@@ -1835,6 +1892,7 @@ const styles = StyleSheet.create({
   placeTypeBadge: { position: 'absolute', top: 12, right: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(155,114,255,0.45)', backgroundColor: 'rgba(13,10,20,0.55)' },
   placeTypeBadgeTop: { position: 'absolute', top: 20, right: 16, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(155,114,255,0.45)', backgroundColor: 'rgba(13,10,20,0.55)' },
   placeTypeBadgeText: { fontSize: 10, fontWeight: '700', color: '#ffffff' },
+  placeManageBtn: { position: 'absolute', top: 12, left: 12, width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', zIndex: 2 },
   placeCardBottom: { position: 'absolute', bottom: 14, left: 14, right: 90 },
   placeCardName: { fontSize: 20, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff' },
   placeCardLocation: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
