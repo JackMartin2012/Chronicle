@@ -31,6 +31,7 @@ The app connects your past (photos from this date in previous years) with your p
 - expo-blur (used on all bottom-sheet modals across all files)
 - @expo/vector-icons (Ionicons)
 - expo-haptics (mood slider ticks, save-day success)
+- react-native-svg (day completeness ring on The Present header)
 - react-native-maps (Places map view — Apple Maps in Expo Go on iOS)
 - @expo-google-fonts/fraunces (display font on The Past — weights 300/400/600/800)
 - `.env` (gitignored): `EXPO_PUBLIC_FOOTBALL_API_KEY` for football-data.org
@@ -44,9 +45,9 @@ app/
   onboarding.tsx      — 4-slide onboarding (already built)
   settings.tsx        — Settings screen (news feed toggles)
   (tabs)/
-    _layout.tsx       — custom tab bar layout
-    index.tsx         — The Past screen
-    explore.tsx       — The Present screen
+    _layout.tsx       — custom tab bar layout (labels: "Your Past" / "Your Present")
+    index.tsx         — Your Past screen
+    explore.tsx       — Your Present screen
     selfie.tsx        — Daily selfie screen
 components/
   DayCard.tsx         — SHARED swipeable day carousel (replaces trading card)
@@ -70,15 +71,16 @@ components/
 - **Glass modal box:** `rgba(24,16,42,0.98)` with `rgba(155,114,255,0.15)` border
 - **Fraunces font** on: "The Past" title, year numbers/badges, trading card date + section headers, people names, month headers, place names
 
-### The Present (explore.tsx) — overhauled July 2026
-- **Background:** `#08090f` (cold blue-black)
-- **Card background:** `#0d1220`
+### Your Present (explore.tsx) — palette fixed July 2026
+- **Background:** `#0b1526` (visibly blue-black — the original `#08090f` read as near-invisible black next to Your Past's purple, so it was replaced)
+- **Card background:** `#101c33`
 - **Blue accent:** `#4a90d9` (rgba form: 74,144,217)
-- **Border default:** `rgba(74,144,217,0.2)` / **active:** `rgba(74,144,217,0.45)`
+- **Border default:** `rgba(74,144,217,0.22)` / **filled/active:** `rgba(74,144,217,0.35)`
 - **Capsule gold:** `#f5c842` — used ONLY for Future Capsules, nothing else
 - **Ghost watermark:** `rgba(74,144,217,0.08)`
-- **Space Grotesk** on: "The Present" title, section/question headers, month headers, favourite names
-- **Glass modal box:** `rgba(10,14,22,0.98)` with `rgba(74,144,217,0.15)` border
+- **Space Grotesk** on: "Your Present" title, section/question headers, month headers, favourite names
+- **Glass modal box:** `rgba(16,28,51,0.98)` with `rgba(74,144,217,0.15)` border
+- Screen title/tab label display text is **"Your Past" / "Your Present"** (renamed from "The Past"/"The Present"); internal file names, variable names, and AsyncStorage keys are unchanged
 
 ### Selfie (unchanged)
 - **Selfie background:** `#0d0d0d` (neutral dark)
@@ -153,7 +155,7 @@ Key points:
 Shows photos from this exact date in previous years. Lets the user add context, captions, tag people, save days to Vault, document places on a map, and browse people.
 
 ### Four tabs: On This Day | Vault | Places | People
-Header: "The Past" (Fraunces 32) left, gear icon right → `router.push('/settings')`.
+Header: "Your Past" (Fraunces 32) left, gear icon right → `router.push('/settings')`.
 Tab pills: active `rgba(155,114,255,0.18)` bg + `rgba(155,114,255,0.35)` border, fontSize 11.
 
 ---
@@ -286,31 +288,26 @@ Every day cell is a two-layer structure:
 
 ---
 
-## Screen 2 — The Present (explore.tsx)
+## Screen 2 — Your Present (explore.tsx)
 
 ### Purpose
 Daily journal screen. Documents today so it becomes a flashback in the future.
 
 ### Three tabs: Today | Your Days | Favourites
 
-### Today Tab (restructured July 2026 — card order top to bottom)
-All cards: `#0d1220` bg, borderRadius 16, border `rgba(74,144,217,0.2)`, marginHorizontal 16.
-1. **THE CAPTURE PAIR** — BeReal-style single card (height 300): main photo + selfie inset (100×133, white border) top-left, tap inset to swap (`pairSwapped`); two dashed prompts when empty; 64×64 extraPhotos strip + "+" tile (multi-select library); "View all selfies →" link to selfie screen (face timelapse untouched)
-2. **MOOD** — PanResponder slider, 5 stops 😞😐🙂😊🤩, `Haptics.selectionAsync()` per stop, thumb scales while dragging; saves emoji to `entry.mood` (old 😔 mapped to 😞 for display)
-3. **TODAY IN THREE WORDS** — three chip TextInputs (maxLength 16) → `entry.threeWords`
-4. **TODAY'S QUESTION** — rotating 12-question pool seeded by dateKey (`getSeededPrompt`); stores `dailyQuestion` + `dailyAnswer`
-5. **FOR FUTURE YOU** — reflection card with blue glow border; 6-question pool, seed offset +7; stores `reflectionQuestion` + `reflectionAnswer`
-6. **YOUR DAY** — ✍️ Write (inline multiline → `dayDescription`) | 🎙 Speak (expo-av record, unchanged); memo play row if exists
-7. **WHAT I COOKED** — dish input + photo slot; "Save to recipes ★" creates a Recipe favourite (dedupe per day → "Saved ✓")
-8. **THE SOUNDTRACK** — renamed Today's Song, same modal/fields
-9. **WHAT I WATCHED** — plain input → `entry.watched`
-10. **WHO MADE TODAY BETTER** — renamed, same tagging chips + autocomplete modal
-11. **WHERE TODAY TOOK YOU** — location rows (name + optional withWho) + BlurView add modal, no geocoding; weather card after it
-12. Daily reminders (Switch now)
-13. **FUTURE CAPSULES** — gold-only (`#f5c842`): sealed rows show "Opens in X days" countdown; reveal modal shows a gold capsule graphic (spring scale-in) for 1.2s, then message/photo fade in over 600ms
-14. **Save today to your days** button — persists entry, sets `saved_day_${todayKey}`, success haptic, opens DayCard (accent 'present') for today
+### Today Tab (rebuilt July 2026 — consolidated into fewer, denser cards)
+All cards: `#101c33` bg, borderRadius 16, border `rgba(74,144,217,0.22)`, marginHorizontal 16.
 
-Removed: old selfie card + its camera (selfie lives on selfie screen), Highlight & What I Learned cards (legacy fields still render in DayCard for old entries).
+**Header row**: "Your Present" (Space Grotesk 32) + date + italic tagline on the left; a **DayRing** (react-native-svg, 44×44, blue progress arc, centred "X/8" label) on the right. The ring counts 8 booleans live from local + entry state: main photo, pair selfie, all 3 threeWords filled, mood set, description-or-voice-memo, daily answer, reflection answer, and any of song/watched/cooked/people/locations.
+
+1. **HERO CAPTURE CARD** — one 340-height bordered shell replacing the old separate photo+selfie+extras cards: main photo fills it, selfie inset (92×133, white border) top-left tappable to swap (`pairSwapped`), bottom overlay row (over a gradient scrim) holds the 46×46 extras strip + "+" tile and a "X photos today" count; empty state shows two dashed prompts inside the same shell. "View all selfies →" sits just below the card, not inside it (selfie timelapse screen untouched).
+2. **THREE WORDS + MOOD** (combined card) — three chip TextInputs (`entry.threeWords`) then a redesigned **MoodSlider**: gradient-filled track, 5 stops 😞😐🙂😊🤩 that individually scale/lift/glow via `Animated.spring` when selected, tap or drag (PanResponder), `Haptics.selectionAsync()` per stop change. Saves emoji to `entry.mood`.
+3. **THE JOURNAL CARD** (combined card, hairline dividers `rgba(74,144,217,0.15)`) — Section A: ✍️ Write / 🎙 Speak (dayDescription / voice memo, unchanged expo-av flow); Section B: TODAY'S QUESTION (rotating 12-question pool, `getSeededPrompt`, → `dailyQuestion`/`dailyAnswer`); Section C: **FOR FUTURE YOU** reflection in its own glowing inner container (`shadowColor #4a90d9`) — 6-question pool, seed offset +7, → `reflectionQuestion`/`reflectionAnswer`. This block is the visual centrepiece of the tab.
+4. **THE DETAILS GRID** — 2-column, 6 tiles (Soundtrack 🎵 / Watched 📺 / Cooked 🍳 / People 👥 / Places 📍 / Weather ⛅), each an `AnimatedCard`. Filled tiles get `#101c33` + `rgba(74,144,217,0.35)` border and an accent label; empty tiles are faint and read "Add...". Tapping opens the field's existing flow: song → existing song modal; watched/cooked → new BlurView modals wrapping the same inline inputs (cooked keeps "Save to recipes ★", dedupes per day); people → existing tagging modal; places → new `showLocationsModal` (list + remove, nests the existing `showAddLocation` add-form modal inside it); weather is display-only (auto-fetches once, tap-to-retry only while empty).
+5. **FUTURE CAPSULES** — collapsed to a single compact gold row (`capsuleRow`) showing "N sealed · next opens in X days" or "N ready to open 🎁" (row goes full gold when ready). Tapping opens a full BlurView sheet (`showCapsulesSheet`) containing the sealed/ready list, a "Seal a new capsule" button, and the daily reminders toggle in its footer; the existing create-capsule and reveal modals are nested inside this sheet's Modal (not top-level) per the no-stacked-modals rule. Reveal keeps the 1.2s gold capsule anticipation animation before the message fades in.
+6. **Save today → becomes your day card** button — blue `LinearGradient` (135°-ish diagonal), persists entry, sets `saved_day_${todayKey}`, success haptic, opens DayCard (accent 'present') for today.
+
+Legacy fields (`highlight`, `learned`) have no input UI on this tab anymore but still render in DayCard for old entries.
 
 ### Your Days Tab
 - Same portrait card calendar as Vault (calSlot/calCard two-layer structure), Space Grotesk month headers, blue year pills
@@ -460,5 +457,13 @@ git push
 
 ### Prior session (same July 2026 arc)
 - The Past design system `#17102a`/Fraunces; Places map view; Friends → People; `app/settings.tsx`; react-native-maps installed
+
+## Session Summary (July 2026 — Present palette fix, rename, Today tab consolidation)
+
+- **Palette bug fixed**: `#08090f`/`#0d1220` read as near-invisible black — replaced everywhere in explore.tsx with `#0b1526`/`#101c33` so Your Present reads unmistakably blue next to Your Past's purple. Card border default now `rgba(74,144,217,0.22)`, filled/active `0.35`
+- **Renamed** "The Past"/"The Present" → **"Your Past"/"Your Present"** — display strings only (header titles, tab bar labels, `Tabs.Screen` titles in `_layout.tsx`); file names, variables, and AsyncStorage keys untouched
+- **Today tab consolidated** from 14 separate cards down to 6 sections: header row gained a `DayRing` (react-native-svg) completeness indicator; capture pair + extras merged into one hero card shell; three words + mood merged into one card with a rebuilt gradient/glow MoodSlider; write/speak + daily question + reflection merged into one "journal card" with hairline dividers; soundtrack/watched/cooked/people/places/weather became a 2-column tap-to-open tile grid (`AnimatedCard`); capsules collapsed to a compact gold summary row that opens a full sheet with the create/reveal modals nested inside (daily reminders toggle moved into its footer)
+- Installed `react-native-svg` for the ring
+- No data-layer changes — all existing state, handlers, and AsyncStorage logic kept; this was layout/grouping + a bug fix only
 
 *Chronicle is functional and running on iOS via Expo Go. All core screens complete. Next up: privacy policy page, then TestFlight.*
