@@ -48,10 +48,11 @@ app/
     _layout.tsx       — custom tab bar layout (labels: "Your Past" / "Your Present")
     index.tsx         — Your Past screen
     explore.tsx       — Your Present screen
-    selfie.tsx        — Daily selfie screen
+    selfie.tsx        — thin wrapper: renders <DailySelfie standalone /> (kept for old links)
 components/
-  DayCard.tsx         — SHARED swipeable day carousel (replaces trading card)
-  newsFeed.ts         — shared Wikipedia/football/weather fetch + 30-day cache
+  DayCard.tsx         — SHARED swipeable day carousel (replaces trading card); exports hashUri()
+  DailySelfie.tsx     — Daily Selfie feature (4th tab in Your Present + selfie.tsx route)
+  newsFeed.ts         — shared Wikipedia/football/weather/GDELT-headlines fetch + 30-day cache
 ```
 
 ---
@@ -170,12 +171,17 @@ Tab pills: active `rgba(155,114,255,0.18)` bg + `rgba(155,114,255,0.35)` border,
 - **Archive card** at the bottom (dashed border, 📜 ghost) → full-page this-day-in-history modal (events before your photos began / births / deaths / holidays, cached under `archive_cache_${MM-DD}`)
 
 ### DAYCARD (components/DayCard.tsx — SHARED, replaces the trading card)
-Full-screen Modal, `pageSheet`, horizontal paging FlatList with animated pagination dots (active dot stretches to 20px). Props: `dateKey`, `accent: 'past' | 'present'`, `visible`, `onClose`, `onOpenDate`.
+Full-screen Modal, `pageSheet`, horizontal paging FlatList with animated pagination dots (active dot stretches to 20px). Props: `dateKey`, `accent: 'past' | 'present'`, `visible`, `onClose`, `onOpenDate`. Exports `hashUri(uri)` (djb2→base36) for keying ImagePicker-URI captions.
 - accent 'past' → `#17102a` bg, `#1e1535` cards, purple, Fraunces headers
-- accent 'present' → `#08090f` bg, `#0d1220` cards, blue, Space Grotesk headers
-- Header: chevron-down close (left); Edit/Done toggle (right); past accent also gets a purple "Save" pill when unsaved (`saved_day_` + `tc_description_` + `tc_location_` + `tc_thumb_`)
-- Slides render only if they have content: **COVER** (always — huge date, ghost mood emoji, weather/location/mood pills, three words, "Swipe →"), **PHOTOS** (BeReal pair with swappable inset for present entries; focused photo + thumb strip for past MediaLibrary photos; edit mode gets ⋯ menu + caption/tag/place action row), **YOUR DAY** (description pull-quote, voice memo play, labelled blocks: daily question, reflection with glow border, highlight/learned legacy, soundtrack, watched, cooked, people chips, 5 day-context fields), **WHERE TODAY TOOK YOU** (if ≥2 locations), **THE WORLD** (news via components/newsFeed.ts, football toggle inline; past accent always, present only if saved), **ONE YEAR AGO** ("Open that day" → onOpenDate swaps the dateKey in place)
-- Edit mode: every field opens a nested BlurView editor; description writes entry.dayDescription if a day_entry exists, else `tc_description_`
+- accent 'present' → `#0b1526` bg, `#101c33` cards, blue, Space Grotesk headers
+- **Unsaved past days open directly in EDIT mode** with a prominent "Save to Vault" pill (Edit toggle hidden until saved). Saving writes `saved_day_` + `tc_description_` + `tc_location_` + `tc_thumb_` + `day_summary_{dateKey}` (aggregated {people, categories, location}) and drops back to view mode. Saved past days and present days open in view mode with the Edit toggle
+- **COVER (past)**: "ON THIS DAY IN {year}" + huge Fraunces date, weather/photo-count/In-Vault pills, aggregated "👥 With ..." line (people tags + Family/Friends categories, falls back to day-context 'with'), 📍 location line, hint "Swipe to add your story →" in edit mode
+- **COVER (present)**: weekday caps + date, threeWords BIG (24/800 accent), pills, mini 4-thumb strip, ghost mood watermark
+- **PER-PHOTO SLIDES** — every visible photo gets its own slide ("Photo 2 of 5" header, 90%-width contain image ≤55% screen height, tap → fullscreen). Asset-backed photos: ⋯ menu (cover/share/copy/hide) + 💬 CAPTION / 👥 WHO'S IN THIS / 📍 WHERE rows (tappable in edit mode). Present entry photos (ImagePicker URIs): caption row only, stored at `caption_{hashUri(uri)}`. Cover photo's slide first; hidden photos don't render
+- Tag people modal has **Family/Friends quick-tag chips** → `photo_tags_{assetId}` (JSON array, separate from names)
+- **YOUR DAY** slide unchanged (pull-quote, voice memo, labelled blocks, 5 context fields)
+- **THE WORLD**: header "What was happening in the world"; sections 📰 Headlines (GDELT via newsFeed.ts, inline toggle like football) / 📅 On this day in history / ⚽ Football / 🌤 Weather; past accent always, present only if saved
+- **ONE YEAR AGO** renders for accent 'present' ONLY
 - All child modals nested inside the DayCard Modal JSX; tag-people confirms before adding brand-new names
 - index.tsx opens it from year cards / vault days / person profile days / place linked days; explore.tsx from Your Days calendar + Save Day button
 
@@ -199,7 +205,7 @@ Two views toggled by a Map | List segmented pill (absolute top-right). Default: 
 
 **List view**:
 - Empty state: map icon + "Your Places" + three coloured add buttons (Add a Home / Add a Trip / Add a Meaningful Place) that pre-set the type
-- Non-empty: 🏠 Homes / ✈️ Places I've Been / ❤️ Places That Matter sections (headers in category colour), place cards height 180 borderRadius 16
+- Non-empty: 🏠 Homes / ✈️ Trips / ❤️ Places That Matter sections (headers in category colour); place cards height `min(28% screen, 220)`, horizontal scroll when >1 in a category; each card has a ⋯ button (top-left) → BlurView action sheet: Edit details (opens profile) / Delete place (confirm)
 - + FAB (bottom 100, right 16) in both views
 
 **Create Place modal** (BlurView, slide up): type pills, name, location, cover photo picker; saves lat/lon when opened from a search result
@@ -282,6 +288,10 @@ Every day cell is a two-layer structure:
 - `football_requests_available` / `football_reset_time` — rate-limit bookkeeping for football-data.org
 - `hidden_photos` — JSON array of hidden asset IDs
 - `cover_photos` — JSON object {year: assetId}
+- `photo_tags_${assetId}` — JSON array of quick-tag categories (Family/Friends)
+- `day_summary_${dateKey}` — JSON {people, categories, location} aggregated on vault save
+- `caption_${hashUri(uri)}` — captions for ImagePicker-URI photos (present-day entry photos)
+- `show_news_feed` — 'true'/'false' GDELT headlines toggle (settings + inline on World slide; default true)
 - `person_photo_${name}` — URI string for person profile photo
 - `person_desc_${name}`, `person_since_${name}`, `person_bday_${name}`, `person_phone_${name}`, `person_insta_${name}`, `person_notes_${name}` — person about fields
 - `places` — JSON array of Place objects (now with latitude/longitude)
@@ -293,14 +303,14 @@ Every day cell is a two-layer structure:
 ### Purpose
 Daily journal screen. Documents today so it becomes a flashback in the future.
 
-### Three tabs: Today | Your Days | Favourites
+### Four tabs: Today | Your Days | Daily Selfie | Favourites
 
 ### Today Tab (rebuilt July 2026 — consolidated into fewer, denser cards)
 All cards: `#101c33` bg, borderRadius 16, border `rgba(74,144,217,0.22)`, marginHorizontal 16.
 
 **Header row**: "Your Present" (Space Grotesk 32) + date + italic tagline on the left; a **DayRing** (react-native-svg, 44×44, blue progress arc, centred "X/8" label) on the right. The ring counts 8 booleans live from local + entry state: main photo, pair selfie, all 3 threeWords filled, mood set, description-or-voice-memo, daily answer, reflection answer, and any of song/watched/cooked/people/locations.
 
-1. **HERO CAPTURE CARD** — one 340-height bordered shell replacing the old separate photo+selfie+extras cards: main photo fills it, selfie inset (92×133, white border) top-left tappable to swap (`pairSwapped`), bottom overlay row (over a gradient scrim) holds the 46×46 extras strip + "+" tile and a "X photos today" count; empty state shows two dashed prompts inside the same shell. "View all selfies →" sits just below the card, not inside it (selfie timelapse screen untouched).
+1. **HERO CAPTURE CARD** — one 340-height bordered shell replacing the old separate photo+selfie+extras cards: main photo fills it, selfie inset (92×133, white border) top-left tappable to swap (`pairSwapped`), bottom overlay row (over a gradient scrim) holds the 46×46 extras strip + "+" tile and a "X photos today" count; empty state shows two dashed prompts inside the same shell. "✍️ Tell the story of these photos →" sits just below the card — opens a BlurView captions sheet listing today's photos (56×56 thumbs + inline caption inputs, saved to `caption_{hashUri(uri)}`); these captions surface on DayCard's per-photo slides. The Daily Selfie feature moved to its own tab (components/DailySelfie.tsx, Present palette, explainer line on top, camera/grid/slideshow unchanged).
 2. **THREE WORDS + MOOD** (combined card) — three chip TextInputs (`entry.threeWords`) then a redesigned **MoodSlider**: gradient-filled track, 5 stops 😞😐🙂😊🤩 that individually scale/lift/glow via `Animated.spring` when selected, tap or drag (PanResponder), `Haptics.selectionAsync()` per stop change. Saves emoji to `entry.mood`.
 3. **THE JOURNAL CARD** (combined card, hairline dividers `rgba(74,144,217,0.15)`) — Section A: ✍️ Write / 🎙 Speak (dayDescription / voice memo, unchanged expo-av flow); Section B: TODAY'S QUESTION (rotating 12-question pool, `getSeededPrompt`, → `dailyQuestion`/`dailyAnswer`); Section C: **FOR FUTURE YOU** reflection in its own glowing inner container (`shadowColor #4a90d9`) — 6-question pool, seed offset +7, → `reflectionQuestion`/`reflectionAnswer`. This block is the visual centrepiece of the tab.
 4. **THE DETAILS GRID** — 2-column, 6 tiles (Soundtrack 🎵 / Watched 📺 / Cooked 🍳 / People 👥 / Places 📍 / Weather ⛅), each an `AnimatedCard`. Filled tiles get `#101c33` + `rgba(74,144,217,0.35)` border and an accent label; empty tiles are faint and read "Add...". Tapping opens the field's existing flow: song → existing song modal; watched/cooked → new BlurView modals wrapping the same inline inputs (cooked keeps "Save to recipes ★", dedupes per day); people → existing tagging modal; places → new `showLocationsModal` (list + remove, nests the existing `showAddLocation` add-form modal inside it); weather is display-only (auto-fetches once, tap-to-retry only while empty).
@@ -465,5 +475,14 @@ git push
 - **Today tab consolidated** from 14 separate cards down to 6 sections: header row gained a `DayRing` (react-native-svg) completeness indicator; capture pair + extras merged into one hero card shell; three words + mood merged into one card with a rebuilt gradient/glow MoodSlider; write/speak + daily question + reflection merged into one "journal card" with hairline dividers; soundtrack/watched/cooked/people/places/weather became a 2-column tap-to-open tile grid (`AnimatedCard`); capsules collapsed to a compact gold summary row that opens a full sheet with the create/reveal modals nested inside (daily reminders toggle moved into its footer)
 - Installed `react-native-svg` for the ring
 - No data-layer changes — all existing state, handlers, and AsyncStorage logic kept; this was layout/grouping + a bug fix only
+
+## Session Summary (July 2026 — DayCard per-photo carousel + selfie tab)
+
+- **DayCard**: unsaved past days open straight into edit mode with a "Save to Vault" pill; past cover is a warm "ON THIS DAY IN {year}" welcome with aggregated "With ..." line; each photo now gets its own carousel slide with caption/who/where rows; Family/Friends quick-tags (`photo_tags_`); `day_summary_` written on save; One Year Ago is present-only; present accent updated to `#0b1526`/`#101c33`
+- **World slide**: GDELT live headlines (free, no key) as a 4th source with inline + settings toggle (`show_news_feed`); section sub-labels added
+- **Daily Selfie** extracted to `components/DailySelfie.tsx`, recoloured to the Present palette, now the 3rd pill tab in Your Present; selfie.tsx is a thin wrapper
+- **Today hero**: "Tell the story of these photos →" captions sheet (per-URI `caption_{hashUri(uri)}`) replaced the selfie link; captions surface on DayCard photo slides
+- **Places list**: cards capped at min(28% screen, 220); ⋯ manage sheet per card (Edit details / Delete with confirm)
+- **Year cards**: bigger badge (17pt) and bottom-bar text (15/14pt)
 
 *Chronicle is functional and running on iOS via Expo Go. All core screens complete. Next up: privacy policy page, then TestFlight.*
