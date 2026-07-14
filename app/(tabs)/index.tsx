@@ -793,7 +793,7 @@ export default function OnThisDay() {
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <View>
-            <Text style={styles.headerTitle}>The Past</Text>
+            <Text style={styles.headerTitle}>Your Past</Text>
             <Text style={styles.headerDate}>{dateString}</Text>
           </View>
           <TouchableOpacity style={styles.headerGear} onPress={() => router.push('/settings')}>

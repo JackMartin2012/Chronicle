@@ -18,13 +18,13 @@ function CustomTabBar() {
         <View style={[styles.pill, isPast && styles.pillActive]}>
           <Ionicons name="time-outline" size={26} color={isPast ? '#9b72ff' : 'rgba(255,255,255,0.4)'} />
         </View>
-        <Text style={{ color: isPast ? '#9b72ff' : 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600', marginTop: 2 }}>The Past</Text>
+        <Text style={{ color: isPast ? '#9b72ff' : 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600', marginTop: 2 }}>Your Past</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.tab} onPress={() => router.push('/explore')}>
         <View style={[styles.pill, isPresent && styles.pillActive]}>
           <Ionicons name="today-outline" size={26} color={isPresent ? '#4a90d9' : 'rgba(255,255,255,0.4)'} />
         </View>
-        <Text style={{ color: isPresent ? '#4a90d9' : 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600', marginTop: 2 }}>The Present</Text>
+        <Text style={{ color: isPresent ? '#4a90d9' : 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '600', marginTop: 2 }}>Your Present</Text>
       </TouchableOpacity>
     </View>
   );
@@ -58,8 +58,8 @@ const styles = StyleSheet.create({
 export default function TabLayout() {
   return (
     <Tabs tabBar={() => <CustomTabBar />} screenOptions={{ headerShown: false }}>
-      <Tabs.Screen name="index" options={{ title: 'The Past' }} />
-      <Tabs.Screen name="explore" options={{ title: 'The Present' }} />
+      <Tabs.Screen name="index" options={{ title: 'Your Past' }} />
+      <Tabs.Screen name="explore" options={{ title: 'Your Present' }} />
       <Tabs.Screen name="selfie" options={{ href: null }} />
     </Tabs>
   );

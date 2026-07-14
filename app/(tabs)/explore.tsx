@@ -30,6 +30,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import DayCard from '../../components/DayCard';
 
 const { width } = Dimensions.get('window');
@@ -178,9 +179,46 @@ const AnimatedCard = ({ onPress, style, children }: {
   );
 };
 
-// ── MOOD SLIDER ──────────────────────────────────────────────────────────────
-const THUMB_W = 44;
+// ── DAY COMPLETENESS RING ────────────────────────────────────────────────────
+const RING_SIZE = 44;
+const RING_STROKE = 4;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
+const DayRing = ({ completed, total }: { completed: number; total: number }) => {
+  const progress = total > 0 ? completed / total : 0;
+  const dashOffset = RING_CIRCUMFERENCE * (1 - progress);
+  return (
+    <View style={ringStyles.wrap}>
+      <Svg width={RING_SIZE} height={RING_SIZE}>
+        <Circle
+          cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS}
+          stroke="rgba(255,255,255,0.08)" strokeWidth={RING_STROKE} fill="none"
+        />
+        <Circle
+          cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS}
+          stroke="#4a90d9" strokeWidth={RING_STROKE} fill="none"
+          strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          rotation="-90"
+          origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
+        />
+      </Svg>
+      <View style={ringStyles.labelWrap} pointerEvents="none">
+        <Text style={ringStyles.labelText}>{completed}/{total}</Text>
+      </View>
+    </View>
+  );
+};
+
+const ringStyles = StyleSheet.create({
+  wrap: { width: RING_SIZE, height: RING_SIZE },
+  labelWrap: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+  labelText: { fontSize: 11, fontWeight: '700', color: '#ffffff' },
+});
+
+// ── MOOD SLIDER ──────────────────────────────────────────────────────────────
 const MoodSlider = ({ value, onChange }: { value: string; onChange: (emoji: string) => void }) => {
   const [trackWidth, setTrackWidth] = useState(0);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -188,12 +226,14 @@ const MoodSlider = ({ value, onChange }: { value: string; onChange: (emoji: stri
   const lastIndex = useRef(-1);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const thumbScale = useRef(new Animated.Value(1)).current;
+
+  const scaleAnims = useRef(MOODS.map(() => new Animated.Value(1))).current;
+  const liftAnims = useRef(MOODS.map(() => new Animated.Value(0))).current;
+  const opacityAnims = useRef(MOODS.map(() => new Animated.Value(0.35))).current;
 
   const indexFromX = (x: number) => {
-    const usable = trackWidthRef.current - THUMB_W;
-    if (usable <= 0) return 0;
-    return Math.min(4, Math.max(0, Math.round((x - THUMB_W / 2) / (usable / 4))));
+    if (trackWidthRef.current <= 0) return 0;
+    return Math.min(4, Math.max(0, Math.round((x / trackWidthRef.current) * 4)));
   };
 
   const pan = useRef(
@@ -201,7 +241,6 @@ const MoodSlider = ({ value, onChange }: { value: string; onChange: (emoji: stri
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e) => {
-        Animated.spring(thumbScale, { toValue: 1.3, useNativeDriver: true, speed: 40 }).start();
         const idx = indexFromX(e.nativeEvent.locationX);
         lastIndex.current = idx;
         Haptics.selectionAsync();
@@ -216,12 +255,10 @@ const MoodSlider = ({ value, onChange }: { value: string; onChange: (emoji: stri
         }
       },
       onPanResponderRelease: () => {
-        Animated.spring(thumbScale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 8 }).start();
         if (lastIndex.current >= 0) onChangeRef.current(MOODS[lastIndex.current]);
         setDragIndex(null);
       },
       onPanResponderTerminate: () => {
-        Animated.spring(thumbScale, { toValue: 1, useNativeDriver: true, speed: 40 }).start();
         setDragIndex(null);
       },
     })
@@ -229,41 +266,58 @@ const MoodSlider = ({ value, onChange }: { value: string; onChange: (emoji: stri
 
   const valueIndex = MOODS.indexOf(value === '😔' ? '😞' : value);
   const displayIndex = dragIndex !== null ? dragIndex : valueIndex;
-  const usable = Math.max(0, trackWidth - THUMB_W);
-  const thumbLeft = displayIndex >= 0 ? (displayIndex * usable) / 4 : usable / 2;
+
+  useEffect(() => {
+    MOODS.forEach((_, i) => {
+      const isSel = i === displayIndex;
+      Animated.spring(scaleAnims[i], { toValue: isSel ? 1.15 : 1, useNativeDriver: true, speed: 20, bounciness: 8 }).start();
+      Animated.spring(liftAnims[i], { toValue: isSel ? -2 : 0, useNativeDriver: true, speed: 20, bounciness: 8 }).start();
+      Animated.timing(opacityAnims[i], { toValue: isSel ? 1 : 0.35, duration: 150, useNativeDriver: true }).start();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayIndex]);
+
+  const fillWidth = displayIndex >= 0 ? Math.max(6, (trackWidth * displayIndex) / 4) : 0;
 
   return (
     <View
-      style={sliderStyles.track}
+      style={sliderStyles.wrap}
       onLayout={e => { setTrackWidth(e.nativeEvent.layout.width); trackWidthRef.current = e.nativeEvent.layout.width; }}
       {...pan.panHandlers}
     >
+      <View style={sliderStyles.trackBase} />
+      <LinearGradient
+        colors={['rgba(74,144,217,0.3)', '#4a90d9']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[sliderStyles.trackFill, { width: fillWidth }]}
+      />
       <View style={sliderStyles.stopsRow} pointerEvents="none">
         {MOODS.map((m, i) => (
-          <Text key={m} style={[sliderStyles.stopEmoji, i === displayIndex && { opacity: 0 }]}>{m}</Text>
+          <Animated.View
+            key={m}
+            style={{ transform: [{ scale: scaleAnims[i] }, { translateY: liftAnims[i] }], opacity: opacityAnims[i] }}
+          >
+            <Text style={[sliderStyles.stopEmoji, i === displayIndex && sliderStyles.stopEmojiSelected]}>{m}</Text>
+          </Animated.View>
         ))}
       </View>
-      {displayIndex >= 0 ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[sliderStyles.thumb, { left: thumbLeft, transform: [{ scale: thumbScale }] }]}
-        >
-          <Text style={sliderStyles.thumbEmoji}>{MOODS[displayIndex]}</Text>
-        </Animated.View>
-      ) : (
-        <Text style={sliderStyles.hint} pointerEvents="none">slide to set your mood</Text>
-      )}
     </View>
   );
 };
 
 const sliderStyles = StyleSheet.create({
-  track: { height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', marginTop: 4 },
-  stopsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 12 },
-  stopEmoji: { fontSize: 20, opacity: 0.35 },
-  thumb: { position: 'absolute', width: THUMB_W, height: THUMB_W, borderRadius: THUMB_W / 2, backgroundColor: 'rgba(74,144,217,0.25)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.5)', justifyContent: 'center', alignItems: 'center', top: 2 },
-  thumbEmoji: { fontSize: 26 },
-  hint: { position: 'absolute', alignSelf: 'center', fontSize: 12, color: 'rgba(255,255,255,0.25)' },
+  wrap: { height: 52, justifyContent: 'center', marginTop: 4, paddingHorizontal: 4 },
+  trackBase: { position: 'absolute', left: 4, right: 4, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.08)' },
+  trackFill: { position: 'absolute', left: 4, height: 5, borderRadius: 2.5 },
+  stopsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 52 },
+  stopEmoji: { fontSize: 17, opacity: 1 },
+  stopEmojiSelected: {
+    fontSize: 30,
+    textShadowColor: 'rgba(74,144,217,0.6)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
+  },
 });
 
 export default function ThePresent() {
@@ -300,6 +354,7 @@ export default function ThePresent() {
   const [knownPeople, setKnownPeople] = useState<string[]>([]);
 
   const [capsules, setCapsules] = useState<Capsule[]>([]);
+  const [showCapsulesSheet, setShowCapsulesSheet] = useState(false);
   const [showCreateCapsule, setShowCreateCapsule] = useState(false);
   const [revealingCapsule, setRevealingCapsule] = useState<Capsule | null>(null);
   const [revealPhase, setRevealPhase] = useState<'capsule' | 'content'>('capsule');
@@ -323,6 +378,9 @@ export default function ThePresent() {
   const [writeOpen, setWriteOpen] = useState(false);
   const [dayDescLocal, setDayDescLocal] = useState('');
   const [showAddLocation, setShowAddLocation] = useState(false);
+  const [showLocationsModal, setShowLocationsModal] = useState(false);
+  const [showWatchedModal, setShowWatchedModal] = useState(false);
+  const [showCookedModal, setShowCookedModal] = useState(false);
   const [locName, setLocName] = useState('');
   const [locWith, setLocWith] = useState('');
   const [savedToday, setSavedToday] = useState(false);
@@ -369,6 +427,19 @@ export default function ThePresent() {
   const recipeSavedToday = favourites.some(f =>
     f.category === 'recipe' && f.dateKey === todayKey && f.name === (cookedDishLocal || '').trim()
   );
+
+  // ── DAY COMPLETENESS ─────────────────────────────────────────────────────
+  const ringItems = [
+    !!entry.photoUri,
+    !!entry.pairSelfieUri,
+    threeWordsLocal.every(w => w.trim().length > 0),
+    !!entry.mood,
+    !!dayDescLocal.trim() || !!entry.voiceMemoUri,
+    !!dailyAnswerLocal.trim(),
+    !!reflectionAnswerLocal.trim(),
+    !!entry.songName || !!watchedLocal.trim() || !!cookedDishLocal.trim() || (entry.taggedPeople || []).length > 0 || (entry.locations || []).length > 0,
+  ];
+  const ringCompleted = ringItems.filter(Boolean).length;
 
   useEffect(() => {
     loadEntry(); checkNotificationStatus(); fetchWeather();
@@ -879,14 +950,28 @@ export default function ThePresent() {
   const filteredFavourites = favFilter === 'all' ? favourites : favourites.filter(f => f.category === favFilter);
   const getCategoryEmoji = (key: string) => favCategories.find(c => c.key === key)?.emoji || '⭐';
 
+  // ── DETAILS GRID DATA ────────────────────────────────────────────────────
+  const placesValue = (entry.locations || []).length > 0
+    ? entry.locations[0].name + (entry.locations.length > 1 ? ` +${entry.locations.length - 1}` : '')
+    : '';
+  const peopleValue = (entry.taggedPeople || []).join(', ');
+  const nextCapsuleDays = sealedCapsules.length > 0 ? Math.min(...sealedCapsules.map(c => daysUntil(c.openDate))) : 0;
+
   if (!fontsLoaded) return null;
 
   return (
     <View style={styles.outerContainer}>
 
+      {/* 3.1 HEADER ROW */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>The Present</Text>
-        <Text style={styles.headerDate}>{dateString}</Text>
+        <View style={styles.headerTopRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Your Present</Text>
+            <Text style={styles.headerDate}>{dateString}</Text>
+            <Text style={styles.headerTagline}>Today&apos;s entry becomes tomorrow&apos;s flashback.</Text>
+          </View>
+          <DayRing completed={ringCompleted} total={8} />
+        </View>
         <View style={styles.tabSwitcher}>
           <TouchableOpacity style={[styles.tabButton, activeTab === 'today' && styles.tabButtonActive]} onPress={() => setActiveTab('today')}>
             <Text style={[styles.tabButtonText, activeTab === 'today' && styles.tabButtonTextActive]}>Today</Text>
@@ -902,16 +987,14 @@ export default function ThePresent() {
 
       {activeTab === 'today' && (
         <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={styles.subHeader}>
-            <Text style={styles.headerSubtitle}>Today&apos;s entry becomes tomorrow&apos;s flashback.</Text>
-          </View>
+          <View style={{ height: 10 }} />
 
-          {/* 3.1 THE CAPTURE PAIR */}
-          <View style={styles.card}>
+          {/* 3.2 HERO CAPTURE CARD */}
+          <View style={styles.heroCard}>
             {entry.photoUri || entry.pairSelfieUri ? (
-              <View style={styles.pairArea}>
+              <>
                 <TouchableOpacity
-                  style={{ flex: 1 }}
+                  style={StyleSheet.absoluteFillObject}
                   activeOpacity={0.9}
                   onPress={() => {
                     const bigUri = pairSwapped && entry.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri;
@@ -927,11 +1010,11 @@ export default function ThePresent() {
                   {(pairSwapped && entry.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri) ? (
                     <Image
                       source={{ uri: pairSwapped && entry.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri }}
-                      style={styles.pairMainPhoto}
+                      style={StyleSheet.absoluteFillObject}
                       resizeMode="cover"
                     />
                   ) : (
-                    <View style={styles.pairMainPlaceholder}>
+                    <View style={styles.heroMainEmptySlot}>
                       <Text style={{ fontSize: 32 }}>📷</Text>
                       <Text style={styles.pairPlaceholderText}>Add today&apos;s photo</Text>
                     </View>
@@ -939,7 +1022,7 @@ export default function ThePresent() {
                 </TouchableOpacity>
                 {entry.pairSelfieUri || entry.photoUri ? (
                   <TouchableOpacity
-                    style={styles.pairInset}
+                    style={styles.heroInset}
                     activeOpacity={0.9}
                     onPress={() => {
                       const insetUri = pairSwapped ? entry.photoUri : entry.pairSelfieUri;
@@ -954,55 +1037,53 @@ export default function ThePresent() {
                         resizeMode="cover"
                       />
                     ) : (
-                      <View style={styles.pairInsetPlaceholder}>
+                      <View style={styles.heroInsetPlaceholder}>
                         <Text style={{ fontSize: 20 }}>🤳</Text>
                       </View>
                     )}
                   </TouchableOpacity>
                 ) : null}
-              </View>
+                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={styles.heroBottomGradient} pointerEvents="none" />
+                <View style={styles.heroBottomRow}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center' }}>
+                    {entry.extraPhotos.map((uri, index) => (
+                      <TouchableOpacity key={index} style={{ marginRight: 8 }} onPress={() => {
+                        Alert.alert('Photo', '', [
+                          { text: 'View photo', onPress: () => setFullScreenUri(uri) },
+                          { text: 'Remove photo', onPress: () => updateEntry({ extraPhotos: entry.extraPhotos.filter((_, i) => i !== index) }), style: 'destructive' },
+                          { text: 'Cancel', style: 'cancel' },
+                        ]);
+                      }}>
+                        <Image source={{ uri }} style={styles.heroThumb} />
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity style={styles.heroAddThumbTile} onPress={() => pickPhoto('extra')}>
+                      <Text style={styles.addExtraText}>+</Text>
+                    </TouchableOpacity>
+                  </ScrollView>
+                  <Text style={styles.heroPhotoCount}>
+                    {(entry.photoUri ? 1 : 0) + (entry.pairSelfieUri ? 1 : 0) + entry.extraPhotos.length} photo{((entry.photoUri ? 1 : 0) + (entry.pairSelfieUri ? 1 : 0) + entry.extraPhotos.length) === 1 ? '' : 's'} today
+                  </Text>
+                </View>
+              </>
             ) : (
-              <View style={styles.pairPromptRow}>
-                <TouchableOpacity style={styles.pairPrompt} onPress={() => pickPhoto('today')}>
+              <View style={styles.heroEmptyRow}>
+                <TouchableOpacity style={styles.heroEmptyPrompt} onPress={() => pickPhoto('today')}>
                   <Text style={{ fontSize: 28 }}>📷</Text>
                   <Text style={styles.pairPromptText}>Today&apos;s photo</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.pairPrompt} onPress={() => pickPhoto('pair')}>
+                <TouchableOpacity style={styles.heroEmptyPrompt} onPress={() => pickPhoto('pair')}>
                   <Text style={{ fontSize: 28 }}>🤳</Text>
                   <Text style={styles.pairPromptText}>Add a selfie</Text>
                 </TouchableOpacity>
               </View>
             )}
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.extraStrip}>
-              {entry.extraPhotos.map((uri, index) => (
-                <TouchableOpacity key={index} onPress={() => {
-                  Alert.alert('Photo', '', [
-                    { text: 'View photo', onPress: () => setFullScreenUri(uri) },
-                    { text: 'Remove photo', onPress: () => updateEntry({ extraPhotos: entry.extraPhotos.filter((_, i) => i !== index) }), style: 'destructive' },
-                    { text: 'Cancel', style: 'cancel' },
-                  ]);
-                }}>
-                  <Image source={{ uri }} style={styles.extraPhoto} />
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity style={styles.addExtraTile} onPress={() => pickPhoto('extra')}>
-                <Text style={styles.addExtraText}>+</Text>
-              </TouchableOpacity>
-            </ScrollView>
-
-            <TouchableOpacity style={styles.viewAllSelfies} onPress={() => router.push('/(tabs)/selfie')}>
-              <Text style={styles.viewAllSelfiesText}>View all selfies →</Text>
-            </TouchableOpacity>
           </View>
+          <TouchableOpacity style={styles.viewAllSelfiesRow} onPress={() => router.push('/(tabs)/selfie')}>
+            <Text style={styles.viewAllSelfiesText}>View all selfies →</Text>
+          </TouchableOpacity>
 
-          {/* 3.2 MOOD SLIDER */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>MOOD</Text>
-            <MoodSlider value={entry.mood} onChange={emoji => updateEntry({ mood: emoji })} />
-          </View>
-
-          {/* 3.3 THREE WORDS */}
+          {/* 3.3 THREE WORDS + MOOD */}
           <View style={styles.card}>
             <Text style={styles.cardLabel}>TODAY IN THREE WORDS</Text>
             <View style={styles.wordsRow}>
@@ -1019,41 +1100,13 @@ export default function ThePresent() {
                 />
               ))}
             </View>
+            <Text style={[styles.cardLabel, { marginTop: 18 }]}>MOOD</Text>
+            <MoodSlider value={entry.mood} onChange={emoji => updateEntry({ mood: emoji })} />
           </View>
 
-          {/* 3.4 TODAY'S QUESTION */}
+          {/* 3.4 THE JOURNAL CARD */}
           <View style={styles.card}>
-            <Text style={styles.cardLabel}>TODAY&apos;S QUESTION</Text>
-            <Text style={styles.questionText}>{dailyQuestion}</Text>
-            <TextInput
-              style={styles.questionInput}
-              placeholder="Your answer..."
-              placeholderTextColor="rgba(255,255,255,0.25)"
-              multiline
-              value={dailyAnswerLocal}
-              onChangeText={setDailyAnswerLocal}
-              onBlur={() => updateEntry({ dailyQuestion, dailyAnswer: dailyAnswerLocal })}
-            />
-          </View>
-
-          {/* 3.5 REFLECTION — FOR FUTURE YOU */}
-          <View style={[styles.card, styles.reflectionCard]}>
-            <Text style={styles.cardLabel}>FOR FUTURE YOU</Text>
-            <Text style={styles.questionText}>{reflectionQuestion}</Text>
-            <TextInput
-              style={styles.questionInput}
-              placeholder="Future you will read this..."
-              placeholderTextColor="rgba(255,255,255,0.25)"
-              multiline
-              value={reflectionAnswerLocal}
-              onChangeText={setReflectionAnswerLocal}
-              onBlur={() => updateEntry({ reflectionQuestion, reflectionAnswer: reflectionAnswerLocal })}
-            />
-          </View>
-
-          {/* 3.6 YOUR DAY — write or speak */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>YOUR DAY</Text>
+            <Text style={styles.cardLabel}>TELL US ABOUT YOUR DAY</Text>
             <View style={styles.dayActionsRow}>
               <TouchableOpacity
                 style={[styles.dayActionBtn, writeOpen && styles.dayActionBtnActive]}
@@ -1091,193 +1144,141 @@ export default function ThePresent() {
                 <Text style={styles.voicePlayText}>{isPlaying ? 'Playing...' : 'Play voice memo'}</Text>
               </TouchableOpacity>
             )}
-          </View>
 
-          {/* 3.7 WHAT I COOKED */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>WHAT I COOKED</Text>
-            <View style={styles.cookedRow}>
-              <TextInput
-                style={[styles.inlineInput, { flex: 1 }]}
-                placeholder="Dish name..."
-                placeholderTextColor="rgba(255,255,255,0.25)"
-                value={cookedDishLocal}
-                onChangeText={setCookedDishLocal}
-                onBlur={() => updateEntry({ cookedDish: cookedDishLocal.trim() })}
-              />
-              <TouchableOpacity style={styles.cookedPhotoSlot} onPress={() => pickPhoto('cooked')}>
-                {entry.cookedPhotoUri ? (
-                  <Image source={{ uri: entry.cookedPhotoUri }} style={{ width: '100%', height: '100%', borderRadius: 10 }} resizeMode="cover" />
-                ) : (
-                  <Ionicons name="camera-outline" size={20} color="rgba(255,255,255,0.35)" />
-                )}
-              </TouchableOpacity>
-            </View>
-            {!!cookedDishLocal.trim() && (
-              <TouchableOpacity
-                style={[styles.recipeSaveBtn, recipeSavedToday && styles.recipeSaveBtnDone]}
-                onPress={saveCookedToRecipes}
-                disabled={recipeSavedToday}
-              >
-                <Text style={[styles.recipeSaveText, recipeSavedToday && { color: 'rgba(255,255,255,0.5)' }]}>
-                  {recipeSavedToday ? 'Saved ✓' : 'Save to recipes ★'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
+            <View style={styles.journalDivider} />
 
-          {/* 3.8 THE SOUNDTRACK */}
-          <AnimatedCard onPress={() => openModal('song', entry.songName, entry.songRating)} style={styles.card}>
-            <Text style={styles.cardLabel}>THE SOUNDTRACK</Text>
-            {entry.songName ? (
-              <View>
-                <Text style={styles.songName}>🎵 {entry.songName}</Text>
-                <View style={styles.ratingRow}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => <View key={n} style={[styles.ratingDot, n <= entry.songRating && styles.ratingDotFilled]} />)}
-                  <Text style={styles.ratingNumber}>{entry.songRating}/10</Text>
-                </View>
-                {entry.songMeaning ? <Text style={styles.entryAnswer}>{`"${entry.songMeaning}"`}</Text>
-                  : <TouchableOpacity onPress={() => openModal('songMeaning', entry.songMeaning)}><Text style={styles.entryAddText}>+ What does it mean to you?</Text></TouchableOpacity>}
-              </View>
-            ) : (
-              <View>
-                <Text style={styles.entryPrompt}>What are you listening to today?</Text>
-                <Text style={styles.entryAddText}>+ Add a song</Text>
-              </View>
-            )}
-          </AnimatedCard>
-
-          {/* 3.9 WHAT I WATCHED */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>WHAT I WATCHED</Text>
+            <Text style={styles.cardLabel}>TODAY&apos;S QUESTION</Text>
+            <Text style={styles.questionText}>{dailyQuestion}</Text>
             <TextInput
-              style={styles.inlineInput}
-              placeholder="Series, film, video..."
+              style={styles.questionInput}
+              placeholder="Your answer..."
               placeholderTextColor="rgba(255,255,255,0.25)"
-              value={watchedLocal}
-              onChangeText={setWatchedLocal}
-              onBlur={() => updateEntry({ watched: watchedLocal.trim() })}
+              multiline
+              value={dailyAnswerLocal}
+              onChangeText={setDailyAnswerLocal}
+              onBlur={() => updateEntry({ dailyQuestion, dailyAnswer: dailyAnswerLocal })}
             />
-          </View>
 
-          {/* 3.10 WHO MADE TODAY BETTER */}
-          <AnimatedCard onPress={() => setShowPeopleModal(true)} style={styles.card}>
-            <Text style={styles.cardLabel}>WHO MADE TODAY BETTER</Text>
-            {(entry.taggedPeople || []).length > 0 ? (
-              <View>
-                <View style={styles.peopleChipsRow}>
-                  {(entry.taggedPeople || []).map(person => (
-                    <View key={person} style={styles.personChip}>
-                      <Text style={styles.personChipText}>👤 {person}</Text>
-                    </View>
-                  ))}
-                </View>
-                <Text style={styles.entryAddText}>+ Add more people</Text>
-              </View>
-            ) : (
-              <View>
-                <Text style={styles.entryPrompt}>Who mattered today?</Text>
-                <Text style={styles.entryAddText}>+ Tag people</Text>
-              </View>
-            )}
-          </AnimatedCard>
+            <View style={styles.journalDivider} />
 
-          {/* 3.11 WHERE TODAY TOOK YOU */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>WHERE TODAY TOOK YOU</Text>
-            {(entry.locations || []).map((loc, i) => (
-              <View key={i} style={styles.locationRow}>
-                <View style={styles.locationDot} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.locationName}>{loc.name}</Text>
-                  {!!loc.withWho && <Text style={styles.locationWith}>with {loc.withWho}</Text>}
-                </View>
-                <TouchableOpacity onPress={() => removeLocation(i)} style={{ padding: 4 }}>
-                  <Ionicons name="close" size={14} color="rgba(255,255,255,0.3)" />
-                </TouchableOpacity>
-              </View>
-            ))}
-            <TouchableOpacity style={styles.addLocationRow} onPress={() => setShowAddLocation(true)}>
-              <Text style={styles.addLocationText}>+ Add a place</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Weather */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>WEATHER</Text>
-            {weatherLoading ? <ActivityIndicator color="#4a90d9" size="small" style={{ marginTop: 8 }} />
-              : entry.weatherEmoji ? (
-                <View style={styles.weatherRow}>
-                  <Text style={styles.weatherEmoji}>{entry.weatherEmoji}</Text>
-                  <Text style={styles.weatherTemp}>{entry.weatherTemp}°C</Text>
-                  <Text style={styles.weatherDesc}>{entry.weatherDescription}</Text>
-                </View>
-              ) : (
-                <TouchableOpacity onPress={fetchWeather} style={styles.weatherRow}>
-                  <Text style={styles.weatherEmoji}>🌍</Text>
-                  <Text style={styles.weatherDesc}>Tap to load today&apos;s weather</Text>
-                </TouchableOpacity>
-              )}
-          </View>
-
-          {/* Daily reminders */}
-          <View style={styles.card}>
-            <View style={styles.notificationRow}>
-              <Text style={styles.notificationEmoji}>🔔</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.notificationTitle}>{notificationsEnabled ? 'Reminders on' : 'Get daily reminders'}</Text>
-                <Text style={styles.notificationSubtitle}>{notificationsEnabled ? "You'll get a daily prompt every evening" : 'A daily nudge to document your life'}</Text>
-              </View>
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={v => v ? enableNotifications() : disableNotifications()}
-                trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(74,144,217,0.6)' }}
-                thumbColor="#ffffff"
+            <View style={styles.reflectionInner}>
+              <Text style={[styles.cardLabel, { marginBottom: 6 }]}>✦ FOR FUTURE YOU</Text>
+              <Text style={styles.reflectionQuestionText}>{reflectionQuestion}</Text>
+              <TextInput
+                style={styles.questionInput}
+                placeholder="Future you will read this..."
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                multiline
+                value={reflectionAnswerLocal}
+                onChangeText={setReflectionAnswerLocal}
+                onBlur={() => updateEntry({ reflectionQuestion, reflectionAnswer: reflectionAnswerLocal })}
               />
             </View>
           </View>
 
-          {/* 3.12 FUTURE CAPSULES — gold */}
-          <View style={styles.capsuleSection}>
-            <Text style={styles.capsuleSectionTitle}>Future Capsules</Text>
-            <Text style={styles.capsuleSectionSubtitle}>Seal a message for future you. It unlocks on the date you choose.</Text>
-
-            {readyCapsules.map(capsule => (
-              <TouchableOpacity key={capsule.id} style={styles.capsuleReadyCard} onPress={() => setRevealingCapsule(capsule)}>
-                <Text style={styles.capsuleEmoji}>🎁</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.capsuleReadyTitle}>Ready to open</Text>
-                  <Text style={styles.capsuleReadyDate}>Sealed {new Date(capsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#f5c842" />
-              </TouchableOpacity>
-            ))}
-
-            {sealedCapsules.map(capsule => (
-              <View key={capsule.id} style={styles.capsuleSealedCard}>
-                <Text style={styles.capsuleEmoji}>🔒</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.capsuleSealedTitle}>
-                    Opens in {daysUntil(capsule.openDate)} day{daysUntil(capsule.openDate) === 1 ? '' : 's'}
-                  </Text>
-                  <Text style={styles.capsuleSealedDate}>
-                    {new Date(capsule.openDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </Text>
-                </View>
+          {/* 3.5 THE DETAILS GRID */}
+          <Text style={styles.detailsSectionLabel}>THE DETAILS</Text>
+          <View style={styles.detailsGrid}>
+            <AnimatedCard
+              style={[styles.tile, entry.songName ? styles.tileFilled : styles.tileEmpty]}
+              onPress={() => openModal('song', entry.songName, entry.songRating)}
+            >
+              <View style={styles.tileHeaderRow}>
+                <Text style={styles.tileEmoji}>🎵</Text>
+                <Text style={[styles.tileLabel, !!entry.songName && styles.tileLabelFilled]}>Soundtrack</Text>
               </View>
-            ))}
+              {entry.songName ? <Text style={styles.tileValue} numberOfLines={1}>{entry.songName}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
+            </AnimatedCard>
 
-            <TouchableOpacity style={styles.createCapsuleButton} onPress={() => setShowCreateCapsule(true)}>
-              <Text style={styles.createCapsuleEmoji}>✉️</Text>
-              <Text style={styles.createCapsuleText}>Seal a new capsule</Text>
-            </TouchableOpacity>
+            <AnimatedCard
+              style={[styles.tile, entry.watched ? styles.tileFilled : styles.tileEmpty]}
+              onPress={() => setShowWatchedModal(true)}
+            >
+              <View style={styles.tileHeaderRow}>
+                <Text style={styles.tileEmoji}>📺</Text>
+                <Text style={[styles.tileLabel, !!entry.watched && styles.tileLabelFilled]}>Watched</Text>
+              </View>
+              {entry.watched ? <Text style={styles.tileValue} numberOfLines={1}>{entry.watched}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
+            </AnimatedCard>
+
+            <AnimatedCard
+              style={[styles.tile, entry.cookedDish ? styles.tileFilled : styles.tileEmpty]}
+              onPress={() => setShowCookedModal(true)}
+            >
+              <View style={styles.tileHeaderRow}>
+                <Text style={styles.tileEmoji}>🍳</Text>
+                <Text style={[styles.tileLabel, !!entry.cookedDish && styles.tileLabelFilled]}>Cooked</Text>
+              </View>
+              {entry.cookedDish ? <Text style={styles.tileValue} numberOfLines={1}>{entry.cookedDish}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
+            </AnimatedCard>
+
+            <AnimatedCard
+              style={[styles.tile, (entry.taggedPeople || []).length > 0 ? styles.tileFilled : styles.tileEmpty]}
+              onPress={() => setShowPeopleModal(true)}
+            >
+              <View style={styles.tileHeaderRow}>
+                <Text style={styles.tileEmoji}>👥</Text>
+                <Text style={[styles.tileLabel, (entry.taggedPeople || []).length > 0 && styles.tileLabelFilled]}>People</Text>
+              </View>
+              {peopleValue ? <Text style={styles.tileValue} numberOfLines={1}>{peopleValue}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
+            </AnimatedCard>
+
+            <AnimatedCard
+              style={[styles.tile, (entry.locations || []).length > 0 ? styles.tileFilled : styles.tileEmpty]}
+              onPress={() => setShowLocationsModal(true)}
+            >
+              <View style={styles.tileHeaderRow}>
+                <Text style={styles.tileEmoji}>📍</Text>
+                <Text style={[styles.tileLabel, (entry.locations || []).length > 0 && styles.tileLabelFilled]}>Places</Text>
+              </View>
+              {placesValue ? <Text style={styles.tileValue} numberOfLines={1}>{placesValue}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
+            </AnimatedCard>
+
+            <AnimatedCard
+              style={[styles.tile, entry.weatherEmoji ? styles.tileFilled : styles.tileEmpty]}
+              onPress={() => { if (!entry.weatherEmoji) fetchWeather(); }}
+            >
+              <View style={styles.tileHeaderRow}>
+                <Text style={styles.tileEmoji}>⛅</Text>
+                <Text style={[styles.tileLabel, !!entry.weatherEmoji && styles.tileLabelFilled]}>Weather</Text>
+              </View>
+              {weatherLoading ? <ActivityIndicator size="small" color="#4a90d9" />
+                : entry.weatherEmoji ? <Text style={styles.tileValue} numberOfLines={1}>{entry.weatherEmoji} {entry.weatherTemp}°C</Text>
+                  : <Text style={styles.tileEmptyText}>Tap to load</Text>}
+            </AnimatedCard>
           </View>
 
-          {/* 3.13 SAVE DAY */}
-          <TouchableOpacity style={[styles.saveDayButton, savedToday && styles.saveDayButtonDone]} onPress={saveToday}>
-            <Text style={styles.saveDayButtonText}>
-              {savedToday ? '✓ Saved — view your day' : 'Save today to your days'}
-            </Text>
+          {/* 3.6 FUTURE CAPSULES — compact gold row */}
+          <AnimatedCard
+            style={[styles.capsuleRow, readyCapsules.length > 0 && styles.capsuleRowReady]}
+            onPress={() => setShowCapsulesSheet(true)}
+          >
+            <Text style={styles.capsuleRowEmoji}>✉️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.capsuleRowTitle}>Future Capsules</Text>
+              <Text style={styles.capsuleRowSubtitle}>
+                {readyCapsules.length > 0
+                  ? `${readyCapsules.length} ready to open 🎁`
+                  : sealedCapsules.length > 0
+                    ? `${sealedCapsules.length} sealed · next opens in ${nextCapsuleDays} day${nextCapsuleDays === 1 ? '' : 's'}`
+                    : 'No capsules yet'}
+              </Text>
+            </View>
+            <Text style={styles.capsuleRowCta}>Seal one →</Text>
+          </AnimatedCard>
+
+          {/* 3.7 SAVE DAY */}
+          <TouchableOpacity onPress={saveToday} activeOpacity={0.85} style={styles.saveDayButtonWrap}>
+            <LinearGradient
+              colors={savedToday ? ['rgba(74,144,217,0.35)', 'rgba(74,144,217,0.35)'] : ['#4a90d9', 'rgba(74,144,217,0.75)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.saveDayButtonGradient}
+            >
+              <Text style={styles.saveDayButtonText}>
+                {savedToday ? '✓ Saved — view your day' : 'Save today → becomes your day card'}
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
 
           <View style={{ height: 110 }} />
@@ -1540,32 +1541,94 @@ export default function ThePresent() {
         </View>
       </Modal>
 
-      {/* Add location modal */}
-      <Modal visible={showAddLocation} animationType="slide" transparent>
+      {/* Places / Locations sheet — tile opens this */}
+      <Modal visible={showLocationsModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
             <View style={styles.modalBox}>
-              <Text style={styles.modalTitle}>Where did today take you?</Text>
+              <Text style={styles.modalTitle}>Where today took you</Text>
+              {(entry.locations || []).length > 0 ? (
+                <View style={{ marginBottom: 12 }}>
+                  {(entry.locations || []).map((loc, i) => (
+                    <View key={i} style={styles.locationRow}>
+                      <View style={styles.locationDot} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.locationName}>{loc.name}</Text>
+                        {!!loc.withWho && <Text style={styles.locationWith}>with {loc.withWho}</Text>}
+                      </View>
+                      <TouchableOpacity onPress={() => removeLocation(i)} style={{ padding: 4 }}>
+                        <Ionicons name="close" size={14} color="rgba(255,255,255,0.3)" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.capsuleEmptyText}>No places added yet.</Text>
+              )}
+              <TouchableOpacity style={styles.addLocationRow} onPress={() => setShowAddLocation(true)}>
+                <Text style={styles.addLocationText}>+ Add a place</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowLocationsModal(false)}>
+                <Text style={styles.cancelButtonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Nested: add location form */}
+            <Modal visible={showAddLocation} animationType="slide" transparent>
+              <View style={styles.modalOverlay}>
+                <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+                  <View style={styles.modalBox}>
+                    <Text style={styles.modalTitle}>Add a place</Text>
+                    <TextInput
+                      style={[styles.textInput, { minHeight: 48 }]}
+                      placeholder="Place name..."
+                      placeholderTextColor="rgba(255,255,255,0.25)"
+                      value={locName}
+                      onChangeText={setLocName}
+                      autoFocus
+                    />
+                    <TextInput
+                      style={[styles.textInput, { minHeight: 48 }]}
+                      placeholder="Who with? (optional)"
+                      placeholderTextColor="rgba(255,255,255,0.25)"
+                      value={locWith}
+                      onChangeText={setLocWith}
+                    />
+                    <TouchableOpacity style={styles.saveButton} onPress={addLocation}>
+                      <Text style={styles.saveButtonText}>Add</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.cancelButton} onPress={() => { setShowAddLocation(false); setLocName(''); setLocWith(''); }}>
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </KeyboardAvoidingView>
+              </View>
+            </Modal>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Watched modal — tile opens this */}
+      <Modal visible={showWatchedModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>What I watched</Text>
               <TextInput
-                style={[styles.textInput, { minHeight: 48 }]}
-                placeholder="Place name..."
+                style={styles.textInput}
+                placeholder="Series, film, video..."
                 placeholderTextColor="rgba(255,255,255,0.25)"
-                value={locName}
-                onChangeText={setLocName}
+                value={watchedLocal}
+                onChangeText={setWatchedLocal}
                 autoFocus
               />
-              <TextInput
-                style={[styles.textInput, { minHeight: 48 }]}
-                placeholder="Who with? (optional)"
-                placeholderTextColor="rgba(255,255,255,0.25)"
-                value={locWith}
-                onChangeText={setLocWith}
-              />
-              <TouchableOpacity style={styles.saveButton} onPress={addLocation}>
-                <Text style={styles.saveButtonText}>Add</Text>
+              <TouchableOpacity style={styles.saveButton} onPress={() => { updateEntry({ watched: watchedLocal.trim() }); setShowWatchedModal(false); }}>
+                <Text style={styles.saveButtonText}>Save</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => { setShowAddLocation(false); setLocName(''); setLocWith(''); }}>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowWatchedModal(false)}>
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
@@ -1573,154 +1636,268 @@ export default function ThePresent() {
         </View>
       </Modal>
 
-      {/* Create capsule */}
-      <Modal visible={showCreateCapsule} animationType="slide">
-        <View style={styles.capsuleModal}>
-          {capsuleCameraOpen && (
-            <View style={[StyleSheet.absoluteFillObject, { zIndex: 10, backgroundColor: '#000000' }]}>
-              {!capsuleCameraPreview ? (
-                <>
-                  <CameraView ref={capsuleCameraRef} style={StyleSheet.absoluteFillObject} facing={capsuleCameraFacing} />
-                  <View style={styles.cameraTop}>
-                    <TouchableOpacity style={styles.cameraTopButton} onPress={() => setCapsuleCameraOpen(false)}>
-                      <Text style={styles.cameraTopButtonText}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.cameraBottom}>
-                    <TouchableOpacity style={styles.cameraFlipButton} onPress={() => setCapsuleCameraFacing(f => f === 'front' ? 'back' : 'front')}>
-                      <Text style={styles.cameraFlipButtonText}>⟳</Text>
-                    </TouchableOpacity>
-                    <Animated.View style={{ transform: [{ scale: photoShutterScale }] }}>
-                      <TouchableOpacity
-                        style={[styles.cameraShutterButton, capsuleCameraCapturing && { opacity: 0.6 }]}
-                        onPress={takeCapsulePhoto}
-                        onPressIn={onPhotoShutterPressIn}
-                        onPressOut={onPhotoShutterPressOut}
-                        activeOpacity={1}>
-                        <View style={styles.cameraShutterInner} />
-                      </TouchableOpacity>
-                    </Animated.View>
-                    <View style={styles.cameraFlipButton} />
-                  </View>
-                </>
-              ) : (
-                <>
-                  <Image source={{ uri: capsuleCameraPreview }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-                  <View style={styles.photoCaptureActions}>
-                    <TouchableOpacity style={styles.photoCaptureBtn} onPress={() => setCapsuleCameraPreview(null)}>
-                      <Text style={styles.photoCaptureBtnText}>Retake</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.photoCaptureBtn, styles.photoCaptureBtnPrimary]} onPress={() => {
-                      setNewCapsulePhoto(capsuleCameraPreview!);
-                      setCapsuleCameraOpen(false);
-                      setCapsuleCameraPreview(null);
-                    }}>
-                      <Text style={[styles.photoCaptureBtnText, styles.photoCaptureBtnTextPrimary]}>Use Photo</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
+      {/* Cooked modal — tile opens this */}
+      <Modal visible={showCookedModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
+            <View style={styles.modalBox}>
+              <Text style={styles.modalTitle}>What I cooked</Text>
+              <View style={styles.cookedRow}>
+                <TextInput
+                  style={[styles.inlineInput, { flex: 1 }]}
+                  placeholder="Dish name..."
+                  placeholderTextColor="rgba(255,255,255,0.25)"
+                  value={cookedDishLocal}
+                  onChangeText={setCookedDishLocal}
+                  autoFocus
+                />
+                <TouchableOpacity style={styles.cookedPhotoSlot} onPress={() => pickPhoto('cooked')}>
+                  {entry.cookedPhotoUri ? (
+                    <Image source={{ uri: entry.cookedPhotoUri }} style={{ width: '100%', height: '100%', borderRadius: 10 }} resizeMode="cover" />
+                  ) : (
+                    <Ionicons name="camera-outline" size={20} color="rgba(255,255,255,0.35)" />
+                  )}
+                </TouchableOpacity>
+              </View>
+              {!!cookedDishLocal.trim() && (
+                <TouchableOpacity
+                  style={[styles.recipeSaveBtn, recipeSavedToday && styles.recipeSaveBtnDone]}
+                  onPress={saveCookedToRecipes}
+                  disabled={recipeSavedToday}
+                >
+                  <Text style={[styles.recipeSaveText, recipeSavedToday && { color: 'rgba(255,255,255,0.5)' }]}>
+                    {recipeSavedToday ? 'Saved ✓' : 'Save to recipes ★'}
+                  </Text>
+                </TouchableOpacity>
               )}
+              <TouchableOpacity style={styles.saveButton} onPress={() => { updateEntry({ cookedDish: cookedDishLocal.trim() }); setShowCookedModal(false); }}>
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setShowCookedModal(false)}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
             </View>
-          )}
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <Text style={styles.capsuleModalTitle}>Seal a Capsule ✉️</Text>
-            <Text style={styles.capsuleModalSubtitle}>Write something for future you. It&apos;ll be waiting.</Text>
-            <Text style={styles.addFavLabel}>Your message</Text>
-            <TextInput style={[styles.addFavInput, { minHeight: 120 }]} placeholder="Dear future me... What do you want to remember? What are you hoping for?" placeholderTextColor="rgba(255,255,255,0.35)" multiline value={newCapsuleMessage} onChangeText={setNewCapsuleMessage} />
-            <Text style={styles.addFavLabel}>Photo (optional)</Text>
-            <TouchableOpacity
-              style={styles.addFavPhotoButton}
-              onPress={() => {
-                if (newCapsulePhoto) {
-                  Alert.alert('Capsule photo', '', [
-                    { text: 'View photo', onPress: () => setFullScreenUri(newCapsulePhoto) },
-                    { text: 'Change photo', onPress: pickCapsulePhoto },
-                    { text: 'Remove photo', onPress: () => setNewCapsulePhoto(''), style: 'destructive' },
-                    { text: 'Cancel', style: 'cancel' },
-                  ]);
-                } else {
-                  pickCapsulePhoto();
-                }
-              }}
-            >
-              {newCapsulePhoto ? <Image source={{ uri: newCapsulePhoto }} style={styles.addFavPhotoPreview} />
-                : <View style={styles.addFavPhotoEmpty}><Text style={styles.addFavPhotoEmoji}>📷</Text><Text style={styles.addFavPhotoText}>Add a photo</Text></View>}
-            </TouchableOpacity>
-            <Text style={styles.addFavLabel}>Open on</Text>
-            <View style={styles.capsuleDatePicker}>
-              <View style={styles.capsuleDateColumn}>
-                <TouchableOpacity onPress={() => setCapsuleMonth(m => m === 1 ? 12 : m - 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>‹</Text></TouchableOpacity>
-                <Text style={styles.capsuleDateValue}>{MONTH_SHORT[capsuleMonth - 1]}</Text>
-                <TouchableOpacity onPress={() => setCapsuleMonth(m => m === 12 ? 1 : m + 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>›</Text></TouchableOpacity>
-              </View>
-              <View style={styles.capsuleDateColumn}>
-                <TouchableOpacity onPress={() => setCapsuleDay(d => d === 1 ? capsuleMaxDay : d - 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>‹</Text></TouchableOpacity>
-                <Text style={styles.capsuleDateValue}>{capsuleDay}</Text>
-                <TouchableOpacity onPress={() => setCapsuleDay(d => d === capsuleMaxDay ? 1 : d + 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>›</Text></TouchableOpacity>
-              </View>
-              <View style={styles.capsuleDateColumn}>
-                <TouchableOpacity onPress={() => setCapsuleYear(y => y - 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>‹</Text></TouchableOpacity>
-                <Text style={styles.capsuleDateValue}>{capsuleYear}</Text>
-                <TouchableOpacity onPress={() => setCapsuleYear(y => y + 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>›</Text></TouchableOpacity>
-              </View>
-            </View>
-            <Text style={styles.capsuleDatePreview}>Opens on {MONTH_NAMES[capsuleMonth - 1]} {Math.min(capsuleDay, capsuleMaxDay)}, {capsuleYear}</Text>
-            <View style={styles.capsuleToggleRow}>
-              <Text style={styles.capsuleToggleLabel}>Add to today&apos;s entry</Text>
-              <Switch
-                value={capsuleAddToDay}
-                onValueChange={setCapsuleAddToDay}
-                trackColor={{ false: 'rgba(255,255,255,0.2)', true: '#f5c842' }}
-                thumbColor="#ffffff"
-              />
-            </View>
-            {capsuleAddToDay && (
-              <TextInput
-                style={styles.addFavInput}
-                placeholder="Why are you writing this today? (optional)"
-                placeholderTextColor="rgba(255,255,255,0.35)"
-                multiline
-                value={capsuleContext}
-                onChangeText={setCapsuleContext}
-              />
-            )}
-            <TouchableOpacity style={styles.capsuleSealButton} onPress={createCapsule}><Text style={styles.capsuleSealButtonText}>🔒 Seal Capsule</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.addFavCancel} onPress={() => { setNewCapsuleMessage(''); setNewCapsulePhoto(''); setCapsuleAddToDay(false); setCapsuleContext(''); setShowCreateCapsule(false); }}>
-              <Text style={styles.addFavCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
-      {/* Capsule reveal — the opening moment */}
-      <Modal visible={revealingCapsule !== null} animationType="fade" transparent>
-        <View style={styles.capsuleRevealOverlay}>
+      {/* Future Capsules — full sheet */}
+      <Modal visible={showCapsulesSheet} animationType="slide" transparent onRequestClose={() => setShowCapsulesSheet(false)}>
+        <View style={styles.modalOverlay}>
           <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFillObject} />
-          {revealPhase === 'capsule' ? (
-            <Animated.View style={[styles.capsuleGraphic, { transform: [{ scale: revealScale }] }]}>
-              <Text style={styles.capsuleGraphicEmoji}>🎁</Text>
-            </Animated.View>
-          ) : (
-            <Animated.View style={[styles.capsuleRevealBox, { opacity: revealOpacity }]}>
-              <Text style={styles.capsuleRevealEmoji}>🎁</Text>
-              <Text style={styles.capsuleRevealTitle}>A message from your past self</Text>
-              {revealingCapsule?.createdDate && (
-                <Text style={styles.capsuleRevealDate}>Sealed {new Date(revealingCapsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+          <View style={styles.capsuleSheetBox}>
+            <View style={styles.capsuleSheetHeaderRow}>
+              <Text style={styles.capsuleSheetTitle}>Future Capsules</Text>
+              <TouchableOpacity onPress={() => setShowCapsulesSheet(false)}>
+                <Ionicons name="close" size={22} color="rgba(255,255,255,0.6)" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.capsuleSectionSubtitle}>Seal a message for future you. It unlocks on the date you choose.</Text>
+
+            <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+              {readyCapsules.map(capsule => (
+                <TouchableOpacity key={capsule.id} style={styles.capsuleReadyCard} onPress={() => setRevealingCapsule(capsule)}>
+                  <Text style={styles.capsuleEmoji}>🎁</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.capsuleReadyTitle}>Ready to open</Text>
+                    <Text style={styles.capsuleReadyDate}>Sealed {new Date(capsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#f5c842" />
+                </TouchableOpacity>
+              ))}
+
+              {sealedCapsules.map(capsule => (
+                <View key={capsule.id} style={styles.capsuleSealedCard}>
+                  <Text style={styles.capsuleEmoji}>🔒</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.capsuleSealedTitle}>
+                      Opens in {daysUntil(capsule.openDate)} day{daysUntil(capsule.openDate) === 1 ? '' : 's'}
+                    </Text>
+                    <Text style={styles.capsuleSealedDate}>
+                      {new Date(capsule.openDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+
+              {readyCapsules.length === 0 && sealedCapsules.length === 0 && (
+                <Text style={styles.capsuleEmptyText}>No capsules yet — seal your first one below.</Text>
               )}
-              <ScrollView style={styles.capsuleRevealMessage} showsVerticalScrollIndicator={false}>
-                {revealingCapsule?.photoUri ? <Image source={{ uri: revealingCapsule.photoUri }} style={styles.capsuleRevealPhoto} /> : null}
-                <Text style={styles.capsuleRevealText}>{revealingCapsule?.message}</Text>
-              </ScrollView>
-              <View style={styles.capsuleRevealButtons}>
-                <TouchableOpacity style={[styles.capsuleSealButton, { flex: 1 }]} onPress={() => revealingCapsule && addCapsuleToDay(revealingCapsule)}>
-                  <Text style={styles.capsuleSealButtonText}>Add to today</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.addFavCancel, { flex: 1 }]} onPress={() => setRevealingCapsule(null)}>
-                  <Text style={styles.addFavCancelText}>Close</Text>
-                </TouchableOpacity>
+            </ScrollView>
+
+            <TouchableOpacity style={styles.createCapsuleButton} onPress={() => setShowCreateCapsule(true)}>
+              <Text style={styles.createCapsuleEmoji}>✉️</Text>
+              <Text style={styles.createCapsuleText}>Seal a new capsule</Text>
+            </TouchableOpacity>
+
+            <View style={styles.capsuleSheetFooter}>
+              <View style={styles.notificationRow}>
+                <Text style={styles.notificationEmoji}>🔔</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.notificationTitle}>{notificationsEnabled ? 'Reminders on' : 'Get daily reminders'}</Text>
+                  <Text style={styles.notificationSubtitle}>{notificationsEnabled ? "You'll get a daily prompt every evening" : 'A daily nudge to document your life'}</Text>
+                </View>
+                <Switch
+                  value={notificationsEnabled}
+                  onValueChange={v => v ? enableNotifications() : disableNotifications()}
+                  trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(74,144,217,0.6)' }}
+                  thumbColor="#ffffff"
+                />
               </View>
-            </Animated.View>
-          )}
+            </View>
+          </View>
+
+          {/* Nested: create capsule */}
+          <Modal visible={showCreateCapsule} animationType="slide">
+            <View style={styles.capsuleModal}>
+              {capsuleCameraOpen && (
+                <View style={[StyleSheet.absoluteFillObject, { zIndex: 10, backgroundColor: '#000000' }]}>
+                  {!capsuleCameraPreview ? (
+                    <>
+                      <CameraView ref={capsuleCameraRef} style={StyleSheet.absoluteFillObject} facing={capsuleCameraFacing} />
+                      <View style={styles.cameraTop}>
+                        <TouchableOpacity style={styles.cameraTopButton} onPress={() => setCapsuleCameraOpen(false)}>
+                          <Text style={styles.cameraTopButtonText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.cameraBottom}>
+                        <TouchableOpacity style={styles.cameraFlipButton} onPress={() => setCapsuleCameraFacing(f => f === 'front' ? 'back' : 'front')}>
+                          <Text style={styles.cameraFlipButtonText}>⟳</Text>
+                        </TouchableOpacity>
+                        <Animated.View style={{ transform: [{ scale: photoShutterScale }] }}>
+                          <TouchableOpacity
+                            style={[styles.cameraShutterButton, capsuleCameraCapturing && { opacity: 0.6 }]}
+                            onPress={takeCapsulePhoto}
+                            onPressIn={onPhotoShutterPressIn}
+                            onPressOut={onPhotoShutterPressOut}
+                            activeOpacity={1}>
+                            <View style={styles.cameraShutterInner} />
+                          </TouchableOpacity>
+                        </Animated.View>
+                        <View style={styles.cameraFlipButton} />
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Image source={{ uri: capsuleCameraPreview }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                      <View style={styles.photoCaptureActions}>
+                        <TouchableOpacity style={styles.photoCaptureBtn} onPress={() => setCapsuleCameraPreview(null)}>
+                          <Text style={styles.photoCaptureBtnText}>Retake</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.photoCaptureBtn, styles.photoCaptureBtnPrimary]} onPress={() => {
+                          setNewCapsulePhoto(capsuleCameraPreview!);
+                          setCapsuleCameraOpen(false);
+                          setCapsuleCameraPreview(null);
+                        }}>
+                          <Text style={[styles.photoCaptureBtnText, styles.photoCaptureBtnTextPrimary]}>Use Photo</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </View>
+              )}
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={styles.capsuleModalTitle}>Seal a Capsule ✉️</Text>
+                <Text style={styles.capsuleModalSubtitle}>Write something for future you. It&apos;ll be waiting.</Text>
+                <Text style={styles.addFavLabel}>Your message</Text>
+                <TextInput style={[styles.addFavInput, { minHeight: 120 }]} placeholder="Dear future me... What do you want to remember? What are you hoping for?" placeholderTextColor="rgba(255,255,255,0.35)" multiline value={newCapsuleMessage} onChangeText={setNewCapsuleMessage} />
+                <Text style={styles.addFavLabel}>Photo (optional)</Text>
+                <TouchableOpacity
+                  style={styles.addFavPhotoButton}
+                  onPress={() => {
+                    if (newCapsulePhoto) {
+                      Alert.alert('Capsule photo', '', [
+                        { text: 'View photo', onPress: () => setFullScreenUri(newCapsulePhoto) },
+                        { text: 'Change photo', onPress: pickCapsulePhoto },
+                        { text: 'Remove photo', onPress: () => setNewCapsulePhoto(''), style: 'destructive' },
+                        { text: 'Cancel', style: 'cancel' },
+                      ]);
+                    } else {
+                      pickCapsulePhoto();
+                    }
+                  }}
+                >
+                  {newCapsulePhoto ? <Image source={{ uri: newCapsulePhoto }} style={styles.addFavPhotoPreview} />
+                    : <View style={styles.addFavPhotoEmpty}><Text style={styles.addFavPhotoEmoji}>📷</Text><Text style={styles.addFavPhotoText}>Add a photo</Text></View>}
+                </TouchableOpacity>
+                <Text style={styles.addFavLabel}>Open on</Text>
+                <View style={styles.capsuleDatePicker}>
+                  <View style={styles.capsuleDateColumn}>
+                    <TouchableOpacity onPress={() => setCapsuleMonth(m => m === 1 ? 12 : m - 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>‹</Text></TouchableOpacity>
+                    <Text style={styles.capsuleDateValue}>{MONTH_SHORT[capsuleMonth - 1]}</Text>
+                    <TouchableOpacity onPress={() => setCapsuleMonth(m => m === 12 ? 1 : m + 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>›</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.capsuleDateColumn}>
+                    <TouchableOpacity onPress={() => setCapsuleDay(d => d === 1 ? capsuleMaxDay : d - 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>‹</Text></TouchableOpacity>
+                    <Text style={styles.capsuleDateValue}>{capsuleDay}</Text>
+                    <TouchableOpacity onPress={() => setCapsuleDay(d => d === capsuleMaxDay ? 1 : d + 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>›</Text></TouchableOpacity>
+                  </View>
+                  <View style={styles.capsuleDateColumn}>
+                    <TouchableOpacity onPress={() => setCapsuleYear(y => y - 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>‹</Text></TouchableOpacity>
+                    <Text style={styles.capsuleDateValue}>{capsuleYear}</Text>
+                    <TouchableOpacity onPress={() => setCapsuleYear(y => y + 1)} style={styles.capsuleDateArrow}><Text style={styles.capsuleDateArrowText}>›</Text></TouchableOpacity>
+                  </View>
+                </View>
+                <Text style={styles.capsuleDatePreview}>Opens on {MONTH_NAMES[capsuleMonth - 1]} {Math.min(capsuleDay, capsuleMaxDay)}, {capsuleYear}</Text>
+                <View style={styles.capsuleToggleRow}>
+                  <Text style={styles.capsuleToggleLabel}>Add to today&apos;s entry</Text>
+                  <Switch
+                    value={capsuleAddToDay}
+                    onValueChange={setCapsuleAddToDay}
+                    trackColor={{ false: 'rgba(255,255,255,0.2)', true: '#f5c842' }}
+                    thumbColor="#ffffff"
+                  />
+                </View>
+                {capsuleAddToDay && (
+                  <TextInput
+                    style={styles.addFavInput}
+                    placeholder="Why are you writing this today? (optional)"
+                    placeholderTextColor="rgba(255,255,255,0.35)"
+                    multiline
+                    value={capsuleContext}
+                    onChangeText={setCapsuleContext}
+                  />
+                )}
+                <TouchableOpacity style={styles.capsuleSealButton} onPress={createCapsule}><Text style={styles.capsuleSealButtonText}>🔒 Seal Capsule</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.addFavCancel} onPress={() => { setNewCapsuleMessage(''); setNewCapsulePhoto(''); setCapsuleAddToDay(false); setCapsuleContext(''); setShowCreateCapsule(false); }}>
+                  <Text style={styles.addFavCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </Modal>
+
+          {/* Nested: capsule reveal — the opening moment */}
+          <Modal visible={revealingCapsule !== null} animationType="fade" transparent>
+            <View style={styles.capsuleRevealOverlay}>
+              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFillObject} />
+              {revealPhase === 'capsule' ? (
+                <Animated.View style={[styles.capsuleGraphic, { transform: [{ scale: revealScale }] }]}>
+                  <Text style={styles.capsuleGraphicEmoji}>🎁</Text>
+                </Animated.View>
+              ) : (
+                <Animated.View style={[styles.capsuleRevealBox, { opacity: revealOpacity }]}>
+                  <Text style={styles.capsuleRevealEmoji}>🎁</Text>
+                  <Text style={styles.capsuleRevealTitle}>A message from your past self</Text>
+                  {revealingCapsule?.createdDate && (
+                    <Text style={styles.capsuleRevealDate}>Sealed {new Date(revealingCapsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
+                  )}
+                  <ScrollView style={styles.capsuleRevealMessage} showsVerticalScrollIndicator={false}>
+                    {revealingCapsule?.photoUri ? <Image source={{ uri: revealingCapsule.photoUri }} style={styles.capsuleRevealPhoto} /> : null}
+                    <Text style={styles.capsuleRevealText}>{revealingCapsule?.message}</Text>
+                  </ScrollView>
+                  <View style={styles.capsuleRevealButtons}>
+                    <TouchableOpacity style={[styles.capsuleSealButton, { flex: 1 }]} onPress={() => revealingCapsule && addCapsuleToDay(revealingCapsule)}>
+                      <Text style={styles.capsuleSealButtonText}>Add to today</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.addFavCancel, { flex: 1 }]} onPress={() => setRevealingCapsule(null)}>
+                      <Text style={styles.addFavCancelText}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+              )}
+            </View>
+          </Modal>
         </View>
       </Modal>
 
@@ -1819,38 +1996,39 @@ export default function ThePresent() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#08090f' },
+  outerContainer: { flex: 1, backgroundColor: '#0b1526' },
   container: { flex: 1 },
-  header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#08090f' },
+  header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#0b1526' },
+  headerTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
   headerTitle: { fontSize: 32, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff' },
-  headerDate: { fontSize: 14, color: 'rgba(255,255,255,0.4)', marginTop: 2, marginBottom: 14 },
+  headerDate: { fontSize: 14, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  headerTagline: { fontSize: 13, color: 'rgba(74,144,217,0.7)', fontStyle: 'italic', marginTop: 6 },
   tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center', borderWidth: 1, borderColor: 'transparent' },
   tabButtonActive: { backgroundColor: 'rgba(74,144,217,0.18)', borderColor: 'rgba(74,144,217,0.35)' },
   tabButtonText: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.3)' },
   tabButtonTextActive: { color: '#ffffff', fontWeight: '700' },
-  subHeader: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12 },
-  headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' },
 
   // Card base
-  card: { backgroundColor: '#0d1220', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(74,144,217,0.2)', marginHorizontal: 16, marginBottom: 14, padding: 14 },
+  card: { backgroundColor: '#101c33', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(74,144,217,0.22)', marginHorizontal: 16, marginBottom: 14, padding: 14 },
   cardLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '800', letterSpacing: 2, marginBottom: 10 },
 
-  // 3.1 Capture pair
-  pairArea: { height: 300, borderRadius: 12, overflow: 'hidden' },
-  pairMainPhoto: { width: '100%', height: '100%' },
-  pairMainPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(74,144,217,0.25)', borderStyle: 'dashed', borderRadius: 12 },
+  // 3.2 Hero capture card
+  heroCard: { height: 340, borderRadius: 20, borderWidth: 1.5, borderColor: 'rgba(74,144,217,0.3)', overflow: 'hidden', backgroundColor: '#101c33', marginHorizontal: 16, marginBottom: 4, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  heroMainEmptySlot: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  heroInset: { position: 'absolute', top: 12, left: 12, width: 92, height: 122, borderRadius: 14, borderWidth: 2.5, borderColor: '#ffffff', overflow: 'hidden', backgroundColor: '#101c33', shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6 },
+  heroInsetPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.1)' },
+  heroEmptyRow: { flex: 1, flexDirection: 'row', gap: 12, padding: 12 },
+  heroEmptyPrompt: { flex: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', borderStyle: 'dashed', borderRadius: 14, backgroundColor: 'rgba(74,144,217,0.05)' },
   pairPlaceholderText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 8 },
-  pairInset: { position: 'absolute', top: 10, left: 10, width: 100, height: 133, borderRadius: 12, borderWidth: 2, borderColor: '#ffffff', overflow: 'hidden', backgroundColor: '#0d1220', shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6 },
-  pairInsetPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', borderStyle: 'dashed', borderRadius: 10 },
-  pairPromptRow: { flexDirection: 'row', gap: 12, height: 300 },
-  pairPrompt: { flex: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', borderStyle: 'dashed', borderRadius: 12, backgroundColor: 'rgba(74,144,217,0.05)' },
   pairPromptText: { fontSize: 14, color: 'rgba(255,255,255,0.6)', fontWeight: '600', marginTop: 10 },
-  extraStrip: { gap: 8, paddingTop: 12 },
-  extraPhoto: { width: 64, height: 64, borderRadius: 10 },
-  addExtraTile: { width: 64, height: 64, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', justifyContent: 'center', alignItems: 'center' },
-  addExtraText: { color: '#4a90d9', fontSize: 26, fontWeight: '300' },
-  viewAllSelfies: { marginTop: 10, alignSelf: 'flex-end' },
+  heroBottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 76 },
+  heroBottomRow: { position: 'absolute', left: 12, right: 12, bottom: 10, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  heroThumb: { width: 46, height: 46, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  heroAddThumbTile: { width: 46, height: 46, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(74,144,217,0.6)', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(16,28,51,0.6)' },
+  addExtraText: { color: '#4a90d9', fontSize: 22, fontWeight: '300' },
+  heroPhotoCount: { fontSize: 12, fontWeight: '600', color: '#ffffff', marginLeft: 10 },
+  viewAllSelfiesRow: { marginHorizontal: 16, marginTop: 8, marginBottom: 14, alignSelf: 'flex-end' },
   viewAllSelfiesText: { fontSize: 12, color: 'rgba(74,144,217,0.8)', fontWeight: '600' },
 
   // 3.3 Three words
@@ -1858,12 +2036,13 @@ const styles = StyleSheet.create({
   wordChip: { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, color: 'rgba(255,255,255,0.8)', fontSize: 14, borderWidth: 1, borderColor: 'transparent', textAlign: 'center' },
   wordChipFilled: { borderColor: 'rgba(74,144,217,0.5)', color: '#ffffff', fontWeight: '600' },
 
-  // 3.4 / 3.5 Questions
+  // 3.4 Journal card
   questionText: { fontSize: 17, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', lineHeight: 24, marginBottom: 10 },
   questionInput: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.15)', paddingTop: 10, color: '#ffffff', fontSize: 15, lineHeight: 21, minHeight: 60, textAlignVertical: 'top' },
-  reflectionCard: { borderColor: 'rgba(74,144,217,0.35)', shadowColor: '#4a90d9', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
+  journalDivider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(74,144,217,0.15)', marginVertical: 16, marginHorizontal: 6 },
+  reflectionInner: { borderRadius: 14, borderWidth: 1, borderColor: 'rgba(74,144,217,0.4)', backgroundColor: 'rgba(74,144,217,0.06)', padding: 14, shadowColor: '#4a90d9', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 3 },
+  reflectionQuestionText: { fontSize: 16, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', lineHeight: 22, marginBottom: 8 },
 
-  // 3.6 Your day
   dayActionsRow: { flexDirection: 'row', gap: 10 },
   dayActionBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.06)' },
   dayActionBtnActive: { backgroundColor: 'rgba(74,144,217,0.2)', borderColor: 'rgba(74,144,217,0.5)' },
@@ -1875,23 +2054,16 @@ const styles = StyleSheet.create({
   voicePlayRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, backgroundColor: 'rgba(74,144,217,0.1)' },
   voicePlayText: { fontSize: 13, color: '#4a90d9', fontWeight: '600' },
 
-  // 3.7 Cooked
-  cookedRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  // Cooked (shared by modal + tile)
+  cookedRow: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 12 },
   inlineInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', fontSize: 15 },
   cookedPhotoSlot: { width: 44, height: 44, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  recipeSaveBtn: { marginTop: 10, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.15)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.35)' },
+  recipeSaveBtn: { marginBottom: 12, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.15)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.35)' },
   recipeSaveBtnDone: { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.15)' },
   recipeSaveText: { fontSize: 13, color: '#4a90d9', fontWeight: '700' },
 
-  // 3.8 Soundtrack
-  songName: { fontSize: 16, color: '#ffffff', fontWeight: '600', marginBottom: 8 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 8 },
-  ratingDot: { width: 14, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)' },
-  ratingDotFilled: { backgroundColor: '#4a90d9' },
-  ratingNumber: { fontSize: 12, color: 'rgba(255,255,255,0.5)', marginLeft: 6 },
   entryAnswer: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 20 },
   entryAddText: { fontSize: 13, color: 'rgba(74,144,217,0.8)', marginTop: 6 },
-  entryPrompt: { fontSize: 14, color: 'rgba(255,255,255,0.5)', marginBottom: 2 },
 
   // People
   peopleChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
@@ -1900,19 +2072,13 @@ const styles = StyleSheet.create({
   personChipRemovable: { flexDirection: 'row', backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', alignItems: 'center' },
   personChipRemove: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
 
-  // 3.11 Locations
+  // Locations
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   locationDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4a90d9' },
   locationName: { fontSize: 15, color: '#ffffff', fontWeight: '600' },
   locationWith: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1 },
-  addLocationRow: { paddingVertical: 8 },
+  addLocationRow: { paddingVertical: 10 },
   addLocationText: { fontSize: 13, color: 'rgba(74,144,217,0.8)', fontWeight: '600' },
-
-  // Weather
-  weatherRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  weatherEmoji: { fontSize: 26 },
-  weatherTemp: { fontSize: 20, color: '#ffffff', fontWeight: '700' },
-  weatherDesc: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
 
   // Notifications
   notificationRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -1920,24 +2086,48 @@ const styles = StyleSheet.create({
   notificationTitle: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
   notificationSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1 },
 
-  // 3.12 Capsules — GOLD
-  capsuleSection: { marginHorizontal: 16, marginBottom: 14, marginTop: 8 },
-  capsuleSectionTitle: { fontSize: 20, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842', marginBottom: 4 },
+  // 3.5 Details grid
+  detailsSectionLabel: { fontSize: 10, color: 'rgba(255,255,255,0.4)', fontWeight: '800', letterSpacing: 2, marginHorizontal: 16, marginBottom: 10 },
+  detailsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 4 },
+  tile: { width: '48%', minHeight: 74, borderRadius: 16, padding: 14, marginBottom: 10 },
+  tileFilled: { backgroundColor: '#101c33', borderWidth: 1, borderColor: 'rgba(74,144,217,0.35)' },
+  tileEmpty: { backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  tileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  tileEmoji: { fontSize: 15 },
+  tileLabel: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: 0.5 },
+  tileLabelFilled: { color: '#4a90d9' },
+  tileValue: { fontSize: 13, fontWeight: '600', color: '#ffffff' },
+  tileEmptyText: { fontSize: 12, color: 'rgba(255,255,255,0.25)' },
+
+  // 3.6 Capsules — compact gold row
+  capsuleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 14, padding: 14, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(245,200,66,0.35)', backgroundColor: 'rgba(245,200,66,0.05)' },
+  capsuleRowReady: { backgroundColor: 'rgba(245,200,66,0.16)', borderColor: 'rgba(245,200,66,0.6)' },
+  capsuleRowEmoji: { fontSize: 20 },
+  capsuleRowTitle: { fontSize: 14, fontWeight: '700', color: '#f5c842' },
+  capsuleRowSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  capsuleRowCta: { fontSize: 13, fontWeight: '700', color: '#f5c842' },
+
+  // Capsules sheet
+  capsuleSheetBox: { backgroundColor: 'rgba(16,28,51,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 36, borderWidth: 1, borderColor: 'rgba(245,200,66,0.25)', maxHeight: '85%' },
+  capsuleSheetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  capsuleSheetTitle: { fontSize: 22, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842' },
+  capsuleSheetFooter: { marginTop: 16, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.1)' },
   capsuleSectionSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 12 },
+  capsuleEmptyText: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', paddingVertical: 12 },
   capsuleReadyCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(245,200,66,0.12)', borderWidth: 1, borderColor: 'rgba(245,200,66,0.5)', borderRadius: 14, padding: 14, marginBottom: 8 },
   capsuleEmoji: { fontSize: 24 },
   capsuleReadyTitle: { fontSize: 15, color: '#f5c842', fontWeight: '700' },
   capsuleReadyDate: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 1 },
-  capsuleSealedCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#0d1220', borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', borderRadius: 14, padding: 14, marginBottom: 8 },
+  capsuleSealedCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#101c33', borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', borderRadius: 14, padding: 14, marginBottom: 8 },
   capsuleSealedTitle: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
   capsuleSealedDate: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1 },
-  createCapsuleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', borderStyle: 'dashed', borderRadius: 14, padding: 14 },
+  createCapsuleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', borderStyle: 'dashed', borderRadius: 14, padding: 14, marginTop: 8 },
   createCapsuleEmoji: { fontSize: 16 },
   createCapsuleText: { fontSize: 14, color: '#f5c842', fontWeight: '600' },
 
-  // 3.13 Save day
-  saveDayButton: { marginHorizontal: 16, backgroundColor: '#4a90d9', borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 8 },
-  saveDayButtonDone: { backgroundColor: 'rgba(74,144,217,0.35)' },
+  // 3.7 Save day — gradient
+  saveDayButtonWrap: { marginHorizontal: 16, marginTop: 4, borderRadius: 16, shadowColor: '#4a90d9', shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  saveDayButtonGradient: { borderRadius: 16, padding: 17, alignItems: 'center' },
   saveDayButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
 
   // Empty states
@@ -1954,17 +2144,17 @@ const styles = StyleSheet.create({
   yearPickerText: { fontSize: 16, fontWeight: '700', color: 'rgba(255,255,255,0.35)' },
   yearPickerTextActive: { color: '#ffffff' },
   calendarMonth: { paddingHorizontal: 16, marginBottom: 28 },
-  calendarMonthTitle: { fontSize: 22, fontFamily: 'SpaceGrotesk_600SemiBold', color: '#ffffff', marginBottom: 8 },
+  calendarMonthTitle: { fontSize: 22, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 8 },
   calendarDayHeaders: { flexDirection: 'row', marginBottom: 4 },
   calendarDayHeader: { width: CAL_SLOT_WIDTH, textAlign: 'center', fontSize: 9, color: '#ffffff', fontWeight: '700' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calSlot: { width: CAL_SLOT_WIDTH, alignItems: 'center', marginBottom: 8 },
   calCard: { width: '86%', aspectRatio: 3 / 4, borderRadius: 8, overflow: 'hidden' },
   calCardFilled: { borderWidth: 1.5, borderColor: '#ffffff' },
-  calCardEmpty: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-  calCardToday: { borderWidth: 2, borderColor: '#ffffff' },
+  calCardEmpty: { borderWidth: 1, borderColor: 'rgba(74,144,217,0.18)', justifyContent: 'center', alignItems: 'center' },
+  calCardToday: { borderWidth: 2, borderColor: '#4a90d9' },
   calDayNumFilled: { position: 'absolute', bottom: 4, left: 5, color: '#ffffff', fontSize: 12, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-  calDayNumEmpty: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' },
+  calDayNumEmpty: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '700' },
 
   // Favourites
   favFilterStrip: { maxHeight: 54 },
@@ -1975,7 +2165,7 @@ const styles = StyleSheet.create({
   favFilterText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
   favFilterTextActive: { color: '#ffffff' },
   favGrid: { paddingHorizontal: 16, paddingBottom: 140, gap: 12 },
-  favCard: { backgroundColor: '#0d1220', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(74,144,217,0.2)', overflow: 'hidden' },
+  favCard: { backgroundColor: '#101c33', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(74,144,217,0.22)', overflow: 'hidden' },
   favPhoto: { width: '100%', height: 140 },
   favPhotoRecipe: { height: 200 },
   favPhotoEmpty: { width: '100%', height: 90, backgroundColor: 'rgba(74,144,217,0.06)', justifyContent: 'center', alignItems: 'center' },
@@ -1992,7 +2182,7 @@ const styles = StyleSheet.create({
 
   // Fav detail
   favDetailOverlay: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  favDetailBox: { backgroundColor: 'rgba(10,14,22,0.98)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)', padding: 20, maxHeight: '75%' },
+  favDetailBox: { backgroundColor: 'rgba(16,28,51,0.98)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)', padding: 20, maxHeight: '75%' },
   favDetailCloseBtn: { position: 'absolute', top: 12, right: 12, zIndex: 2, padding: 6 },
   favDetailPhoto: { width: '100%', height: 220, borderRadius: 14, marginBottom: 4 },
   favDetailPhotoEditBadge: { position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
@@ -2010,7 +2200,7 @@ const styles = StyleSheet.create({
   favDetailDeleteText: { color: '#ff4444', fontSize: 13, fontWeight: '600' },
 
   // Add favourite modal
-  addFavModal: { flex: 1, backgroundColor: '#08090f', paddingTop: 70, paddingHorizontal: 20 },
+  addFavModal: { flex: 1, backgroundColor: '#0b1526', paddingTop: 70, paddingHorizontal: 20 },
   addFavTitle: { fontSize: 26, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 20 },
   addFavLabel: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 8, marginTop: 12 },
   addFavCategoryRow: { gap: 8, paddingBottom: 4 },
@@ -2037,7 +2227,7 @@ const styles = StyleSheet.create({
 
   // Modals — glass
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
-  modalBox: { backgroundColor: 'rgba(10,14,22,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)' },
+  modalBox: { backgroundColor: 'rgba(16,28,51,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)' },
   modalTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginBottom: 12, letterSpacing: -0.3 },
   textInput: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
   saveButton: { backgroundColor: '#4a90d9', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
@@ -2061,7 +2251,7 @@ const styles = StyleSheet.create({
   peopleSuggestionText: { color: '#ffffff', fontSize: 14 },
 
   // Capsule modal
-  capsuleModal: { flex: 1, backgroundColor: '#08090f', paddingTop: 70, paddingHorizontal: 20 },
+  capsuleModal: { flex: 1, backgroundColor: '#0b1526', paddingTop: 70, paddingHorizontal: 20 },
   capsuleModalTitle: { fontSize: 26, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842', marginBottom: 4 },
   capsuleModalSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 16 },
   capsuleDatePicker: { flexDirection: 'row', gap: 10, justifyContent: 'center' },
@@ -2079,7 +2269,7 @@ const styles = StyleSheet.create({
   capsuleRevealOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
   capsuleGraphic: { width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(245,200,66,0.15)', borderWidth: 2, borderColor: '#f5c842', justifyContent: 'center', alignItems: 'center', shadowColor: '#f5c842', shadowOpacity: 0.4, shadowRadius: 24, shadowOffset: { width: 0, height: 0 } },
   capsuleGraphicEmoji: { fontSize: 64 },
-  capsuleRevealBox: { width: '100%', backgroundColor: 'rgba(10,14,22,0.98)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', padding: 24, maxHeight: '75%', alignItems: 'center' },
+  capsuleRevealBox: { width: '100%', backgroundColor: 'rgba(16,28,51,0.98)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', padding: 24, maxHeight: '75%', alignItems: 'center' },
   capsuleRevealEmoji: { fontSize: 40, marginBottom: 8 },
   capsuleRevealTitle: { fontSize: 18, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842', textAlign: 'center' },
   capsuleRevealDate: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4, marginBottom: 12 },
@@ -2109,4 +2299,3 @@ const styles = StyleSheet.create({
   photoCaptureBtnText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
   photoCaptureBtnTextPrimary: { color: '#000000' },
 });
-
