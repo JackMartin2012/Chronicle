@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold, useFonts } from '@expo-google-fonts/space-grotesk';
+import { SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold, useFonts } from '@expo-google-fonts/space-grotesk';
 import { Audio } from 'expo-av';
 import { BlurView } from 'expo-blur';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -136,13 +136,13 @@ const getSeededPrompt = (dateKey: string, prompts: string[], offset = 0) => {
 };
 
 const favCategories = [
-  { key: 'all', label: 'All', emoji: '⭐' },
-  { key: 'song', label: 'Song', emoji: '🎵' },
-  { key: 'movie', label: 'Movie / TV', emoji: '🎬' },
-  { key: 'book', label: 'Book', emoji: '📚' },
-  { key: 'restaurant', label: 'Restaurant', emoji: '🍽️' },
-  { key: 'recipe', label: 'Recipe', emoji: '🍳' },
-  { key: 'place', label: 'Place', emoji: '📍' },
+  { key: 'all', label: 'All' },
+  { key: 'song', label: 'Song' },
+  { key: 'movie', label: 'Movie / TV' },
+  { key: 'book', label: 'Book' },
+  { key: 'restaurant', label: 'Restaurant' },
+  { key: 'recipe', label: 'Recipe' },
+  { key: 'place', label: 'Place' },
 ];
 
 const getWeatherInfo = (code: number, temp: number) => {
@@ -156,27 +156,6 @@ const getWeatherInfo = (code: number, temp: number) => {
   else if (code <= 82) { emoji = '🌧️'; description = 'Showers'; }
   else if (code <= 99) { emoji = '⛈️'; description = 'Thunderstorm'; }
   return { emoji, description, temp: Math.round(temp) };
-};
-
-// ── ANIMATED CARD ────────────────────────────────────────────────────────────
-const AnimatedCard = ({ onPress, style, children }: {
-  onPress: () => void; style?: any; children: React.ReactNode;
-}) => {
-  const scale = useRef(new Animated.Value(1)).current;
-  const onPressIn = () => Animated.spring(scale, {
-    toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 4,
-  }).start();
-  const onPressOut = () => Animated.spring(scale, {
-    toValue: 1, useNativeDriver: true, speed: 50, bounciness: 4,
-  }).start();
-  return (
-    <Animated.View style={[style, { transform: [{ scale }] }]}>
-      <TouchableOpacity onPress={onPress} onPressIn={onPressIn} onPressOut={onPressOut}
-        activeOpacity={1} style={{ flex: 1 }}>
-        {children}
-      </TouchableOpacity>
-    </Animated.View>
-  );
 };
 
 // ── DAY COMPLETENESS RING ────────────────────────────────────────────────────
@@ -215,7 +194,7 @@ const DayRing = ({ completed, total }: { completed: number; total: number }) => 
 const ringStyles = StyleSheet.create({
   wrap: { width: RING_SIZE, height: RING_SIZE },
   labelWrap: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  labelText: { fontSize: 11, fontWeight: '700', color: '#ffffff' },
+  labelText: { fontSize: 11, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff' },
 });
 
 // ── MOOD SLIDER ──────────────────────────────────────────────────────────────
@@ -321,7 +300,7 @@ const sliderStyles = StyleSheet.create({
 });
 
 export default function ThePresent() {
-  const [fontsLoaded] = useFonts({ SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold });
+  const [fontsLoaded] = useFonts({ SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold });
   const [activeTab, setActiveTab] = useState<'today' | 'archive' | 'selfie' | 'favourites'>('today');
 
   const [entry, setEntry] = useState<DayEntry>(emptyEntry);
@@ -897,7 +876,7 @@ export default function ThePresent() {
     }
     setNewCapsuleMessage(''); setNewCapsulePhoto(''); setCapsuleAddToDay(false); setCapsuleContext('');
     setShowCreateCapsule(false);
-    Alert.alert('Sealed! 🔒', `Opens on ${new Date(openDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.`);
+    Alert.alert('Sealed', `Opens on ${new Date(openDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}.`);
   };
 
   const addCapsuleToDay = async (capsule: Capsule) => {
@@ -969,7 +948,6 @@ export default function ThePresent() {
   };
 
   const filteredFavourites = favFilter === 'all' ? favourites : favourites.filter(f => f.category === favFilter);
-  const getCategoryEmoji = (key: string) => favCategories.find(c => c.key === key)?.emoji || '⭐';
 
   // ── DETAILS GRID DATA ────────────────────────────────────────────────────
   const placesValue = (entry.locations || []).length > 0
@@ -1013,7 +991,7 @@ export default function ThePresent() {
         <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={{ height: 10 }} />
 
-          {/* 3.2 HERO CAPTURE CARD */}
+          {/* 3.2 HERO CAPTURE — full bleed */}
           <View style={styles.heroCard}>
             {entry.photoUri || entry.pairSelfieUri ? (
               <>
@@ -1039,7 +1017,7 @@ export default function ThePresent() {
                     />
                   ) : (
                     <View style={styles.heroMainEmptySlot}>
-                      <Text style={{ fontSize: 32 }}>📷</Text>
+                      <Ionicons name="camera-outline" size={30} color="rgba(255,255,255,0.35)" />
                       <Text style={styles.pairPlaceholderText}>Add today&apos;s photo</Text>
                     </View>
                   )}
@@ -1062,54 +1040,49 @@ export default function ThePresent() {
                       />
                     ) : (
                       <View style={styles.heroInsetPlaceholder}>
-                        <Text style={{ fontSize: 20 }}>🤳</Text>
+                        <Ionicons name="person-outline" size={18} color="rgba(255,255,255,0.4)" />
                       </View>
                     )}
                   </TouchableOpacity>
                 ) : null}
-                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={styles.heroBottomGradient} pointerEvents="none" />
-                <View style={styles.heroBottomRow}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center' }}>
-                    {entry.extraPhotos.map((uri, index) => (
-                      <TouchableOpacity key={index} style={{ marginRight: 8 }} onPress={() => {
-                        Alert.alert('Photo', '', [
-                          { text: 'View photo', onPress: () => setFullScreenUri(uri) },
-                          { text: 'Remove photo', onPress: () => updateEntry({ extraPhotos: entry.extraPhotos.filter((_, i) => i !== index) }), style: 'destructive' },
-                          { text: 'Cancel', style: 'cancel' },
-                        ]);
-                      }}>
-                        <Image source={{ uri }} style={styles.heroThumb} />
-                      </TouchableOpacity>
-                    ))}
-                    <TouchableOpacity style={styles.heroAddThumbTile} onPress={() => pickPhoto('extra')}>
-                      <Text style={styles.addExtraText}>+</Text>
-                    </TouchableOpacity>
-                  </ScrollView>
-                  <Text style={styles.heroPhotoCount}>
-                    {(entry.photoUri ? 1 : 0) + (entry.pairSelfieUri ? 1 : 0) + entry.extraPhotos.length} photo{((entry.photoUri ? 1 : 0) + (entry.pairSelfieUri ? 1 : 0) + entry.extraPhotos.length) === 1 ? '' : 's'} today
+                <LinearGradient colors={['transparent', 'transparent', '#0b1526']} locations={[0, 0.55, 1]} style={styles.heroBottomGradient} pointerEvents="none" />
+                <LinearGradient colors={['#0b1526', 'transparent']} style={styles.heroTopGradient} pointerEvents="none" />
+                <View style={styles.heroOverlayText} pointerEvents="none">
+                  {threeWordsLocal.some(w => w.trim()) && (
+                    <Text style={styles.heroThreeWords}>{threeWordsLocal.filter(w => w.trim()).join(' · ')}</Text>
+                  )}
+                  <Text style={styles.heroMetaLine}>
+                    {[
+                      entry.weatherEmoji ? `${entry.weatherEmoji} ${entry.weatherTemp}°C` : null,
+                      entry.mood || null,
+                      `${(entry.photoUri ? 1 : 0) + (entry.pairSelfieUri ? 1 : 0) + entry.extraPhotos.length} photo${((entry.photoUri ? 1 : 0) + (entry.pairSelfieUri ? 1 : 0) + entry.extraPhotos.length) === 1 ? '' : 's'}`,
+                    ].filter(Boolean).join('  ·  ')}
                   </Text>
                 </View>
               </>
             ) : (
               <View style={styles.heroEmptyRow}>
                 <TouchableOpacity style={styles.heroEmptyPrompt} onPress={() => pickPhoto('today')}>
-                  <Text style={{ fontSize: 28 }}>📷</Text>
+                  <Ionicons name="camera-outline" size={26} color="rgba(255,255,255,0.4)" />
                   <Text style={styles.pairPromptText}>Today&apos;s photo</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.heroEmptyPrompt} onPress={() => pickPhoto('pair')}>
-                  <Text style={{ fontSize: 28 }}>🤳</Text>
+                  <Ionicons name="person-outline" size={26} color="rgba(255,255,255,0.4)" />
                   <Text style={styles.pairPromptText}>Add a selfie</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
-          <TouchableOpacity style={styles.storyLinkRow} onPress={openCaptionsSheet}>
-            <Text style={styles.storyLinkText}>✍️ Tell the story of these photos →</Text>
-          </TouchableOpacity>
 
-          {/* 3.3 THREE WORDS + MOOD */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>TODAY IN THREE WORDS</Text>
+          {/* 3.2b Mood — open section directly under the hero */}
+          <View style={styles.openSection}>
+            <Text style={styles.quietLabel}>Mood</Text>
+            <MoodSlider value={entry.mood} onChange={emoji => updateEntry({ mood: emoji })} />
+          </View>
+
+          {/* Three words — open, editable; the values themselves are shown on the hero photo */}
+          <View style={[styles.openSection, { paddingTop: 0 }]}>
+            <Text style={styles.quietLabel}>Today in three words</Text>
             <View style={styles.wordsRow}>
               {[0, 1, 2].map(i => (
                 <TextInput
@@ -1124,37 +1097,61 @@ export default function ThePresent() {
                 />
               ))}
             </View>
-            <Text style={[styles.cardLabel, { marginTop: 18 }]}>MOOD</Text>
-            <MoodSlider value={entry.mood} onChange={emoji => updateEntry({ mood: emoji })} />
           </View>
 
-          {/* 3.4 THE JOURNAL CARD */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>TELL US ABOUT YOUR DAY</Text>
-            <View style={styles.dayActionsRow}>
-              <TouchableOpacity
-                style={[styles.dayActionBtn, writeOpen && styles.dayActionBtnActive]}
-                onPress={() => setWriteOpen(o => !o)}
-              >
-                <Text style={styles.dayActionText}>✍️ Write</Text>
+          {(entry.photoUri || entry.pairSelfieUri) && (
+            <View style={[styles.openSection, { paddingTop: 0 }]}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ alignItems: 'center', gap: 8 }}>
+                {entry.extraPhotos.map((uri, index) => (
+                  <TouchableOpacity key={index} onPress={() => {
+                    Alert.alert('Photo', '', [
+                      { text: 'View photo', onPress: () => setFullScreenUri(uri) },
+                      { text: 'Remove photo', onPress: () => updateEntry({ extraPhotos: entry.extraPhotos.filter((_, i) => i !== index) }), style: 'destructive' },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]);
+                  }}>
+                    <Image source={{ uri }} style={styles.heroThumb} />
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity style={styles.heroAddThumbTile} onPress={() => pickPhoto('extra')}>
+                  <Ionicons name="add" size={20} color="rgba(255,255,255,0.45)" />
+                </TouchableOpacity>
+              </ScrollView>
+              <TouchableOpacity style={styles.storyLinkRow} onPress={openCaptionsSheet}>
+                <Text style={styles.storyLinkText}>Tell the story of these photos →</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.dayActionBtn, isRecording && styles.dayActionBtnRecording]}
-                onPress={isRecording ? stopRecording : startRecording}
-              >
-                <Text style={styles.dayActionText}>{isRecording ? '⏹ Stop' : '🎙 Speak'}</Text>
+            </View>
+          )}
+
+          <View style={styles.sectionDivider} />
+
+          {/* 3.4 THE JOURNAL — open layout */}
+          <View style={styles.openSection}>
+            <Text style={styles.journalQuestion}>{dailyQuestion}</Text>
+            <TextInput
+              style={styles.journalAnswerInput}
+              placeholder="Your answer..."
+              placeholderTextColor="rgba(255,255,255,0.25)"
+              multiline
+              value={dailyAnswerLocal}
+              onChangeText={setDailyAnswerLocal}
+              onBlur={() => updateEntry({ dailyQuestion, dailyAnswer: dailyAnswerLocal })}
+            />
+            <View style={styles.journalLinksRow}>
+              <TouchableOpacity onPress={() => setWriteOpen(o => !o)}>
+                <Text style={styles.journalLinkAccent}>Write more</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={isRecording ? stopRecording : startRecording}>
+                <Text style={styles.journalLinkMuted}>{isRecording ? 'Stop recording' : 'Speak it'}</Text>
               </TouchableOpacity>
             </View>
             {isRecording && (
-              <View style={styles.recordingRow}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.recordingText}>Recording... tap Stop when done</Text>
-              </View>
+              <Text style={styles.recordingText}>Recording... tap Stop when done</Text>
             )}
             {(writeOpen || !!dayDescLocal) && (
               <TextInput
-                style={styles.questionInput}
-                placeholder="Tell future you about today..."
+                style={[styles.journalAnswerInput, { marginTop: 12 }]}
+                placeholder="Tell future you more about today..."
                 placeholderTextColor="rgba(255,255,255,0.25)"
                 multiline
                 value={dayDescLocal}
@@ -1164,146 +1161,94 @@ export default function ThePresent() {
             )}
             {!!entry.voiceMemoUri && !isRecording && (
               <TouchableOpacity style={styles.voicePlayRow} onPress={() => playVoiceMemo()}>
-                <Ionicons name={isPlaying ? 'stop' : 'play'} size={16} color="#4a90d9" />
+                <Ionicons name={isPlaying ? 'stop' : 'play'} size={16} color="rgba(255,255,255,0.45)" />
                 <Text style={styles.voicePlayText}>{isPlaying ? 'Playing...' : 'Play voice memo'}</Text>
               </TouchableOpacity>
             )}
+          </View>
 
-            <View style={styles.journalDivider} />
+          <View style={styles.sectionDivider} />
 
-            <Text style={styles.cardLabel}>TODAY&apos;S QUESTION</Text>
-            <Text style={styles.questionText}>{dailyQuestion}</Text>
+          {/* For future you — open, no glow, no border */}
+          <View style={styles.openSection}>
+            <Text style={styles.forFutureYouLabel}>For future you</Text>
+            <Text style={styles.journalQuestion}>{reflectionQuestion}</Text>
             <TextInput
-              style={styles.questionInput}
-              placeholder="Your answer..."
+              style={styles.journalAnswerInput}
+              placeholder="Future you will read this..."
               placeholderTextColor="rgba(255,255,255,0.25)"
               multiline
-              value={dailyAnswerLocal}
-              onChangeText={setDailyAnswerLocal}
-              onBlur={() => updateEntry({ dailyQuestion, dailyAnswer: dailyAnswerLocal })}
+              value={reflectionAnswerLocal}
+              onChangeText={setReflectionAnswerLocal}
+              onBlur={() => updateEntry({ reflectionQuestion, reflectionAnswer: reflectionAnswerLocal })}
             />
-
-            <View style={styles.journalDivider} />
-
-            <View style={styles.reflectionInner}>
-              <Text style={[styles.cardLabel, { marginBottom: 6 }]}>✦ FOR FUTURE YOU</Text>
-              <Text style={styles.reflectionQuestionText}>{reflectionQuestion}</Text>
-              <TextInput
-                style={styles.questionInput}
-                placeholder="Future you will read this..."
-                placeholderTextColor="rgba(255,255,255,0.25)"
-                multiline
-                value={reflectionAnswerLocal}
-                onChangeText={setReflectionAnswerLocal}
-                onBlur={() => updateEntry({ reflectionQuestion, reflectionAnswer: reflectionAnswerLocal })}
-              />
-            </View>
           </View>
 
-          {/* 3.5 THE DETAILS GRID */}
-          <Text style={styles.detailsSectionLabel}>THE DETAILS</Text>
-          <View style={styles.detailsGrid}>
-            <AnimatedCard
-              style={[styles.tile, entry.songName ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => openModal('song', entry.songName, entry.songRating)}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>🎵</Text>
-                <Text style={[styles.tileLabel, !!entry.songName && styles.tileLabelFilled]}>Soundtrack</Text>
-              </View>
-              {entry.songName ? <Text style={styles.tileValue} numberOfLines={1}>{entry.songName}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
-            </AnimatedCard>
+          <View style={styles.sectionDivider} />
 
-            <AnimatedCard
-              style={[styles.tile, entry.watched ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => setShowWatchedModal(true)}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>📺</Text>
-                <Text style={[styles.tileLabel, !!entry.watched && styles.tileLabelFilled]}>Watched</Text>
-              </View>
-              {entry.watched ? <Text style={styles.tileValue} numberOfLines={1}>{entry.watched}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
-            </AnimatedCard>
+          {/* 3.5 THE DETAILS — list rows */}
+          <View style={styles.openSection}>
+            <Text style={styles.quietLabel}>The details</Text>
 
-            <AnimatedCard
-              style={[styles.tile, entry.cookedDish ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => setShowCookedModal(true)}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>🍳</Text>
-                <Text style={[styles.tileLabel, !!entry.cookedDish && styles.tileLabelFilled]}>Cooked</Text>
-              </View>
-              {entry.cookedDish ? <Text style={styles.tileValue} numberOfLines={1}>{entry.cookedDish}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
-            </AnimatedCard>
+            <TouchableOpacity style={styles.detailRow} onPress={() => openModal('song', entry.songName, entry.songRating)}>
+              <Text style={styles.detailRowLabel}>Soundtrack</Text>
+              {entry.songName ? <Text style={styles.detailRowValue} numberOfLines={1}>{entry.songName}</Text> : <Text style={styles.detailRowEmpty}>Add...</Text>}
+            </TouchableOpacity>
 
-            <AnimatedCard
-              style={[styles.tile, (entry.taggedPeople || []).length > 0 ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => setShowPeopleModal(true)}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>👥</Text>
-                <Text style={[styles.tileLabel, (entry.taggedPeople || []).length > 0 && styles.tileLabelFilled]}>People</Text>
-              </View>
-              {peopleValue ? <Text style={styles.tileValue} numberOfLines={1}>{peopleValue}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
-            </AnimatedCard>
+            <TouchableOpacity style={styles.detailRow} onPress={() => setShowWatchedModal(true)}>
+              <Text style={styles.detailRowLabel}>Watched</Text>
+              {entry.watched ? <Text style={styles.detailRowValue} numberOfLines={1}>{entry.watched}</Text> : <Text style={styles.detailRowEmpty}>Add...</Text>}
+            </TouchableOpacity>
 
-            <AnimatedCard
-              style={[styles.tile, (entry.locations || []).length > 0 ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => setShowLocationsModal(true)}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>📍</Text>
-                <Text style={[styles.tileLabel, (entry.locations || []).length > 0 && styles.tileLabelFilled]}>Places</Text>
-              </View>
-              {placesValue ? <Text style={styles.tileValue} numberOfLines={1}>{placesValue}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
-            </AnimatedCard>
+            <TouchableOpacity style={styles.detailRow} onPress={() => setShowCookedModal(true)}>
+              <Text style={styles.detailRowLabel}>Cooked</Text>
+              {entry.cookedDish ? <Text style={styles.detailRowValue} numberOfLines={1}>{entry.cookedDish}</Text> : <Text style={styles.detailRowEmpty}>Add...</Text>}
+            </TouchableOpacity>
 
-            <AnimatedCard
-              style={[styles.tile, entry.weatherEmoji ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => { if (!entry.weatherEmoji) fetchWeather(); }}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>⛅</Text>
-                <Text style={[styles.tileLabel, !!entry.weatherEmoji && styles.tileLabelFilled]}>Weather</Text>
-              </View>
-              {weatherLoading ? <ActivityIndicator size="small" color="#4a90d9" />
-                : entry.weatherEmoji ? <Text style={styles.tileValue} numberOfLines={1}>{entry.weatherEmoji} {entry.weatherTemp}°C</Text>
-                  : <Text style={styles.tileEmptyText}>Tap to load</Text>}
-            </AnimatedCard>
+            <TouchableOpacity style={styles.detailRow} onPress={() => setShowPeopleModal(true)}>
+              <Text style={styles.detailRowLabel}>People</Text>
+              {peopleValue ? <Text style={styles.detailRowValue} numberOfLines={1}>{peopleValue}</Text> : <Text style={styles.detailRowEmpty}>Add...</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.detailRow} onPress={() => setShowLocationsModal(true)}>
+              <Text style={styles.detailRowLabel}>Places</Text>
+              {placesValue ? <Text style={styles.detailRowValue} numberOfLines={1}>{placesValue}</Text> : <Text style={styles.detailRowEmpty}>Add...</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.detailRow, styles.detailRowLast]} onPress={() => { if (!entry.weatherEmoji) fetchWeather(); }}>
+              <Text style={styles.detailRowLabel}>Weather</Text>
+              {weatherLoading ? <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" />
+                : entry.weatherEmoji ? <Text style={styles.detailRowValue} numberOfLines={1}>{entry.weatherEmoji} {entry.weatherTemp}°C</Text>
+                  : <Text style={styles.detailRowEmpty}>Tap to load</Text>}
+            </TouchableOpacity>
           </View>
 
-          {/* 3.6 FUTURE CAPSULES — compact gold row */}
-          <AnimatedCard
-            style={[styles.capsuleRow, readyCapsules.length > 0 && styles.capsuleRowReady]}
-            onPress={() => setShowCapsulesSheet(true)}
-          >
-            <Text style={styles.capsuleRowEmoji}>✉️</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.capsuleRowTitle}>Future Capsules</Text>
-              <Text style={styles.capsuleRowSubtitle}>
-                {readyCapsules.length > 0
-                  ? `${readyCapsules.length} ready to open 🎁`
-                  : sealedCapsules.length > 0
-                    ? `${sealedCapsules.length} sealed · next opens in ${nextCapsuleDays} day${nextCapsuleDays === 1 ? '' : 's'}`
-                    : 'No capsules yet'}
-              </Text>
-            </View>
-            <Text style={styles.capsuleRowCta}>Seal one →</Text>
-          </AnimatedCard>
+          <View style={styles.sectionDivider} />
 
-          {/* 3.7 SAVE DAY */}
-          <TouchableOpacity onPress={saveToday} activeOpacity={0.85} style={styles.saveDayButtonWrap}>
-            <LinearGradient
-              colors={savedToday ? ['rgba(74,144,217,0.35)', 'rgba(74,144,217,0.35)'] : ['#4a90d9', 'rgba(74,144,217,0.75)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.saveDayButtonGradient}
-            >
-              <Text style={styles.saveDayButtonText}>
-                {savedToday ? '✓ Saved — view your day' : 'Save today → becomes your day card'}
-              </Text>
-            </LinearGradient>
+          {/* 3.6 FUTURE CAPSULES — plain two-line row, gold text only */}
+          <TouchableOpacity style={styles.openSection} onPress={() => setShowCapsulesSheet(true)}>
+            <View style={styles.capsuleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.capsuleRowTitle}>Future capsules</Text>
+                <Text style={styles.capsuleRowSubtitle}>
+                  {readyCapsules.length > 0
+                    ? `${readyCapsules.length} ready to open`
+                    : sealedCapsules.length > 0
+                      ? `${sealedCapsules.length} sealed · next opens in ${nextCapsuleDays} day${nextCapsuleDays === 1 ? '' : 's'}`
+                      : 'No capsules yet'}
+                </Text>
+              </View>
+              <Text style={styles.capsuleRowCta}>Seal one →</Text>
+            </View>
           </TouchableOpacity>
+
+          {/* 3.7 SAVE DAY — flat solid accent */}
+          <TouchableOpacity onPress={saveToday} activeOpacity={0.85} style={[styles.saveDayButton, savedToday && styles.saveDayButtonDone]}>
+            <Text style={styles.saveDayButtonText}>
+              {savedToday ? 'Saved — view your day' : 'Save today'}
+            </Text>
+          </TouchableOpacity>
+          {!savedToday && <Text style={styles.saveDayCaption}>becomes tomorrow&apos;s flashback</Text>}
 
           <View style={{ height: 110 }} />
         </ScrollView>
@@ -1313,7 +1258,7 @@ export default function ThePresent() {
         <View style={styles.container}>
           {archivedDays.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>📅</Text>
+              <Ionicons name="calendar-outline" size={48} color="rgba(255,255,255,0.25)" style={styles.emptyIcon} />
               <Text style={styles.emptyTitle}>No days archived yet</Text>
               <Text style={styles.emptySubtitle}>Add a photo or mood to today and it will appear here.</Text>
             </View>
@@ -1400,14 +1345,13 @@ export default function ThePresent() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.favFilterStrip} contentContainerStyle={styles.favFilterContent}>
             {favCategories.map(cat => (
               <TouchableOpacity key={cat.key} style={[styles.favFilterPill, favFilter === cat.key && styles.favFilterPillActive]} onPress={() => setFavFilter(cat.key)}>
-                <Text style={styles.favFilterEmoji}>{cat.emoji}</Text>
                 <Text style={[styles.favFilterText, favFilter === cat.key && styles.favFilterTextActive]}>{cat.label}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
           {filteredFavourites.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>⭐</Text>
+              <Ionicons name="star-outline" size={48} color="rgba(255,255,255,0.25)" style={styles.emptyIcon} />
               <Text style={styles.emptyTitle}>No favourites yet</Text>
               <Text style={styles.emptySubtitle}>Tap the + button to add your first favourite.</Text>
             </View>
@@ -1417,10 +1361,10 @@ export default function ThePresent() {
                 <TouchableOpacity key={fav.id} style={styles.favCard} onPress={() => setSelectedFav(fav)}>
                   {fav.photoUri
                     ? <Image source={{ uri: fav.photoUri }} style={[styles.favPhoto, fav.category === 'recipe' && styles.favPhotoRecipe]} />
-                    : <View style={styles.favPhotoEmpty}><Text style={styles.favCategoryEmoji}>{getCategoryEmoji(fav.category)}</Text></View>}
+                    : <View style={styles.favPhotoEmpty} />}
                   <View style={styles.favInfo}>
                     <View style={styles.favInfoTop}>
-                      <Text style={styles.favCategoryTag}>{getCategoryEmoji(fav.category)} {favCategories.find(c => c.key === fav.category)?.label}</Text>
+                      <Text style={styles.favCategoryTag}>{favCategories.find(c => c.key === fav.category)?.label}</Text>
                       {fav.rating > 0 && <Text style={styles.favRatingTag}>{fav.rating}/10</Text>}
                     </View>
                     <Text style={styles.favName} numberOfLines={1}>{fav.name}</Text>
@@ -1464,12 +1408,11 @@ export default function ThePresent() {
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity style={styles.favDetailPhotoEmpty} onPress={pickFavDetailPhoto} activeOpacity={0.8}>
-                  <Text style={styles.favDetailEmoji}>{getCategoryEmoji(selectedFav?.category || '')}</Text>
-                  <Text style={styles.favDetailAddPhotoLabel}>+ Add photo</Text>
+                  <Text style={styles.favDetailAddPhotoLabel}>Add photo</Text>
                 </TouchableOpacity>
               )}
               <View style={styles.favDetailInfoRow}>
-                <Text style={styles.favDetailCategory}>{getCategoryEmoji(selectedFav?.category || '')} {favCategories.find(c => c.key === selectedFav?.category)?.label}</Text>
+                <Text style={styles.favDetailCategory}>{favCategories.find(c => c.key === selectedFav?.category)?.label}</Text>
                 {selectedFav?.rating && selectedFav.rating > 0 ? <Text style={styles.favDetailRating}>{selectedFav.rating}/10</Text> : null}
               </View>
               <Text style={styles.favDetailName}>{selectedFav?.name}</Text>
@@ -1492,7 +1435,6 @@ export default function ThePresent() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.addFavCategoryRow}>
               {favCategories.filter(c => c.key !== 'all').map(cat => (
                 <TouchableOpacity key={cat.key} style={[styles.addFavCatPill, newFav.category === cat.key && styles.addFavCatPillActive]} onPress={() => setNewFav(prev => ({ ...prev, category: cat.key }))}>
-                  <Text style={styles.addFavCatEmoji}>{cat.emoji}</Text>
                   <Text style={[styles.addFavCatText, newFav.category === cat.key && styles.addFavCatTextActive]}>{cat.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -1500,7 +1442,7 @@ export default function ThePresent() {
             <Text style={styles.addFavLabel}>Photo (optional)</Text>
             <TouchableOpacity style={styles.addFavPhotoButton} onPress={pickFavPhoto}>
               {newFav.photoUri ? <Image source={{ uri: newFav.photoUri }} style={styles.addFavPhotoPreview} />
-                : <View style={styles.addFavPhotoEmpty}><Text style={styles.addFavPhotoEmoji}>📷</Text><Text style={styles.addFavPhotoText}>Add a photo</Text></View>}
+                : <View style={styles.addFavPhotoEmpty}><Ionicons name="camera-outline" size={24} color="rgba(255,255,255,0.35)" /><Text style={styles.addFavPhotoText}>Add a photo</Text></View>}
             </TouchableOpacity>
             <Text style={styles.addFavLabel}>Name</Text>
             <TextInput style={styles.addFavInput}
@@ -1535,8 +1477,8 @@ export default function ThePresent() {
                 <View style={styles.peopleChipsRow}>
                   {(entry.taggedPeople || []).map(person => (
                     <TouchableOpacity key={person} style={styles.personChipRemovable} onPress={() => removePersonTag(person)}>
-                      <Text style={styles.personChipText}>👤 {person}</Text>
-                      <Text style={styles.personChipRemove}> ✕</Text>
+                      <Text style={styles.personChipText}>{person}</Text>
+                      <Ionicons name="close" size={12} color="rgba(255,255,255,0.5)" />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -1551,7 +1493,7 @@ export default function ThePresent() {
                 <View style={styles.peopleSuggestionsBox}>
                   {peopleSuggestions.map(person => (
                     <TouchableOpacity key={person} style={styles.peopleSuggestion} onPress={() => addPersonTag(person)}>
-                      <Text style={styles.peopleSuggestionText}>👤 {person}</Text>
+                      <Text style={styles.peopleSuggestionText}>{person}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -1693,7 +1635,7 @@ export default function ThePresent() {
                   disabled={recipeSavedToday}
                 >
                   <Text style={[styles.recipeSaveText, recipeSavedToday && { color: 'rgba(255,255,255,0.5)' }]}>
-                    {recipeSavedToday ? 'Saved ✓' : 'Save to recipes ★'}
+                    {recipeSavedToday ? 'Saved' : 'Save to recipes'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1724,18 +1666,16 @@ export default function ThePresent() {
             <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
               {readyCapsules.map(capsule => (
                 <TouchableOpacity key={capsule.id} style={styles.capsuleReadyCard} onPress={() => setRevealingCapsule(capsule)}>
-                  <Text style={styles.capsuleEmoji}>🎁</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.capsuleReadyTitle}>Ready to open</Text>
                     <Text style={styles.capsuleReadyDate}>Sealed {new Date(capsule.createdDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#f5c842" />
+                  <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.45)" />
                 </TouchableOpacity>
               ))}
 
               {sealedCapsules.map(capsule => (
                 <View key={capsule.id} style={styles.capsuleSealedCard}>
-                  <Text style={styles.capsuleEmoji}>🔒</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.capsuleSealedTitle}>
                       Opens in {daysUntil(capsule.openDate)} day{daysUntil(capsule.openDate) === 1 ? '' : 's'}
@@ -1753,13 +1693,11 @@ export default function ThePresent() {
             </ScrollView>
 
             <TouchableOpacity style={styles.createCapsuleButton} onPress={() => setShowCreateCapsule(true)}>
-              <Text style={styles.createCapsuleEmoji}>✉️</Text>
               <Text style={styles.createCapsuleText}>Seal a new capsule</Text>
             </TouchableOpacity>
 
             <View style={styles.capsuleSheetFooter}>
               <View style={styles.notificationRow}>
-                <Text style={styles.notificationEmoji}>🔔</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.notificationTitle}>{notificationsEnabled ? 'Reminders on' : 'Get daily reminders'}</Text>
                   <Text style={styles.notificationSubtitle}>{notificationsEnabled ? "You'll get a daily prompt every evening" : 'A daily nudge to document your life'}</Text>
@@ -1784,12 +1722,12 @@ export default function ThePresent() {
                       <CameraView ref={capsuleCameraRef} style={StyleSheet.absoluteFillObject} facing={capsuleCameraFacing} />
                       <View style={styles.cameraTop}>
                         <TouchableOpacity style={styles.cameraTopButton} onPress={() => setCapsuleCameraOpen(false)}>
-                          <Text style={styles.cameraTopButtonText}>✕</Text>
+                          <Ionicons name="close" size={20} color="#ffffff" />
                         </TouchableOpacity>
                       </View>
                       <View style={styles.cameraBottom}>
                         <TouchableOpacity style={styles.cameraFlipButton} onPress={() => setCapsuleCameraFacing(f => f === 'front' ? 'back' : 'front')}>
-                          <Text style={styles.cameraFlipButtonText}>⟳</Text>
+                          <Ionicons name="camera-reverse-outline" size={24} color="#ffffff" />
                         </TouchableOpacity>
                         <Animated.View style={{ transform: [{ scale: photoShutterScale }] }}>
                           <TouchableOpacity
@@ -1824,7 +1762,7 @@ export default function ThePresent() {
                 </View>
               )}
               <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <Text style={styles.capsuleModalTitle}>Seal a Capsule ✉️</Text>
+                <Text style={styles.capsuleModalTitle}>Seal a capsule</Text>
                 <Text style={styles.capsuleModalSubtitle}>Write something for future you. It&apos;ll be waiting.</Text>
                 <Text style={styles.addFavLabel}>Your message</Text>
                 <TextInput style={[styles.addFavInput, { minHeight: 120 }]} placeholder="Dear future me... What do you want to remember? What are you hoping for?" placeholderTextColor="rgba(255,255,255,0.35)" multiline value={newCapsuleMessage} onChangeText={setNewCapsuleMessage} />
@@ -1845,7 +1783,7 @@ export default function ThePresent() {
                   }}
                 >
                   {newCapsulePhoto ? <Image source={{ uri: newCapsulePhoto }} style={styles.addFavPhotoPreview} />
-                    : <View style={styles.addFavPhotoEmpty}><Text style={styles.addFavPhotoEmoji}>📷</Text><Text style={styles.addFavPhotoText}>Add a photo</Text></View>}
+                    : <View style={styles.addFavPhotoEmpty}><Ionicons name="camera-outline" size={24} color="rgba(255,255,255,0.35)" /><Text style={styles.addFavPhotoText}>Add a photo</Text></View>}
                 </TouchableOpacity>
                 <Text style={styles.addFavLabel}>Open on</Text>
                 <View style={styles.capsuleDatePicker}>
@@ -1885,7 +1823,7 @@ export default function ThePresent() {
                     onChangeText={setCapsuleContext}
                   />
                 )}
-                <TouchableOpacity style={styles.capsuleSealButton} onPress={createCapsule}><Text style={styles.capsuleSealButtonText}>🔒 Seal Capsule</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.capsuleSealButton} onPress={createCapsule}><Text style={styles.capsuleSealButtonText}>Seal capsule</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.addFavCancel} onPress={() => { setNewCapsuleMessage(''); setNewCapsulePhoto(''); setCapsuleAddToDay(false); setCapsuleContext(''); setShowCreateCapsule(false); }}>
                   <Text style={styles.addFavCancelText}>Cancel</Text>
                 </TouchableOpacity>
@@ -2024,12 +1962,12 @@ export default function ThePresent() {
               <CameraView ref={photoCameraRef} style={StyleSheet.absoluteFillObject} facing={photoCameraFacing} />
               <View style={styles.cameraTop}>
                 <TouchableOpacity style={styles.cameraTopButton} onPress={() => setPhotoCameraOpen(false)}>
-                  <Text style={styles.cameraTopButtonText}>✕</Text>
+                  <Ionicons name="close" size={20} color="#ffffff" />
                 </TouchableOpacity>
               </View>
               <View style={styles.cameraBottom}>
                 <TouchableOpacity style={styles.cameraFlipButton} onPress={() => setPhotoCameraFacing(f => f === 'front' ? 'back' : 'front')}>
-                  <Text style={styles.cameraFlipButtonText}>⟳</Text>
+                  <Ionicons name="camera-reverse-outline" size={24} color="#ffffff" />
                 </TouchableOpacity>
                 <Animated.View style={{ transform: [{ scale: photoShutterScale }] }}>
                   <TouchableOpacity
@@ -2070,145 +2008,141 @@ const styles = StyleSheet.create({
   header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#0b1526' },
   headerTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
   headerTitle: { fontSize: 32, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff' },
-  headerDate: { fontSize: 14, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
-  headerTagline: { fontSize: 13, color: 'rgba(74,144,217,0.7)', fontStyle: 'italic', marginTop: 6 },
+  headerDate: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  headerTagline: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', marginTop: 6 },
   tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center', borderWidth: 1, borderColor: 'transparent' },
   tabButtonActive: { backgroundColor: 'rgba(74,144,217,0.18)', borderColor: 'rgba(74,144,217,0.35)' },
-  tabButtonText: { fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.3)' },
-  tabButtonTextActive: { color: '#ffffff', fontWeight: '700' },
+  tabButtonText: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)' },
+  tabButtonTextActive: { color: '#ffffff', fontFamily: 'SpaceGrotesk_700Bold' },
 
-  // Card base
+  // Card base (legacy, still referenced by a couple of untouched rows)
   card: { backgroundColor: '#101c33', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(74,144,217,0.22)', marginHorizontal: 16, marginBottom: 14, padding: 14 },
-  cardLabel: { fontSize: 10, color: '#4a90d9', fontWeight: '800', letterSpacing: 2, marginBottom: 10 },
+  cardLabel: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.4)', marginBottom: 10 },
 
-  // 3.2 Hero capture card
-  heroCard: { height: 340, borderRadius: 20, borderWidth: 1.5, borderColor: 'rgba(74,144,217,0.3)', overflow: 'hidden', backgroundColor: '#101c33', marginHorizontal: 16, marginBottom: 4, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+  // Open section — the replacement for boxed cards
+  openSection: { paddingHorizontal: 22, paddingVertical: 20 },
+  sectionDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 22 },
+  quietLabel: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.4)', marginBottom: 10 },
+
+  // 3.2 Hero capture — full bleed
+  heroCard: { height: 400, overflow: 'hidden', backgroundColor: '#101c33' },
   heroMainEmptySlot: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  heroInset: { position: 'absolute', top: 12, left: 12, width: 92, height: 122, borderRadius: 14, borderWidth: 2.5, borderColor: '#ffffff', overflow: 'hidden', backgroundColor: '#101c33', shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6 },
+  heroInset: { position: 'absolute', top: 16, left: 16, width: 92, height: 122, borderRadius: 14, borderWidth: 2.5, borderColor: '#ffffff', overflow: 'hidden', backgroundColor: '#101c33', shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 6 },
   heroInsetPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.1)' },
-  heroEmptyRow: { flex: 1, flexDirection: 'row', gap: 12, padding: 12 },
-  heroEmptyPrompt: { flex: 1, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', borderStyle: 'dashed', borderRadius: 14, backgroundColor: 'rgba(74,144,217,0.05)' },
-  pairPlaceholderText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 8 },
-  pairPromptText: { fontSize: 14, color: 'rgba(255,255,255,0.6)', fontWeight: '600', marginTop: 10 },
-  heroBottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 76 },
-  heroBottomRow: { position: 'absolute', left: 12, right: 12, bottom: 10, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-  heroThumb: { width: 46, height: 46, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  heroAddThumbTile: { width: 46, height: 46, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(74,144,217,0.6)', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(16,28,51,0.6)' },
-  addExtraText: { color: '#4a90d9', fontSize: 22, fontWeight: '300' },
-  heroPhotoCount: { fontSize: 12, fontWeight: '600', color: '#ffffff', marginLeft: 10 },
-  storyLinkRow: { marginHorizontal: 16, marginTop: 8, marginBottom: 14, alignSelf: 'flex-end' },
-  storyLinkText: { fontSize: 13, color: 'rgba(74,144,217,0.9)', fontWeight: '600' },
+  heroEmptyRow: { flex: 1, flexDirection: 'row', gap: 1, backgroundColor: 'rgba(255,255,255,0.02)' },
+  heroEmptyPrompt: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 },
+  pairPlaceholderText: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 8 },
+  pairPromptText: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.6)' },
+  heroBottomGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 140 },
+  heroTopGradient: { position: 'absolute', left: 0, right: 0, top: 0, height: 60 },
+  heroOverlayText: { position: 'absolute', left: 22, right: 22, bottom: 18 },
+  heroThreeWords: { fontSize: 27, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff' },
+  heroMetaLine: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.6)', marginTop: 6 },
+  heroThumb: { width: 46, height: 46, borderRadius: 10 },
+  heroAddThumbTile: { width: 46, height: 46, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  storyLinkRow: { marginTop: 14 },
+  storyLinkText: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(74,144,217,0.9)' },
   capSheetRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
   capSheetThumb: { width: 56, height: 56, borderRadius: 10 },
-  capSheetLabel: { fontSize: 11, color: 'rgba(74,144,217,0.8)', fontWeight: '700', marginBottom: 4 },
-  capSheetInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, color: '#ffffff', fontSize: 14, minHeight: 40 },
-  capSheetEmpty: { fontSize: 14, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', paddingVertical: 12 },
+  capSheetLabel: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(74,144,217,0.8)', marginBottom: 4 },
+  capSheetInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, color: '#ffffff', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 14, minHeight: 40 },
+  capSheetEmpty: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', paddingVertical: 12 },
 
-  // 3.3 Three words
-  wordsRow: { flexDirection: 'row', gap: 8 },
-  wordChip: { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, color: 'rgba(255,255,255,0.8)', fontSize: 14, borderWidth: 1, borderColor: 'transparent', textAlign: 'center' },
-  wordChipFilled: { borderColor: 'rgba(74,144,217,0.5)', color: '#ffffff', fontWeight: '600' },
+  // 3.3 Three words (legacy chip styles, no longer used by the hero but kept for reference elsewhere)
+  wordsRow: { flexDirection: 'row', gap: 12 },
+  wordChip: { flex: 1, paddingVertical: 8, color: 'rgba(255,255,255,0.5)', fontFamily: 'SpaceGrotesk_500Medium', fontSize: 15, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.15)', textAlign: 'center' },
+  wordChipFilled: { color: '#ffffff', borderBottomColor: 'rgba(74,144,217,0.5)' },
 
-  // 3.4 Journal card
-  questionText: { fontSize: 17, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', lineHeight: 24, marginBottom: 10 },
-  questionInput: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.15)', paddingTop: 10, color: '#ffffff', fontSize: 15, lineHeight: 21, minHeight: 60, textAlignVertical: 'top' },
-  journalDivider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(74,144,217,0.15)', marginVertical: 16, marginHorizontal: 6 },
-  reflectionInner: { borderRadius: 14, borderWidth: 1, borderColor: 'rgba(74,144,217,0.4)', backgroundColor: 'rgba(74,144,217,0.06)', padding: 14, shadowColor: '#4a90d9', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 3 },
-  reflectionQuestionText: { fontSize: 16, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', lineHeight: 22, marginBottom: 8 },
+  // 3.4 Journal — open layout
+  journalQuestion: { fontSize: 21, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', lineHeight: 28, marginBottom: 10 },
+  journalAnswerInput: { color: '#ffffff', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 15, lineHeight: 21, minHeight: 44, textAlignVertical: 'top' },
+  journalLinksRow: { flexDirection: 'row', gap: 20, marginTop: 10 },
+  journalLinkAccent: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: '#4a90d9', textDecorationLine: 'underline' },
+  journalLinkMuted: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.45)' },
+  forFutureYouLabel: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: '#4a90d9', marginBottom: 10 },
 
   dayActionsRow: { flexDirection: 'row', gap: 10 },
   dayActionBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.06)' },
   dayActionBtnActive: { backgroundColor: 'rgba(74,144,217,0.2)', borderColor: 'rgba(74,144,217,0.5)' },
   dayActionBtnRecording: { backgroundColor: 'rgba(255,68,68,0.15)', borderColor: 'rgba(255,68,68,0.5)' },
-  dayActionText: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
+  dayActionText: { fontSize: 14, color: '#ffffff', fontFamily: 'SpaceGrotesk_500Medium' },
   recordingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
   recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ff4444' },
-  recordingText: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
-  voicePlayRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, backgroundColor: 'rgba(74,144,217,0.1)' },
-  voicePlayText: { fontSize: 13, color: '#4a90d9', fontWeight: '600' },
+  recordingText: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.5)', marginTop: 8 },
+  voicePlayRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  voicePlayText: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.6)' },
 
-  // Cooked (shared by modal + tile)
+  // Cooked (shared by modal + details row photo picker)
   cookedRow: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 12 },
-  inlineInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', fontSize: 15 },
+  inlineInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#ffffff', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 15 },
   cookedPhotoSlot: { width: 44, height: 44, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   recipeSaveBtn: { marginBottom: 12, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.15)', borderWidth: 1, borderColor: 'rgba(74,144,217,0.35)' },
   recipeSaveBtnDone: { backgroundColor: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.15)' },
-  recipeSaveText: { fontSize: 13, color: '#4a90d9', fontWeight: '700' },
+  recipeSaveText: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: '#4a90d9' },
 
-  entryAnswer: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 20 },
-  entryAddText: { fontSize: 13, color: 'rgba(74,144,217,0.8)', marginTop: 6 },
+  entryAnswer: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.8)', fontStyle: 'italic', lineHeight: 20 },
+  entryAddText: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(74,144,217,0.8)', marginTop: 6 },
 
   // People
   peopleChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
-  personChip: { backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)' },
-  personChipText: { color: '#ffffff', fontSize: 13 },
-  personChipRemovable: { flexDirection: 'row', backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', alignItems: 'center' },
-  personChipRemove: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
+  personChip: { backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12 },
+  personChipText: { color: '#ffffff', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 13 },
+  personChipRemovable: { flexDirection: 'row', backgroundColor: 'rgba(74,144,217,0.15)', borderRadius: 20, paddingVertical: 5, paddingHorizontal: 12, alignItems: 'center', gap: 6 },
 
   // Locations
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  locationDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4a90d9' },
-  locationName: { fontSize: 15, color: '#ffffff', fontWeight: '600' },
-  locationWith: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1 },
+  locationDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
+  locationName: { fontSize: 15, fontFamily: 'SpaceGrotesk_500Medium', color: '#ffffff' },
+  locationWith: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 1 },
   addLocationRow: { paddingVertical: 10 },
-  addLocationText: { fontSize: 13, color: 'rgba(74,144,217,0.8)', fontWeight: '600' },
+  addLocationText: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(74,144,217,0.8)' },
 
   // Notifications
   notificationRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  notificationEmoji: { fontSize: 22 },
-  notificationTitle: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
-  notificationSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1 },
+  notificationTitle: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: '#ffffff' },
+  notificationSubtitle: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 1 },
 
-  // 3.5 Details grid
-  detailsSectionLabel: { fontSize: 10, color: 'rgba(255,255,255,0.4)', fontWeight: '800', letterSpacing: 2, marginHorizontal: 16, marginBottom: 10 },
-  detailsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 4 },
-  tile: { width: '48%', minHeight: 74, borderRadius: 16, padding: 14, marginBottom: 10 },
-  tileFilled: { backgroundColor: '#101c33', borderWidth: 1, borderColor: 'rgba(74,144,217,0.35)' },
-  tileEmpty: { backgroundColor: 'rgba(255,255,255,0.02)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  tileHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  tileEmoji: { fontSize: 15 },
-  tileLabel: { fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.4)', letterSpacing: 0.5 },
-  tileLabelFilled: { color: '#4a90d9' },
-  tileValue: { fontSize: 13, fontWeight: '600', color: '#ffffff' },
-  tileEmptyText: { fontSize: 12, color: 'rgba(255,255,255,0.25)' },
+  // 3.5 Details — list rows
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  detailRowLast: { borderBottomWidth: 0 },
+  detailRowLabel: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)' },
+  detailRowValue: { fontSize: 15, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', flexShrink: 1, textAlign: 'right', marginLeft: 12 },
+  detailRowEmpty: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.25)' },
 
-  // 3.6 Capsules — compact gold row
-  capsuleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 14, padding: 14, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(245,200,66,0.35)', backgroundColor: 'rgba(245,200,66,0.05)' },
-  capsuleRowReady: { backgroundColor: 'rgba(245,200,66,0.16)', borderColor: 'rgba(245,200,66,0.6)' },
-  capsuleRowEmoji: { fontSize: 20 },
-  capsuleRowTitle: { fontSize: 14, fontWeight: '700', color: '#f5c842' },
-  capsuleRowSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
-  capsuleRowCta: { fontSize: 13, fontWeight: '700', color: '#f5c842' },
+  // 3.6 Capsules — plain row, gold text only
+  capsuleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  capsuleRowTitle: { fontSize: 15, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842' },
+  capsuleRowSubtitle: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  capsuleRowCta: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: '#f5c842' },
 
   // Capsules sheet
-  capsuleSheetBox: { backgroundColor: 'rgba(16,28,51,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 36, borderWidth: 1, borderColor: 'rgba(245,200,66,0.25)', maxHeight: '85%' },
+  capsuleSheetBox: { backgroundColor: 'rgba(16,28,51,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 36, maxHeight: '85%' },
   capsuleSheetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   capsuleSheetTitle: { fontSize: 22, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842' },
-  capsuleSheetFooter: { marginTop: 16, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.1)' },
-  capsuleSectionSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 12 },
-  capsuleEmptyText: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', paddingVertical: 12 },
-  capsuleReadyCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(245,200,66,0.12)', borderWidth: 1, borderColor: 'rgba(245,200,66,0.5)', borderRadius: 14, padding: 14, marginBottom: 8 },
-  capsuleEmoji: { fontSize: 24 },
-  capsuleReadyTitle: { fontSize: 15, color: '#f5c842', fontWeight: '700' },
-  capsuleReadyDate: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 1 },
-  capsuleSealedCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#101c33', borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', borderRadius: 14, padding: 14, marginBottom: 8 },
-  capsuleSealedTitle: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
-  capsuleSealedDate: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1 },
-  createCapsuleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', borderStyle: 'dashed', borderRadius: 14, padding: 14, marginTop: 8 },
-  createCapsuleEmoji: { fontSize: 16 },
-  createCapsuleText: { fontSize: 14, color: '#f5c842', fontWeight: '600' },
+  capsuleSheetFooter: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
+  capsuleSectionSubtitle: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', marginBottom: 12 },
+  capsuleEmptyText: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', paddingVertical: 12 },
+  capsuleReadyCard: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  capsuleReadyTitle: { fontSize: 15, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842' },
+  capsuleReadyDate: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.45)', marginTop: 1 },
+  capsuleSealedCard: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  capsuleSealedTitle: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: '#ffffff' },
+  capsuleSealedDate: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 1 },
+  createCapsuleButton: { alignItems: 'center', paddingVertical: 16, marginTop: 8 },
+  createCapsuleText: { fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium', color: '#f5c842' },
 
-  // 3.7 Save day — gradient
-  saveDayButtonWrap: { marginHorizontal: 16, marginTop: 4, borderRadius: 16, shadowColor: '#4a90d9', shadowOpacity: 0.3, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
-  saveDayButtonGradient: { borderRadius: 16, padding: 17, alignItems: 'center' },
-  saveDayButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
+  // 3.7 Save day — flat solid accent
+  saveDayButton: { marginHorizontal: 16, marginTop: 4, borderRadius: 14, paddingVertical: 17, alignItems: 'center', backgroundColor: '#4a90d9' },
+  saveDayButtonDone: { backgroundColor: 'rgba(74,144,217,0.35)' },
+  saveDayButtonText: { color: '#ffffff', fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16 },
+  saveDayCaption: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: 10 },
 
   // Empty states
   emptyState: { padding: 40, alignItems: 'center', marginTop: 40 },
-  emptyEmoji: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
-  emptySubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
+  emptyIcon: { marginBottom: 16 },
+  emptyTitle: { fontSize: 20, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 8 },
+  emptySubtitle: { fontSize: 15, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
 
   // Calendar
   yearPickerStrip: { maxHeight: 56 },
@@ -2235,24 +2169,22 @@ const styles = StyleSheet.create({
   favFilterContent: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
   favFilterPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'transparent' },
   favFilterPillActive: { backgroundColor: 'rgba(74,144,217,0.25)', borderColor: 'rgba(74,144,217,0.45)' },
-  favFilterEmoji: { fontSize: 13 },
-  favFilterText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
+  favFilterText: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.4)' },
   favFilterTextActive: { color: '#ffffff' },
   favGrid: { paddingHorizontal: 16, paddingBottom: 140, gap: 12 },
   favCard: { backgroundColor: '#101c33', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(74,144,217,0.22)', overflow: 'hidden' },
   favPhoto: { width: '100%', height: 140 },
   favPhotoRecipe: { height: 200 },
   favPhotoEmpty: { width: '100%', height: 90, backgroundColor: 'rgba(74,144,217,0.06)', justifyContent: 'center', alignItems: 'center' },
-  favCategoryEmoji: { fontSize: 32 },
   favInfo: { padding: 12 },
   favInfoTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  favCategoryTag: { fontSize: 11, color: 'rgba(74,144,217,0.9)', fontWeight: '700' },
-  favRatingTag: { fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: '700' },
-  favName: { fontSize: 16, color: '#ffffff', fontWeight: '700', marginBottom: 2 },
-  favNote: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontStyle: 'italic', marginBottom: 4 },
-  favDate: { fontSize: 11, color: 'rgba(255,255,255,0.3)' },
+  favCategoryTag: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.4)' },
+  favRatingTag: { fontSize: 13, fontFamily: 'SpaceGrotesk_700Bold', color: 'rgba(255,255,255,0.5)' },
+  favName: { fontSize: 16, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 2 },
+  favNote: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.5)', fontStyle: 'italic', marginBottom: 4 },
+  favDate: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.3)' },
   addFavButton: { position: 'absolute', bottom: 100, right: 16, width: 52, height: 52, borderRadius: 26, backgroundColor: '#4a90d9', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
-  addFavButtonText: { color: '#ffffff', fontSize: 28, fontWeight: '300', marginTop: -2 },
+  addFavButtonText: { color: '#ffffff', fontSize: 28, fontFamily: 'SpaceGrotesk_300Light', marginTop: -2 },
 
   // Fav detail
   favDetailOverlay: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
@@ -2260,84 +2192,81 @@ const styles = StyleSheet.create({
   favDetailCloseBtn: { position: 'absolute', top: 12, right: 12, zIndex: 2, padding: 6 },
   favDetailPhoto: { width: '100%', height: 220, borderRadius: 14, marginBottom: 4 },
   favDetailPhotoEditBadge: { position: 'absolute', bottom: 12, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
-  favDetailPhotoEditText: { color: '#ffffff', fontSize: 11, fontWeight: '600' },
+  favDetailPhotoEditText: { color: '#ffffff', fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium' },
   favDetailPhotoEmpty: { width: '100%', height: 140, borderRadius: 14, backgroundColor: 'rgba(74,144,217,0.06)', justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  favDetailEmoji: { fontSize: 40 },
-  favDetailAddPhotoLabel: { fontSize: 12, color: 'rgba(74,144,217,0.8)', marginTop: 6 },
+  favDetailAddPhotoLabel: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(74,144,217,0.8)', marginTop: 6 },
   favDetailInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 4 },
-  favDetailCategory: { fontSize: 12, color: 'rgba(74,144,217,0.9)', fontWeight: '700' },
-  favDetailRating: { fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: '700' },
+  favDetailCategory: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.4)' },
+  favDetailRating: { fontSize: 13, fontFamily: 'SpaceGrotesk_700Bold', color: 'rgba(255,255,255,0.6)' },
   favDetailName: { fontSize: 22, color: '#ffffff', fontFamily: 'SpaceGrotesk_700Bold', marginBottom: 6 },
-  favDetailNote: { fontSize: 14, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', lineHeight: 21, marginBottom: 8 },
-  favDetailDate: { fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 16 },
+  favDetailNote: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', lineHeight: 21, marginBottom: 8 },
+  favDetailDate: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.35)', marginBottom: 16 },
   favDetailDelete: { alignItems: 'center', paddingVertical: 10 },
-  favDetailDeleteText: { color: '#ff4444', fontSize: 13, fontWeight: '600' },
+  favDetailDeleteText: { color: '#ff4444', fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium' },
 
   // Add favourite modal
   addFavModal: { flex: 1, backgroundColor: '#0b1526', paddingTop: 70, paddingHorizontal: 20 },
   addFavTitle: { fontSize: 26, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 20 },
-  addFavLabel: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 8, marginTop: 12 },
+  addFavLabel: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.5)', marginBottom: 8, marginTop: 12 },
   addFavCategoryRow: { gap: 8, paddingBottom: 4 },
   addFavCatPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'transparent' },
   addFavCatPillActive: { backgroundColor: 'rgba(74,144,217,0.25)', borderColor: 'rgba(74,144,217,0.45)' },
-  addFavCatEmoji: { fontSize: 13 },
-  addFavCatText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
+  addFavCatText: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.4)' },
   addFavCatTextActive: { color: '#ffffff' },
   addFavPhotoButton: { borderRadius: 14, overflow: 'hidden' },
   addFavPhotoPreview: { width: '100%', height: 160, borderRadius: 14 },
   addFavPhotoEmpty: { height: 100, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(74,144,217,0.3)', borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(74,144,217,0.04)' },
-  addFavPhotoEmoji: { fontSize: 24 },
-  addFavPhotoText: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 },
-  addFavInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, color: '#ffffff', fontSize: 15, borderWidth: 1, borderColor: 'rgba(74,144,217,0.2)' },
+  addFavPhotoText: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 4 },
+  addFavInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, color: '#ffffff', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 15, borderWidth: 1, borderColor: 'rgba(74,144,217,0.2)' },
   addFavRatingRow: { flexDirection: 'row', gap: 6 },
   addFavRatingButton: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center' },
   addFavRatingButtonActive: { backgroundColor: '#4a90d9' },
-  addFavRatingText: { fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
+  addFavRatingText: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.4)' },
   addFavRatingTextActive: { color: '#ffffff' },
   addFavSave: { backgroundColor: '#4a90d9', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 20 },
-  addFavSaveText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
+  addFavSaveText: { color: '#ffffff', fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16 },
   addFavCancel: { alignItems: 'center', padding: 14 },
-  addFavCancelText: { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
+  addFavCancelText: { color: 'rgba(255,255,255,0.35)', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 15 },
 
   // Modals — glass
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalBox: { backgroundColor: 'rgba(16,28,51,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(74,144,217,0.15)' },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginBottom: 12, letterSpacing: -0.3 },
-  textInput: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
+  modalTitle: { fontSize: 20, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 12 },
+  textInput: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, color: '#ffffff', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
   saveButton: { backgroundColor: '#4a90d9', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
-  saveButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
+  saveButtonText: { color: '#ffffff', fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16 },
   cancelButton: { alignItems: 'center', padding: 10 },
-  cancelButtonText: { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
-  ratingLabel: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 8 },
+  cancelButtonText: { color: 'rgba(255,255,255,0.35)', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 15 },
+  ratingLabel: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.5)', marginBottom: 8 },
   ratingButtons: { flexDirection: 'row', gap: 6, marginBottom: 16 },
   ratingNumberButton: { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center' },
   ratingNumberButtonActive: { backgroundColor: '#4a90d9' },
-  ratingNumberText: { fontSize: 12, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
+  ratingNumberText: { fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium', color: 'rgba(255,255,255,0.4)' },
   ratingNumberTextActive: { color: '#ffffff' },
 
   // People modal
   peopleInputRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  peopleTextInput: { flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 14, color: '#ffffff', fontSize: 15 },
+  peopleTextInput: { flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 14, color: '#ffffff', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 15 },
   peopleAddButton: { backgroundColor: '#4a90d9', borderRadius: 12, paddingHorizontal: 18, justifyContent: 'center' },
-  peopleAddButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
+  peopleAddButtonText: { color: '#ffffff', fontFamily: 'SpaceGrotesk_700Bold', fontSize: 14 },
   peopleSuggestionsBox: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, marginBottom: 10 },
   peopleSuggestion: { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
-  peopleSuggestionText: { color: '#ffffff', fontSize: 14 },
+  peopleSuggestionText: { color: '#ffffff', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 14 },
 
   // Capsule modal
   capsuleModal: { flex: 1, backgroundColor: '#0b1526', paddingTop: 70, paddingHorizontal: 20 },
   capsuleModalTitle: { fontSize: 26, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842', marginBottom: 4 },
-  capsuleModalSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.45)', marginBottom: 16 },
+  capsuleModalSubtitle: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.45)', marginBottom: 16 },
   capsuleDatePicker: { flexDirection: 'row', gap: 10, justifyContent: 'center' },
   capsuleDateColumn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(245,200,66,0.25)' },
   capsuleDateArrow: { paddingHorizontal: 12, paddingVertical: 12 },
-  capsuleDateArrowText: { color: '#f5c842', fontSize: 20, fontWeight: '600' },
-  capsuleDateValue: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
-  capsuleDatePreview: { fontSize: 13, color: 'rgba(245,200,66,0.8)', textAlign: 'center', marginTop: 10 },
+  capsuleDateArrowText: { color: '#f5c842', fontSize: 20, fontFamily: 'SpaceGrotesk_500Medium' },
+  capsuleDateValue: { color: '#ffffff', fontSize: 15, fontFamily: 'SpaceGrotesk_700Bold' },
+  capsuleDatePreview: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(245,200,66,0.8)', textAlign: 'center', marginTop: 10 },
   capsuleToggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 8 },
-  capsuleToggleLabel: { fontSize: 14, color: '#ffffff' },
+  capsuleToggleLabel: { fontSize: 14, fontFamily: 'SpaceGrotesk_400Regular', color: '#ffffff' },
   capsuleSealButton: { backgroundColor: '#f5c842', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 16 },
-  capsuleSealButtonText: { color: '#1a1405', fontWeight: '800', fontSize: 16 },
+  capsuleSealButtonText: { color: '#1a1405', fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16 },
 
   // Capsule reveal
   capsuleRevealOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
@@ -2346,30 +2275,28 @@ const styles = StyleSheet.create({
   capsuleRevealBox: { width: '100%', backgroundColor: 'rgba(16,28,51,0.98)', borderRadius: 24, borderWidth: 1, borderColor: 'rgba(245,200,66,0.4)', padding: 24, maxHeight: '75%', alignItems: 'center' },
   capsuleRevealEmoji: { fontSize: 40, marginBottom: 8 },
   capsuleRevealTitle: { fontSize: 18, fontFamily: 'SpaceGrotesk_700Bold', color: '#f5c842', textAlign: 'center' },
-  capsuleRevealDate: { fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4, marginBottom: 12 },
+  capsuleRevealDate: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 4, marginBottom: 12 },
   capsuleRevealMessage: { alignSelf: 'stretch', marginBottom: 16 },
   capsuleRevealPhoto: { width: '100%', height: 180, borderRadius: 14, marginBottom: 12 },
-  capsuleRevealText: { fontSize: 16, color: '#ffffff', lineHeight: 24 },
+  capsuleRevealText: { fontSize: 16, fontFamily: 'SpaceGrotesk_400Regular', color: '#ffffff', lineHeight: 24 },
   capsuleRevealButtons: { flexDirection: 'row', gap: 10, alignSelf: 'stretch', alignItems: 'center' },
 
   // Fullscreen
   fullScreenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   fullScreenImage: { width: '100%', height: '72%' },
-  fullScreenDismiss: { color: 'rgba(255,255,255,0.35)', fontSize: 13, marginTop: 12 },
+  fullScreenDismiss: { color: 'rgba(255,255,255,0.35)', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 13, marginTop: 12 },
 
   // Cameras
   cameraContainer: { flex: 1, backgroundColor: '#000000' },
   cameraTop: { position: 'absolute', top: 60, left: 20 },
   cameraTopButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  cameraTopButtonText: { color: '#ffffff', fontSize: 18 },
   cameraBottom: { position: 'absolute', bottom: 50, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 40 },
   cameraFlipButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  cameraFlipButtonText: { color: '#ffffff', fontSize: 22 },
   cameraShutterButton: { width: 76, height: 76, borderRadius: 38, borderWidth: 4, borderColor: '#ffffff', justifyContent: 'center', alignItems: 'center' },
   cameraShutterInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#ffffff' },
   photoCaptureActions: { position: 'absolute', bottom: 50, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 16 },
   photoCaptureBtn: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 26, backgroundColor: 'rgba(255,255,255,0.15)' },
   photoCaptureBtnPrimary: { backgroundColor: '#ffffff' },
-  photoCaptureBtnText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  photoCaptureBtnText: { color: '#ffffff', fontSize: 15, fontFamily: 'SpaceGrotesk_700Bold' },
   photoCaptureBtnTextPrimary: { color: '#000000' },
 });

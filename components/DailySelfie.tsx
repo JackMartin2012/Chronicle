@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
+import { SpaceGrotesk_400Regular, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, useFonts } from '@expo-google-fonts/space-grotesk';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
@@ -29,6 +31,7 @@ type SelfieEntry = {
 };
 
 export default function DailySelfie({ standalone = false }: { standalone?: boolean }) {
+  const [fontsLoaded] = useFonts({ SpaceGrotesk_400Regular, SpaceGrotesk_500Medium, SpaceGrotesk_700Bold });
   const [permission, requestPermission] = useCameraPermissions();
   const [mediaPermission] = MediaLibrary.usePermissions();
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -124,6 +127,8 @@ export default function DailySelfie({ standalone = false }: { standalone?: boole
   const hasTodaySelfie = selfies.some(s => s.date === todayKey);
   const todaySelfieUri = selfies.find(s => s.date === todayKey)?.uri;
 
+  if (!fontsLoaded) return null;
+
   if (!permission?.granted) {
     return (
       <View style={[styles.centreScreen, standalone && { paddingTop: 70 }]}>
@@ -147,8 +152,8 @@ export default function DailySelfie({ standalone = false }: { standalone?: boole
           <View style={styles.todayDoneCard}>
             <Image source={{ uri: todaySelfieUri }} style={styles.todayDoneImage} />
             <View style={styles.todayDoneOverlay}>
-              <Text style={styles.todayDoneEmoji}>✅</Text>
-              <Text style={styles.todayDoneTitle}>Today&apos;s selfie saved!</Text>
+              <Ionicons name="checkmark-circle-outline" size={32} color="#ffffff" style={{ marginBottom: 8 }} />
+              <Text style={styles.todayDoneTitle}>Today&apos;s selfie saved</Text>
               <TouchableOpacity style={styles.retakeButton} onPress={() => setCameraOpen(true)}>
                 <Text style={styles.retakeText}>Retake</Text>
               </TouchableOpacity>
@@ -156,15 +161,19 @@ export default function DailySelfie({ standalone = false }: { standalone?: boole
           </View>
         ) : (
           <View style={styles.takeSelfieOptions}>
-            <TouchableOpacity style={styles.takeSelfieButtonHalf} onPress={() => setCameraOpen(true)}>
-              <Text style={styles.takeSelfieEmoji}>📸</Text>
-              <Text style={styles.takeSelfieButtonTitle}>Take selfie</Text>
-              <Text style={styles.takeSelfieButtonSubtitle}>Open camera</Text>
+            <TouchableOpacity style={styles.takeSelfieRow} onPress={() => setCameraOpen(true)}>
+              <Ionicons name="camera-outline" size={22} color="rgba(255,255,255,0.45)" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.takeSelfieRowTitle}>Take selfie</Text>
+                <Text style={styles.takeSelfieRowSubtitle}>Open camera</Text>
+              </View>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.takeSelfieButtonHalf} onPress={archiveSelfie}>
-              <Text style={styles.takeSelfieEmoji}>🖼️</Text>
-              <Text style={styles.takeSelfieButtonTitle}>Archive one</Text>
-              <Text style={styles.takeSelfieButtonSubtitle}>Choose from library</Text>
+            <TouchableOpacity style={[styles.takeSelfieRow, styles.takeSelfieRowLast]} onPress={archiveSelfie}>
+              <Ionicons name="images-outline" size={22} color="rgba(255,255,255,0.45)" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.takeSelfieRowTitle}>Archive one</Text>
+                <Text style={styles.takeSelfieRowSubtitle}>Choose from library</Text>
+              </View>
             </TouchableOpacity>
           </View>
         )}
@@ -177,7 +186,7 @@ export default function DailySelfie({ standalone = false }: { standalone?: boole
               <Text style={styles.sectionTitle}>Your selfie timeline</Text>
               <View style={styles.viewToggleRow}>
                 <TouchableOpacity style={styles.sortToggle} onPress={() => setSortOldFirst(prev => !prev)}>
-                  <Text style={styles.sortToggleText}>{sortOldFirst ? '↑ Oldest' : '↓ Newest'}</Text>
+                  <Text style={styles.sortToggleText}>{sortOldFirst ? 'Oldest' : 'Newest'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.sortToggle, stripView && styles.sortToggleActive]}
@@ -219,17 +228,17 @@ export default function DailySelfie({ standalone = false }: { standalone?: boole
                       <TouchableOpacity
                         style={styles.slideshowNavButton}
                         onPress={() => { setSlideshowPlaying(false); setSlideshowIndex(prev => Math.max(0, prev - 1)); }}>
-                        <Text style={styles.slideshowNavText}>‹</Text>
+                        <Ionicons name="chevron-back" size={22} color="#ffffff" />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.slideshowPlayButton}
                         onPress={() => setSlideshowPlaying(prev => !prev)}>
-                        <Text style={styles.slideshowPlayText}>{slideshowPlaying ? '⏸' : '▶'}</Text>
+                        <Ionicons name={slideshowPlaying ? 'pause' : 'play'} size={24} color="#ffffff" />
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.slideshowNavButton}
                         onPress={() => { setSlideshowPlaying(false); setSlideshowIndex(prev => Math.min(slideshowSelfies.length - 1, prev + 1)); }}>
-                        <Text style={styles.slideshowNavText}>›</Text>
+                        <Ionicons name="chevron-forward" size={22} color="#ffffff" />
                       </TouchableOpacity>
                     </View>
 
@@ -273,12 +282,12 @@ export default function DailySelfie({ standalone = false }: { standalone?: boole
           <CameraView ref={cameraRef} style={styles.camera} facing={facing} />
           <View style={styles.cameraTop}>
             <TouchableOpacity style={styles.cameraTopButton} onPress={() => setCameraOpen(false)}>
-              <Text style={styles.cameraTopButtonText}>✕</Text>
+              <Ionicons name="close" size={22} color="#ffffff" />
             </TouchableOpacity>
           </View>
           <View style={styles.cameraBottom}>
             <TouchableOpacity style={styles.flipButton} onPress={flipCamera}>
-              <Text style={styles.flipButtonText}>⟳</Text>
+              <Ionicons name="camera-reverse-outline" size={26} color="#ffffff" />
             </TouchableOpacity>
 
             <Animated.View style={{ transform: [{ scale: shutterScale }] }}>
@@ -311,63 +320,58 @@ export default function DailySelfie({ standalone = false }: { standalone?: boole
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0b1526' },
   centreScreen: { flex: 1, backgroundColor: '#0b1526', justifyContent: 'center', alignItems: 'center', padding: 32 },
-  permissionTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 16 },
-  permissionSubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
+  permissionTitle: { fontSize: 24, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', textAlign: 'center', marginBottom: 16 },
+  permissionSubtitle: { fontSize: 15, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
   permissionButton: { backgroundColor: '#4a90d9', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32 },
-  permissionButtonText: { color: '#ffffff', fontWeight: '600', fontSize: 16 },
+  permissionButtonText: { color: '#ffffff', fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16 },
   explainerWrap: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 14 },
-  explainerText: { fontSize: 13, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' },
-  todayDoneCard: { marginHorizontal: 16, marginBottom: 24, borderRadius: 20, overflow: 'hidden', height: 280, borderWidth: 1, borderColor: 'rgba(74,144,217,0.22)' },
+  explainerText: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic' },
+  todayDoneCard: { marginHorizontal: 16, marginBottom: 24, borderRadius: 20, overflow: 'hidden', height: 280, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
   todayDoneImage: { width: '100%', height: '100%', position: 'absolute' },
   todayDoneOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  todayDoneEmoji: { fontSize: 36, marginBottom: 8 },
-  todayDoneTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 16, textAlign: 'center' },
+  todayDoneTitle: { fontSize: 18, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 16, textAlign: 'center' },
   retakeButton: { borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.5)', borderRadius: 20, paddingVertical: 8, paddingHorizontal: 24 },
-  retakeText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
-  takeSelfieOptions: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 24, gap: 12 },
-  takeSelfieButtonHalf: { flex: 1, backgroundColor: '#101c33', borderRadius: 16, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(74,144,217,0.22)' },
-  takeSelfieEmoji: { fontSize: 36, marginBottom: 10 },
-  takeSelfieButtonTitle: { fontSize: 16, fontWeight: '700', color: '#ffffff', marginBottom: 4 },
-  takeSelfieButtonSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.4)', textAlign: 'center' },
+  retakeText: { color: '#ffffff', fontSize: 14, fontFamily: 'SpaceGrotesk_500Medium' },
+  takeSelfieOptions: { marginHorizontal: 16, marginBottom: 24 },
+  takeSelfieRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  takeSelfieRowLast: { borderBottomWidth: 0 },
+  takeSelfieRowTitle: { fontSize: 15, fontFamily: 'SpaceGrotesk_500Medium', color: '#ffffff' },
+  takeSelfieRowSubtitle: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 2 },
   section: { paddingHorizontal: 16, marginBottom: 40 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#ffffff' },
+  sectionTitle: { fontSize: 18, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff' },
   viewToggleRow: { flexDirection: 'row', gap: 8 },
-  sortToggle: { backgroundColor: '#101c33', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(74,144,217,0.22)' },
-  sortToggleText: { color: '#4a90d9', fontSize: 13, fontWeight: '600' },
-  sortToggleActive: { backgroundColor: '#4a90d9', borderColor: '#4a90d9' },
+  sortToggle: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14 },
+  sortToggleText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontFamily: 'SpaceGrotesk_500Medium' },
+  sortToggleActive: { backgroundColor: '#4a90d9' },
   sortToggleTextActive: { color: '#ffffff' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   gridItem: { width: '31%', alignItems: 'center' },
   gridImage: { width: '100%', aspectRatio: 1, borderRadius: 10, backgroundColor: '#101c33' },
-  gridDate: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 4, textAlign: 'center' },
+  gridDate: { fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 4, textAlign: 'center' },
   emptyState: { paddingHorizontal: 32, paddingTop: 16 },
-  emptySubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
+  emptySubtitle: { fontSize: 15, fontFamily: 'SpaceGrotesk_400Regular', color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
   cameraContainer: { flex: 1, backgroundColor: '#000000' },
   camera: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   cameraTop: { position: 'absolute', top: 60, left: 0, right: 0, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'flex-start' },
   cameraTopButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  cameraTopButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '600' },
   cameraBottom: { position: 'absolute', bottom: 60, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 48 },
   flipButton: { width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  flipButtonText: { color: '#ffffff', fontSize: 26, fontWeight: '300' },
   shutterButton: { width: 84, height: 84, borderRadius: 42, borderWidth: 4, borderColor: '#ffffff', justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
   shutterButtonCapturing: { opacity: 0.6 },
   shutterInner: { width: 68, height: 68, borderRadius: 34, backgroundColor: '#ffffff' },
   fullScreenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   fullScreenImage: { width: '100%', height: '85%' },
-  fullScreenDismiss: { color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 16 },
+  fullScreenDismiss: { color: 'rgba(255,255,255,0.4)', fontFamily: 'SpaceGrotesk_400Regular', fontSize: 13, marginTop: 16 },
   slideshowContainer: { paddingBottom: 16 },
-  slideshowPhotoWrap: { borderRadius: 20, overflow: 'hidden', height: 420, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(74,144,217,0.22)' },
+  slideshowPhotoWrap: { borderRadius: 20, overflow: 'hidden', height: 420, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
   slideshowPhoto: { width: '100%', height: '100%' },
   slideshowDateBadge: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.55)', padding: 16 },
-  slideshowDate: { color: '#ffffff', fontSize: 15, fontWeight: '600', textAlign: 'center' },
+  slideshowDate: { color: '#ffffff', fontSize: 15, fontFamily: 'SpaceGrotesk_500Medium', textAlign: 'center' },
   slideshowControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, marginBottom: 10 },
-  slideshowNavButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#101c33', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(74,144,217,0.22)' },
-  slideshowNavText: { color: '#ffffff', fontSize: 28, fontWeight: '300' },
+  slideshowNavButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center' },
   slideshowPlayButton: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#4a90d9', justifyContent: 'center', alignItems: 'center' },
-  slideshowPlayText: { color: '#ffffff', fontSize: 28 },
-  slideshowCounter: { color: 'rgba(255,255,255,0.4)', fontSize: 13, textAlign: 'center', marginBottom: 10 },
+  slideshowCounter: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontFamily: 'SpaceGrotesk_400Regular', textAlign: 'center', marginBottom: 10 },
   slideshowProgressBar: { height: 3, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2 },
   slideshowProgress: { height: 3, backgroundColor: '#4a90d9', borderRadius: 2 },
 });

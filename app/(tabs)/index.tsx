@@ -110,37 +110,37 @@ type ArchiveData = {
 
 type WikiEvent = { year: number; text: string };
 
-const placeContextFields: Record<string, { key: string; label: string; emoji: string; placeholder: string }[]> = {
+const placeContextFields: Record<string, { key: string; label: string; placeholder: string }[]> = {
   home: [
-    { key: 'liveWith', label: 'WHO DID YOU LIVE WITH?', emoji: '👥', placeholder: 'By myself, with flatmates...' },
-    { key: 'chapterDescription', label: 'WHAT WAS THIS CHAPTER?', emoji: '📖', placeholder: 'Describe this period of life...' },
-    { key: 'bestMemory', label: 'BEST MEMORY HERE?', emoji: '⭐', placeholder: 'The time when...' },
+    { key: 'liveWith', label: 'Who did you live with?', placeholder: 'By myself, with flatmates...' },
+    { key: 'chapterDescription', label: 'What was this chapter?', placeholder: 'Describe this period of life...' },
+    { key: 'bestMemory', label: 'Best memory here?', placeholder: 'The time when...' },
   ],
   visited: [
-    { key: 'wentWith', label: 'WHO DID YOU GO WITH?', emoji: '👥', placeholder: 'Solo, with friends...' },
-    { key: 'highlight', label: 'TRIP HIGHLIGHT?', emoji: '⭐', placeholder: 'The best part was...' },
-    { key: 'wouldReturn', label: 'WOULD YOU GO BACK?', emoji: '🔄', placeholder: 'Absolutely / Maybe not...' },
+    { key: 'wentWith', label: 'Who did you go with?', placeholder: 'Solo, with friends...' },
+    { key: 'highlight', label: 'Trip highlight?', placeholder: 'The best part was...' },
+    { key: 'wouldReturn', label: 'Would you go back?', placeholder: 'Absolutely / Maybe not...' },
   ],
   meaningful: [
-    { key: 'whyItMatters', label: 'WHY DOES THIS PLACE MATTER?', emoji: '💭', placeholder: 'This place means...' },
-    { key: 'bestMemory', label: 'BEST MEMORY HERE?', emoji: '⭐', placeholder: 'The time when...' },
-    { key: 'whoYouAssociate', label: 'WHO DO YOU ASSOCIATE WITH IT?', emoji: '👥', placeholder: 'Always think of...' },
+    { key: 'whyItMatters', label: 'Why does this place matter?', placeholder: 'This place means...' },
+    { key: 'bestMemory', label: 'Best memory here?', placeholder: 'The time when...' },
+    { key: 'whoYouAssociate', label: 'Who do you associate with it?', placeholder: 'Always think of...' },
   ],
 };
 
 const personAboutFields = [
-  { key: 'desc', label: 'WHO ARE THEY?', emoji: '👤', placeholder: 'My best mate from school...' },
-  { key: 'since', label: 'KNOWN SINCE?', emoji: '📅', placeholder: '2018, first year of uni...' },
-  { key: 'bday', label: 'BIRTHDAY', emoji: '🎂', placeholder: '14 June' },
-  { key: 'phone', label: 'PHONE NUMBER', emoji: '📱', placeholder: '+44...' },
-  { key: 'insta', label: 'INSTAGRAM', emoji: '📸', placeholder: '@handle' },
-  { key: 'notes', label: 'NOTES', emoji: '💬', placeholder: 'Anything else...' },
+  { key: 'desc', label: 'Who are they?', placeholder: 'My best mate from school...' },
+  { key: 'since', label: 'Known since?', placeholder: '2018, first year of uni...' },
+  { key: 'bday', label: 'Birthday', placeholder: '14 June' },
+  { key: 'phone', label: 'Phone number', placeholder: '+44...' },
+  { key: 'insta', label: 'Instagram', placeholder: '@handle' },
+  { key: 'notes', label: 'Notes', placeholder: 'Anything else...' },
 ];
 
-const placeAddButtons: { type: 'home' | 'visited' | 'meaningful'; emoji: string; name: string; desc: string }[] = [
-  { type: 'home', emoji: '🏠', name: 'Add a Home', desc: 'Halls, houses, family home...' },
-  { type: 'visited', emoji: '✈️', name: 'Add a Trip', desc: 'Holidays, weekends away, travel...' },
-  { type: 'meaningful', emoji: '❤️', name: 'Add a Meaningful Place', desc: "Pub, school, nan's house..." },
+const placeAddButtons: { type: 'home' | 'visited' | 'meaningful'; name: string; desc: string }[] = [
+  { type: 'home', name: 'Add a home', desc: 'Halls, houses, family home...' },
+  { type: 'visited', name: 'Add a trip', desc: 'Holidays, weekends away, travel...' },
+  { type: 'meaningful', name: 'Add a meaningful place', desc: "Pub, school, nan's house..." },
 ];
 
 const WEEK_DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
@@ -845,7 +845,7 @@ export default function OnThisDay() {
             </View>
           ) : yearRows.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>📷</Text>
+              <Ionicons name="image-outline" size={48} color="rgba(255,255,255,0.25)" style={styles.emptyIcon} />
               <Text style={styles.emptyTitle}>No memories found</Text>
               <Text style={styles.emptySubtitle}>You don&apos;t have any photos from this date in previous years.</Text>
             </View>
@@ -900,14 +900,11 @@ export default function OnThisDay() {
           {!loading && (
             <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}>
               <AnimatedCard onPress={openArchive} style={styles.archiveCard}>
-                <View pointerEvents="none" style={styles.yearGhostWrap}>
-                  <Text style={styles.yearGhost}>📜</Text>
-                </View>
-                <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 18 }}>
+                <View style={{ flex: 1, justifyContent: 'center' }}>
                   <Text style={styles.archiveTitle}>Archive</Text>
                   <Text style={styles.archiveSubtitle}>This day in history — before your photos began</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="rgba(155,114,255,0.6)" style={{ position: 'absolute', right: 16, top: '50%', marginTop: 8 }} />
+                <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.45)" />
               </AnimatedCard>
             </View>
           )}
@@ -924,7 +921,7 @@ export default function OnThisDay() {
             </View>
           ) : vaultDays.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🔒</Text>
+              <Ionicons name="lock-closed-outline" size={48} color="rgba(255,255,255,0.25)" style={styles.emptyIcon} />
               <Text style={styles.emptyTitle}>Your Vault is empty</Text>
               <Text style={styles.emptySubtitle}>Open a year card and tap Save to keep that day forever.</Text>
             </View>
@@ -1074,7 +1071,7 @@ export default function OnThisDay() {
               {places.length === 0 ? (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
                   <View style={styles.placesEmptyWrap}>
-                    <Ionicons name="map-outline" size={56} color="rgba(155,114,255,0.4)" />
+                    <Ionicons name="map-outline" size={56} color="rgba(255,255,255,0.25)" />
                     <Text style={styles.placesEmptyTitle}>Your Places</Text>
                     <Text style={styles.placesEmptySubtitle}>Start building a map of your life.</Text>
                   </View>
@@ -1082,15 +1079,14 @@ export default function OnThisDay() {
                     {placeAddButtons.map(btn => (
                       <TouchableOpacity
                         key={btn.type}
-                        style={[styles.placeAddButton, { borderColor: PIN_COLOURS[btn.type] + '66', backgroundColor: PIN_COLOURS[btn.type] + '14' }]}
+                        style={styles.placeAddButton}
                         onPress={() => { setNewPlaceType(btn.type); setShowCreatePlace(true); }}
                       >
-                        <Text style={styles.placeAddEmoji}>{btn.emoji}</Text>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.placeAddName}>{btn.name}</Text>
                           <Text style={styles.placeAddDesc}>{btn.desc}</Text>
                         </View>
-                        <Ionicons name="add-circle-outline" size={24} color={PIN_COLOURS[btn.type]} />
+                        <Ionicons name="add-outline" size={20} color="rgba(255,255,255,0.45)" />
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -1098,9 +1094,9 @@ export default function OnThisDay() {
               ) : (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 160, paddingTop: 60 }}>
                   {([
-                    { type: 'home' as const, title: '🏠 Homes' },
-                    { type: 'visited' as const, title: '✈️ Trips' },
-                    { type: 'meaningful' as const, title: '❤️ Places That Matter' },
+                    { type: 'home' as const, title: 'Homes' },
+                    { type: 'visited' as const, title: 'Trips' },
+                    { type: 'meaningful' as const, title: 'Places that matter' },
                   ]).map(section => {
                     const sectionPlaces = places
                       .filter(p => p.type === section.type)
@@ -1142,7 +1138,7 @@ export default function OnThisDay() {
                     );
                     return (
                       <View key={section.type}>
-                        <Text style={[styles.placeSectionHeader, { color: PIN_COLOURS[section.type] }]}>{section.title}</Text>
+                        <Text style={styles.placeSectionHeader}>{section.title}</Text>
                         {sectionPlaces.length === 0 ? (
                           <Text style={styles.placeEmptyText}>None added yet.</Text>
                         ) : sectionPlaces.length === 1 ? (
@@ -1216,7 +1212,7 @@ export default function OnThisDay() {
             </View>
           ) : allPeople.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>👥</Text>
+              <Ionicons name="people-outline" size={48} color="rgba(255,255,255,0.25)" style={styles.emptyIcon} />
               <Text style={styles.emptyTitle}>Your People</Text>
               <Text style={styles.emptySubtitle}>People you tag in your photos will appear here.</Text>
             </View>
@@ -1225,7 +1221,7 @@ export default function OnThisDay() {
               <Text style={[styles.sectionTitle, { marginBottom: 16 }]}>Your People</Text>
               <View style={styles.friendsGrid}>
                 {allPeople.map(person => (
-                  <TouchableOpacity key={person} style={styles.friendCard} onPress={() => openPersonProfile(person)}>
+                  <TouchableOpacity key={person} style={styles.friendItem} onPress={() => openPersonProfile(person)}>
                     <View style={styles.friendAvatarWrap}>
                       {personProfilePhotos[person] ? (
                         <Image source={{ uri: personProfilePhotos[person] }} style={styles.friendAvatarPhoto} />
@@ -1260,14 +1256,14 @@ export default function OnThisDay() {
                 setShowPlaceProfile(true);
               }
             }}>
-              <Text style={styles.menuItemEmoji}>✏️</Text>
+              <Ionicons name="create-outline" size={20} color="rgba(255,255,255,0.45)" />
               <View>
                 <Text style={styles.menuItemText}>Edit details</Text>
                 <Text style={styles.menuItemSub}>Open the place profile — tap any field to edit</Text>
               </View>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.menuItem, styles.menuItemDanger]} onPress={() => managePlace && deletePlaceById(managePlace)}>
-              <Text style={styles.menuItemEmoji}>🗑️</Text>
+              <Ionicons name="trash-outline" size={20} color="#ff4444" />
               <View>
                 <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete place</Text>
                 <Text style={styles.menuItemSub}>Photos and days stay in your library</Text>
@@ -1302,7 +1298,7 @@ export default function OnThisDay() {
           </TouchableOpacity>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
             <View style={styles.tcDateBlock}>
-              <Text style={styles.tcDayOfWeek}>THE ARCHIVE</Text>
+              <Text style={styles.tcDayOfWeek}>The archive</Text>
               <Text style={styles.tcDateBig}>
                 {today.getDate()} {today.toLocaleDateString('en-GB', { month: 'long' })}
               </Text>
@@ -1322,14 +1318,13 @@ export default function OnThisDay() {
                   const oldEvents = archiveData.events.filter(e => e.year < cutoff).slice(0, 15);
                   return oldEvents.length > 0 ? (
                     <>
-                      <Text style={styles.tcSectionTitleSmall}>📅 Events</Text>
+                      <Text style={styles.tcSectionTitleSmall}>Events</Text>
                       {oldEvents.map((ev, i) => (
                         <View key={`aev-${i}`} style={styles.tcNewsCard}>
                           <View style={styles.tcNewsTopRow}>
                             <View style={styles.tcNewsYearPill}>
                               <Text style={styles.tcNewsYearPillText}>{ev.year}</Text>
                             </View>
-                            <Text style={styles.tcNewsIcon}>📅</Text>
                           </View>
                           <Text style={styles.tcNewsText}>{ev.text}</Text>
                           <Text style={styles.tcNewsSource}>Wikipedia</Text>
@@ -1343,14 +1338,13 @@ export default function OnThisDay() {
 
                 {archiveData.births.length > 0 && (
                   <>
-                    <Text style={[styles.tcSectionTitleSmall, { marginTop: 20 }]}>🎂 Born on this day</Text>
+                    <Text style={[styles.tcSectionTitleSmall, { marginTop: 20 }]}>Born on this day</Text>
                     {archiveData.births.map((b, i) => (
                       <View key={`ab-${i}`} style={styles.tcNewsCard}>
                         <View style={styles.tcNewsTopRow}>
                           <View style={styles.tcNewsYearPill}>
                             <Text style={styles.tcNewsYearPillText}>{b.year}</Text>
                           </View>
-                          <Text style={styles.tcNewsIcon}>🎂</Text>
                         </View>
                         <Text style={styles.tcNewsText}>{b.text}</Text>
                       </View>
@@ -1360,14 +1354,13 @@ export default function OnThisDay() {
 
                 {archiveData.deaths.length > 0 && (
                   <>
-                    <Text style={[styles.tcSectionTitleSmall, { marginTop: 20 }]}>🕯️ Remembered today</Text>
+                    <Text style={[styles.tcSectionTitleSmall, { marginTop: 20 }]}>Remembered today</Text>
                     {archiveData.deaths.map((d, i) => (
                       <View key={`ad-${i}`} style={styles.tcNewsCard}>
                         <View style={styles.tcNewsTopRow}>
                           <View style={styles.tcNewsYearPill}>
                             <Text style={styles.tcNewsYearPillText}>{d.year}</Text>
                           </View>
-                          <Text style={styles.tcNewsIcon}>🕯️</Text>
                         </View>
                         <Text style={styles.tcNewsText}>{d.text}</Text>
                       </View>
@@ -1377,7 +1370,7 @@ export default function OnThisDay() {
 
                 {archiveData.holidays.length > 0 && (
                   <>
-                    <Text style={[styles.tcSectionTitleSmall, { marginTop: 20 }]}>🎉 Holidays & observances</Text>
+                    <Text style={[styles.tcSectionTitleSmall, { marginTop: 20 }]}>Holidays & observances</Text>
                     {archiveData.holidays.map((h, i) => (
                       <View key={`ah-${i}`} style={styles.tcNewsCard}>
                         <Text style={styles.tcNewsText}>{h.text}</Text>
@@ -1423,7 +1416,8 @@ export default function OnThisDay() {
                 style={styles.personEditPhotoBtn}
                 onPress={() => showPersonProfile && savePersonProfilePhoto(showPersonProfile)}
               >
-                <Text style={styles.personEditPhotoText}>📷 Edit photo</Text>
+                <Ionicons name="camera-outline" size={13} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.personEditPhotoText}>Edit photo</Text>
               </TouchableOpacity>
             </View>
 
@@ -1437,7 +1431,7 @@ export default function OnThisDay() {
                   style={styles.tcContextRow}
                   onPress={() => { setPersonAboutText(val); setPersonAboutField(field.key); }}
                 >
-                  <Text style={styles.tcContextLabel}>{field.emoji} {field.label}</Text>
+                  <Text style={styles.tcContextLabel}>{field.label}</Text>
                   {val
                     ? <Text style={styles.tcContextValue}>{val}</Text>
                     : <Text style={styles.tcContextEmpty}>Tap to add...</Text>}
@@ -1555,7 +1549,8 @@ export default function OnThisDay() {
                 <Text style={styles.placeTypeBadgeText}>{selectedPlace?.type.toUpperCase()}</Text>
               </View>
               <TouchableOpacity style={styles.placeEditCoverBtn} onPress={updatePlaceCover}>
-                <Text style={styles.placeEditCoverText}>📷 Edit cover</Text>
+                <Ionicons name="camera-outline" size={13} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.placeEditCoverText}>Edit cover</Text>
               </TouchableOpacity>
               <View style={{ position: 'absolute', bottom: 16, left: 16, right: 16 }}>
                 <Text style={styles.placeProfileName}>{selectedPlace?.name}</Text>
@@ -1570,13 +1565,13 @@ export default function OnThisDay() {
             <View style={styles.placeActionsRow}>
               {selectedPlace?.latitude != null && selectedPlace?.longitude != null && (
                 <TouchableOpacity style={styles.placeViewMapBtn} onPress={() => setShowPlaceMapModal(true)}>
-                  <Ionicons name="map-outline" size={16} color="#9b72ff" />
-                  <Text style={styles.placeViewMapBtnText}>View on Map</Text>
+                  <Ionicons name="map-outline" size={16} color="rgba(255,255,255,0.45)" />
+                  <Text style={styles.placeViewMapBtnText}>View on map</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.placeViewMapBtn} onPress={editPinEmoji}>
-                <Text style={{ fontSize: 14 }}>{selectedPlace?.pinEmoji || '📍'}</Text>
-                <Text style={styles.placeViewMapBtnText}>Pin emoji</Text>
+                <Ionicons name="location-outline" size={16} color="rgba(255,255,255,0.45)" />
+                <Text style={styles.placeViewMapBtnText}>Pin symbol</Text>
               </TouchableOpacity>
             </View>
 
@@ -1586,7 +1581,7 @@ export default function OnThisDay() {
               const val = selectedPlace.context[field.key as keyof PlaceContext] || '';
               return (
                 <TouchableOpacity key={field.key} style={styles.tcContextRow} onPress={() => { setPlaceFieldText(val); setEditingPlaceField(field.key); }}>
-                  <Text style={styles.tcContextLabel}>{field.emoji} {field.label}</Text>
+                  <Text style={styles.tcContextLabel}>{field.label}</Text>
                   {val ? <Text style={styles.tcContextValue}>{val}</Text> : <Text style={styles.tcContextEmpty}>Tap to add...</Text>}
                 </TouchableOpacity>
               );
@@ -1745,7 +1740,7 @@ export default function OnThisDay() {
                     ? <Image source={{ uri: newPlaceCoverUri }} style={{ width: '100%', height: '100%', borderRadius: 10 }} resizeMode="cover" />
                     : <>
                         <Ionicons name="image-outline" size={32} color="rgba(255,255,255,0.3)" />
-                        <Text style={{ color: 'rgba(255,255,255,0.3)', marginTop: 8, fontSize: 14 }}>Tap to add cover photo</Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.3)', marginTop: 8, fontSize: 14, fontFamily: 'Fraunces_400Regular' }}>Tap to add cover photo</Text>
                       </>}
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.saveButton, { marginTop: 16 }]} onPress={createPlace}>
@@ -1767,32 +1762,32 @@ const styles = StyleSheet.create({
   header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#17102a' },
   headerTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
   headerTitle: { fontSize: 32, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff' },
-  headerDate: { fontSize: 14, color: 'rgba(255,255,255,0.4)', marginTop: 2 },
+  headerDate: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 2 },
   headerGear: { padding: 4, marginTop: 6 },
   tabSwitcher: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 4 },
   tabButton: { flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center', borderWidth: 1, borderColor: 'transparent' },
   tabButtonActive: { backgroundColor: 'rgba(155,114,255,0.18)', borderColor: 'rgba(155,114,255,0.35)' },
-  tabButtonText: { fontSize: 11, fontWeight: '500', color: 'rgba(255,255,255,0.3)' },
-  tabButtonTextActive: { color: '#ffffff', fontWeight: '700' },
+  tabButtonText: { fontSize: 13, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.4)' },
+  tabButtonTextActive: { color: '#ffffff', fontFamily: 'Fraunces_600SemiBold' },
   centreScreen: { flex: 1, backgroundColor: '#17102a', justifyContent: 'center', alignItems: 'center', padding: 32 },
-  permissionTitle: { fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center', marginBottom: 16 },
-  permissionSubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
+  permissionTitle: { fontSize: 24, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff', textAlign: 'center', marginBottom: 16 },
+  permissionSubtitle: { fontSize: 15, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
   permissionButton: { backgroundColor: '#9b72ff', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32 },
-  permissionButtonText: { color: '#ffffff', fontWeight: '600', fontSize: 16 },
+  permissionButtonText: { color: '#ffffff', fontFamily: 'Fraunces_600SemiBold', fontSize: 16 },
   loadingContainer: { paddingTop: 80, alignItems: 'center' },
-  loadingText: { color: 'rgba(255,255,255,0.35)', marginTop: 16, fontSize: 15 },
+  loadingText: { color: 'rgba(255,255,255,0.35)', fontFamily: 'Fraunces_400Regular', marginTop: 16, fontSize: 15 },
   emptyState: { padding: 40, alignItems: 'center', marginTop: 40 },
-  emptyEmoji: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#ffffff', marginBottom: 8 },
-  emptySubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
+  emptyIcon: { marginBottom: 16 },
+  emptyTitle: { fontSize: 20, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff', marginBottom: 8 },
+  emptySubtitle: { fontSize: 15, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 22 },
   sectionTitle: { fontSize: 22, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff', marginBottom: 4, letterSpacing: -0.5 },
 
   // On This Day — year cards
   yearCardsList: { padding: 16, gap: 16, paddingBottom: 0 },
   yearCard: { width: '100%', borderRadius: 18, overflow: 'hidden', backgroundColor: '#1e1535', borderWidth: 1.5, borderColor: 'rgba(155,114,255,0.3)', shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
-  archiveCard: { width: '100%', height: 110, borderRadius: 18, overflow: 'hidden', backgroundColor: 'rgba(155,114,255,0.06)', borderWidth: 1.5, borderColor: 'rgba(155,114,255,0.2)', borderStyle: 'dashed' },
-  archiveTitle: { fontSize: 24, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff' },
-  archiveSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 4, paddingRight: 40 },
+  archiveCard: { width: '100%', minHeight: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
+  archiveTitle: { fontSize: 20, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff' },
+  archiveSubtitle: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 4, paddingRight: 20 },
   yearCardBg: { ...StyleSheet.absoluteFillObject, opacity: 0.88 },
   yearGhostWrap: { position: 'absolute', top: -10, right: -6 },
   yearGhost: { fontSize: 108, fontFamily: 'Fraunces_800ExtraBold', color: 'rgba(155,114,255,0.08)' },
@@ -1830,14 +1825,14 @@ const styles = StyleSheet.create({
   calDayNumEmpty: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' },
 
   // People tab
-  friendsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  friendCard: { width: '30%', alignItems: 'center', paddingVertical: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(155,114,255,0.15)' },
+  friendsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 20 },
+  friendItem: { width: '28%', alignItems: 'center', paddingVertical: 8 },
   friendAvatarWrap: { marginBottom: 8 },
-  friendAvatarPhoto: { width: 56, height: 56, borderRadius: 28 },
-  friendAvatarInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(155,114,255,0.3)', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(155,114,255,0.4)' },
-  friendAvatarInitial: { color: '#ffffff', fontSize: 24, fontWeight: 'bold' },
-  friendName: { fontSize: 13, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', marginBottom: 2, textAlign: 'center', paddingHorizontal: 4 },
-  friendDays: { fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center' },
+  friendAvatarPhoto: { width: 60, height: 60, borderRadius: 30 },
+  friendAvatarInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(155,114,255,0.18)', justifyContent: 'center', alignItems: 'center' },
+  friendAvatarInitial: { color: '#ffffff', fontSize: 24, fontFamily: 'Fraunces_600SemiBold' },
+  friendName: { fontSize: 14, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', marginBottom: 2, textAlign: 'center', paddingHorizontal: 4 },
+  friendDays: { fontSize: 13, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.4)', textAlign: 'center' },
 
   // Person profile
   personModal: { flex: 1, backgroundColor: '#17102a' },
@@ -1845,13 +1840,13 @@ const styles = StyleSheet.create({
   personHeaderInitial: { fontSize: 72, fontFamily: 'Fraunces_800ExtraBold', color: 'rgba(255,255,255,0.2)' },
   personClose: { position: 'absolute', top: 20, left: 16, padding: 4, zIndex: 2 },
   personHeaderName: { fontSize: 28, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff' },
-  personHeaderDays: { fontSize: 14, color: 'rgba(155,114,255,0.8)', marginTop: 2 },
-  personEditPhotoBtn: { position: 'absolute', bottom: 14, right: 16, backgroundColor: 'rgba(13,10,20,0.6)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.35)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
-  personEditPhotoText: { fontSize: 12, color: '#ffffff' },
+  personHeaderDays: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  personEditPhotoBtn: { position: 'absolute', bottom: 14, right: 16, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(13,10,20,0.5)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+  personEditPhotoText: { fontSize: 13, fontFamily: 'Fraunces_400Regular', color: '#ffffff' },
   personSectionTitle: { fontSize: 20, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', marginTop: 24, marginLeft: 16, marginBottom: 4 },
-  personCountText: { fontSize: 13, color: 'rgba(255,255,255,0.35)', marginLeft: 16, marginBottom: 10 },
+  personCountText: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.4)', marginLeft: 16, marginBottom: 10 },
   personDayCard: { width: 120, height: 160, borderRadius: 12, overflow: 'hidden' },
-  personDayDate: { position: 'absolute', bottom: 8, left: 8, fontSize: 11, fontWeight: '700', color: '#ffffff' },
+  personDayDate: { position: 'absolute', bottom: 8, left: 8, fontSize: 13, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff' },
   personPhotoThumb: { width: 80, height: 80, borderRadius: 8 },
 
   // Map view
@@ -1880,13 +1875,12 @@ const styles = StyleSheet.create({
   // Places list
   placesEmptyWrap: { alignItems: 'center', marginTop: 80, paddingHorizontal: 40 },
   placesEmptyTitle: { fontSize: 24, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', marginTop: 16 },
-  placesEmptySubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.45)', textAlign: 'center', marginTop: 8 },
-  placeAddButton: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 14, padding: 18, borderWidth: 1 },
-  placeAddEmoji: { fontSize: 28 },
-  placeAddName: { fontSize: 15, fontWeight: '700', color: '#ffffff' },
-  placeAddDesc: { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
-  placeSectionHeader: { fontSize: 20, fontFamily: 'Fraunces_600SemiBold', marginTop: 24, marginBottom: 12 },
-  placeEmptyText: { color: 'rgba(255,255,255,0.3)', fontSize: 14, fontStyle: 'italic', marginBottom: 8 },
+  placesEmptySubtitle: { fontSize: 15, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.45)', textAlign: 'center', marginTop: 8 },
+  placeAddButton: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  placeAddName: { fontSize: 15, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff' },
+  placeAddDesc: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.45)', marginTop: 2 },
+  placeSectionHeader: { fontSize: 20, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', marginTop: 24, marginBottom: 12 },
+  placeEmptyText: { color: 'rgba(255,255,255,0.3)', fontSize: 14, fontFamily: 'Fraunces_400Regular', fontStyle: 'italic', marginBottom: 8 },
   placeCard: { width: '100%', borderRadius: 16, overflow: 'hidden', marginBottom: 12, backgroundColor: '#1e1535', borderWidth: 1, borderColor: 'rgba(155,114,255,0.25)' },
   placeCardNoCover: { backgroundColor: 'rgba(255,255,255,0.05)' },
   placeTypeBadge: { position: 'absolute', top: 12, right: 12, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(155,114,255,0.45)', backgroundColor: 'rgba(13,10,20,0.55)' },
@@ -1903,37 +1897,37 @@ const styles = StyleSheet.create({
   // Place profile
   placeProfileClose: { position: 'absolute', top: 20, left: 16, padding: 4, zIndex: 2 },
   placeProfileName: { fontSize: 28, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff' },
-  placeProfileLocation: { fontSize: 15, color: 'rgba(255,255,255,0.65)', marginTop: 4 },
-  placeProfileDate: { fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
+  placeProfileLocation: { fontSize: 15, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.65)', marginTop: 4 },
+  placeProfileDate: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.45)', marginTop: 2 },
   placeProfileSectionTitle: { fontSize: 18, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', marginTop: 24, marginLeft: 16, marginBottom: 8 },
-  placeActionsRow: { flexDirection: 'row', gap: 10, marginTop: 16, marginHorizontal: 16 },
-  placeViewMapBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: 'rgba(155,114,255,0.12)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.3)' },
-  placeEditCoverBtn: { position: 'absolute', top: 60, right: 16, backgroundColor: 'rgba(13,10,20,0.6)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.35)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
-  placeEditCoverText: { fontSize: 12, color: '#ffffff' },
-  placeDeleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 32, marginHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,68,68,0.35)', backgroundColor: 'rgba(255,68,68,0.08)' },
-  placeDeleteBtnText: { color: '#ff4444', fontSize: 14, fontWeight: '700' },
-  placeViewMapBtnText: { color: '#9b72ff', fontSize: 14, fontWeight: '700' },
-  placeAddPhotoBtn: { borderWidth: 1, borderColor: 'rgba(155,114,255,0.25)', borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 8 },
-  placeAddPhotoBtnText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontWeight: '600' },
-  placeLinkedDayRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  placeActionsRow: { flexDirection: 'row', gap: 24, marginTop: 16, marginHorizontal: 16 },
+  placeViewMapBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
+  placeEditCoverBtn: { position: 'absolute', top: 60, right: 16, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(13,10,20,0.5)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+  placeEditCoverText: { fontSize: 13, fontFamily: 'Fraunces_400Regular', color: '#ffffff' },
+  placeDeleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 32, marginHorizontal: 16, paddingVertical: 14 },
+  placeDeleteBtnText: { color: '#ff4444', fontSize: 15, fontFamily: 'Fraunces_600SemiBold' },
+  placeViewMapBtnText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, fontFamily: 'Fraunces_400Regular' },
+  placeAddPhotoBtn: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 8 },
+  placeAddPhotoBtnText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, fontFamily: 'Fraunces_600SemiBold' },
+  placeLinkedDayRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
   placeLinkedDayThumb: { width: 50, height: 50, borderRadius: 6 },
-  placeLinkedDayDate: { fontSize: 15, color: '#ffffff', fontWeight: '600', flex: 1 },
+  placeLinkedDayDate: { fontSize: 15, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', flex: 1 },
 
   // Create place modal
-  createPlaceLabel: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginBottom: 8 },
-  createPlaceInput: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 14, color: '#ffffff', fontSize: 16, borderWidth: 1, borderColor: 'rgba(155,114,255,0.2)', marginBottom: 16 },
+  createPlaceLabel: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.5)', marginBottom: 8 },
+  createPlaceInput: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 14, color: '#ffffff', fontFamily: 'Fraunces_400Regular', fontSize: 16, borderWidth: 1, borderColor: 'rgba(155,114,255,0.2)', marginBottom: 16 },
   createPlaceTypePill: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(155,114,255,0.25)' },
   createPlaceTypePillActive: { backgroundColor: '#9b72ff', borderColor: '#9b72ff' },
-  createPlaceTypePillText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, fontWeight: '600' },
+  createPlaceTypePillText: { color: 'rgba(255,255,255,0.6)', fontSize: 14, fontFamily: 'Fraunces_600SemiBold' },
   createPlaceCoverBtn: { borderWidth: 1, borderColor: 'rgba(155,114,255,0.25)', borderStyle: 'dashed', borderRadius: 10, height: 120, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
 
   // Add to place picker
   addToPlaceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
-  addToPlaceRowName: { fontSize: 16, color: '#ffffff', fontWeight: '600', flex: 1 },
+  addToPlaceRowName: { fontSize: 16, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', flex: 1 },
   placeTypePill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(155,114,255,0.3)', backgroundColor: 'rgba(155,114,255,0.1)' },
-  placeTypePillText: { fontSize: 10, fontWeight: '700', color: 'rgba(255,255,255,0.6)' },
+  placeTypePillText: { fontSize: 13, fontFamily: 'Fraunces_600SemiBold', color: 'rgba(255,255,255,0.6)' },
   addToPlaceNewBtn: { paddingVertical: 14, alignItems: 'center' },
-  addToPlaceNewBtnText: { color: '#9b72ff', fontWeight: '600', fontSize: 15 },
+  addToPlaceNewBtnText: { color: '#9b72ff', fontFamily: 'Fraunces_600SemiBold', fontSize: 15 },
 
   // Trading card
   tcContainer: { flex: 1, backgroundColor: '#17102a' },
@@ -1941,47 +1935,46 @@ const styles = StyleSheet.create({
   tcSaveBtn: { position: 'absolute', top: 14, right: 16, zIndex: 10, backgroundColor: '#9b72ff', borderRadius: 18, paddingHorizontal: 18, paddingVertical: 8 },
   tcSaveBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
   tcDateBlock: { paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20 },
-  tcDayOfWeek: { fontSize: 16, fontFamily: 'Fraunces_600SemiBold', color: 'rgba(255,255,255,0.5)', letterSpacing: 1 },
+  tcDayOfWeek: { fontSize: 16, fontFamily: 'Fraunces_600SemiBold', color: 'rgba(255,255,255,0.5)' },
   tcDateBig: { fontSize: 38, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff', lineHeight: 44, marginTop: 2 },
   tcInfoStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingBottom: 20 },
   tcPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  tcPillText: { fontSize: 13, color: '#ffffff' },
+  tcPillText: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: '#ffffff' },
   tcPillTextMuted: { color: 'rgba(255,255,255,0.35)' },
-  tcPillInput: { color: '#ffffff', fontSize: 13, minWidth: 130, padding: 0 },
+  tcPillInput: { color: '#ffffff', fontFamily: 'Fraunces_400Regular', fontSize: 14, minWidth: 130, padding: 0 },
   tcSavedPill: { backgroundColor: 'rgba(155,114,255,0.2)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.4)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  tcSavedPillText: { fontSize: 13, color: '#ffffff', fontWeight: '700' },
+  tcSavedPillText: { fontSize: 14, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff' },
   tcSectionTitle: { fontSize: 22, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', paddingHorizontal: 20, marginTop: 8, marginBottom: 12 },
   tcSectionTitleSmall: { fontSize: 20, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', paddingHorizontal: 20, marginTop: 8, marginBottom: 8 },
-  tcNoPhotosText: { fontSize: 14, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic', paddingHorizontal: 20, marginBottom: 16 },
+  tcNoPhotosText: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.3)', fontStyle: 'italic', paddingHorizontal: 20, marginBottom: 16 },
   tcPhotoCard: { marginHorizontal: 20, marginBottom: 20, borderRadius: 14, overflow: 'hidden', backgroundColor: '#1e1535' },
   tcPhotoImage: { width: '100%', aspectRatio: 4 / 3 },
   tcPhotoMenuBtn: { position: 'absolute', top: 10, right: 10, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
   tcCoverBadge: { position: 'absolute', top: 10, left: 10, backgroundColor: 'rgba(155,114,255,0.8)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
   tcCoverBadgeText: { fontSize: 10, fontWeight: '700', color: '#ffffff' },
   tcSingleSaveRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8 },
-  tcSingleSaveText: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
+  tcSingleSaveText: { fontSize: 13, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.35)' },
   tcActionRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.04)', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)' },
   tcActionBtn: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  tcActionText: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 3 },
+  tcActionText: { fontSize: 13, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.4)', marginTop: 3 },
   tcActionTextActive: { color: '#9b72ff' },
-  tcCaption: { paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: 'rgba(255,255,255,0.8)', fontStyle: 'italic' },
+  tcCaption: { paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.8)', fontStyle: 'italic' },
   tcPeopleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 14, paddingBottom: 12 },
   tcPersonChip: { backgroundColor: 'rgba(155,114,255,0.15)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3 },
-  tcPersonChipText: { fontSize: 12, color: '#9b72ff' },
-  tcDescInput: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, marginHorizontal: 20, paddingHorizontal: 20, paddingVertical: 14, color: '#ffffff', fontSize: 15, lineHeight: 22, minHeight: 80, textAlignVertical: 'top' },
+  tcPersonChipText: { fontSize: 13, fontFamily: 'Fraunces_400Regular', color: '#9b72ff' },
+  tcDescInput: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14, marginHorizontal: 20, paddingHorizontal: 20, paddingVertical: 14, color: '#ffffff', fontFamily: 'Fraunces_400Regular', fontSize: 15, lineHeight: 22, minHeight: 80, textAlignVertical: 'top' },
   tcContextRow: { paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
-  tcContextLabel: { fontSize: 11, fontWeight: '700', color: 'rgba(155,114,255,0.6)', letterSpacing: 1.5 },
-  tcContextValue: { fontSize: 15, color: '#ffffff', marginTop: 3 },
-  tcContextEmpty: { fontSize: 15, color: 'rgba(255,255,255,0.2)', marginTop: 3 },
+  tcContextLabel: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.4)' },
+  tcContextValue: { fontSize: 15, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', marginTop: 3 },
+  tcContextEmpty: { fontSize: 15, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.2)', marginTop: 3 },
   tcNewsHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingRight: 20, marginTop: 28 },
-  tcNewsSubheader: { fontSize: 13, color: 'rgba(255,255,255,0.4)', paddingHorizontal: 20, marginBottom: 16 },
+  tcNewsSubheader: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.4)', paddingHorizontal: 20, marginBottom: 16 },
   tcNewsCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 14, marginHorizontal: 20, marginBottom: 8 },
   tcNewsTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   tcNewsYearPill: { backgroundColor: 'rgba(155,114,255,0.15)', borderWidth: 1, borderColor: 'rgba(155,114,255,0.3)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 },
   tcNewsYearPillText: { fontSize: 13, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff' },
-  tcNewsIcon: { fontSize: 14 },
-  tcNewsText: { fontSize: 14, color: '#ffffff', lineHeight: 20 },
-  tcNewsSource: { fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 6 },
+  tcNewsText: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: '#ffffff', lineHeight: 20 },
+  tcNewsSource: { fontSize: 13, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.3)', marginTop: 6 },
   tcFootballHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginTop: 16, marginBottom: 8 },
   tcFootballHeaderText: { fontSize: 16, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff' },
   tcMatchComp: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 8 },
@@ -2008,24 +2001,23 @@ const styles = StyleSheet.create({
   // Three dot menu
   menuOverlay: { flex: 1, justifyContent: 'flex-end' },
   menuBox: { backgroundColor: 'rgba(24,16,42,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(155,114,255,0.15)' },
-  menuTitle: { fontSize: 16, color: 'rgba(255,255,255,0.35)', fontWeight: '600', marginBottom: 16, textAlign: 'center' },
+  menuTitle: { fontSize: 16, fontFamily: 'Fraunces_600SemiBold', color: 'rgba(255,255,255,0.4)', marginBottom: 16, textAlign: 'center' },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
   menuItemDanger: { borderBottomWidth: 0 },
-  menuItemEmoji: { fontSize: 22 },
-  menuItemText: { fontSize: 16, color: '#ffffff', fontWeight: '600', marginBottom: 2 },
+  menuItemText: { fontSize: 16, fontFamily: 'Fraunces_600SemiBold', color: '#ffffff', marginBottom: 2 },
   menuItemTextDanger: { color: '#ff4444' },
-  menuItemSub: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
+  menuItemSub: { fontSize: 13, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.35)' },
   menuCancel: { marginTop: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, alignItems: 'center' },
-  menuCancelText: { color: '#ffffff', fontWeight: '600', fontSize: 15 },
+  menuCancelText: { color: '#ffffff', fontFamily: 'Fraunces_600SemiBold', fontSize: 15 },
 
   // Modals — glass effect
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalBox: { backgroundColor: 'rgba(24,16,42,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: 'rgba(155,114,255,0.15)' },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#ffffff', marginBottom: 6, letterSpacing: -0.3 },
-  modalSubtitle: { fontSize: 14, color: 'rgba(255,255,255,0.35)', marginBottom: 10 },
-  textInput: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, color: '#ffffff', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
+  modalTitle: { fontSize: 20, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff', marginBottom: 6 },
+  modalSubtitle: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.35)', marginBottom: 10 },
+  textInput: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 12, padding: 16, color: '#ffffff', fontFamily: 'Fraunces_400Regular', fontSize: 16, minHeight: 100, textAlignVertical: 'top', marginBottom: 16 },
   saveButton: { backgroundColor: '#9b72ff', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 10 },
-  saveButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 16 },
+  saveButtonText: { color: '#ffffff', fontFamily: 'Fraunces_600SemiBold', fontSize: 16 },
   cancelButton: { alignItems: 'center', padding: 10 },
-  cancelButtonText: { color: 'rgba(255,255,255,0.35)', fontSize: 15 },
+  cancelButtonText: { color: 'rgba(255,255,255,0.35)', fontFamily: 'Fraunces_400Regular', fontSize: 15 },
 });
