@@ -85,6 +85,12 @@ export default function Settings() {
         <View style={styles.row}>
           <Text style={styles.placeholderText}>More settings coming soon</Text>
         </View>
+
+        <View style={styles.divider} />
+        <TouchableOpacity style={styles.privacyRow} onPress={() => router.push('/privacy')}>
+          <Text style={styles.privacyLabel}>Privacy Policy</Text>
+          <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.35)" />
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -99,4 +105,7 @@ const styles = StyleSheet.create({
   row: { paddingHorizontal: 22, paddingVertical: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
   rowLabel: { fontSize: 15, fontFamily: 'Fraunces_400Regular', color: '#ffffff' },
   placeholderText: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.3)' },
+  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 0 },
+  privacyRow: { paddingHorizontal: 16, paddingVertical: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  privacyLabel: { fontSize: 15, fontFamily: 'Fraunces_400Regular', color: '#ffffff' },
 });
