@@ -48,7 +48,6 @@ const ACCENTS = {
     rgb: '155,114,255',
     font800: 'Fraunces_800ExtraBold',
     font600: 'Fraunces_600SemiBold',
-    font400: 'Fraunces_400Regular',
   },
   present: {
     bg: '#0b1526',
@@ -57,7 +56,6 @@ const ACCENTS = {
     rgb: '74,144,217',
     font800: 'SpaceGrotesk_700Bold',
     font600: 'SpaceGrotesk_600SemiBold',
-    font400: 'SpaceGrotesk_400Regular',
   },
 };
 
@@ -84,11 +82,11 @@ type Place = {
 };
 
 const contextFields = [
-  { key: 'living', label: 'Where I was living', placeholder: 'My flat in Edinburgh...' },
-  { key: 'doing', label: 'What I was doing', placeholder: 'Working at..., studying...' },
-  { key: 'with', label: 'Who I was with', placeholder: 'Mostly with Alex and...' },
-  { key: 'listening', label: 'What I was listening to', placeholder: 'Obsessed with...' },
-  { key: 'thinking', label: 'What I was thinking about', placeholder: 'Worried about / excited about...' },
+  { key: 'living', label: 'WHERE I WAS LIVING', placeholder: 'My flat in Edinburgh...', emoji: '📍' },
+  { key: 'doing', label: 'WHAT I WAS DOING', placeholder: 'Working at..., studying...', emoji: '💼' },
+  { key: 'with', label: 'WHO I WAS WITH', placeholder: 'Mostly with Alex and...', emoji: '👥' },
+  { key: 'listening', label: 'WHAT I WAS LISTENING TO', placeholder: 'Obsessed with...', emoji: '🎵' },
+  { key: 'thinking', label: 'WHAT I WAS THINKING ABOUT', placeholder: 'Worried about / excited about...', emoji: '💭' },
 ];
 
 const formatDateKey = (date: Date) => {
@@ -108,7 +106,6 @@ type DayCardProps = {
 
 export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate }: DayCardProps) {
   const A = ACCENTS[accent];
-  const AccentText = (textProps: any) => <Text {...textProps} style={[{ fontFamily: A.font400 }, textProps.style]} />;
   const year = dateKey ? dateKey.split('-')[0] : '';
   const date = dateKey ? new Date(dateKey + 'T12:00:00') : null;
 
@@ -595,40 +592,40 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
     if (accent === 'past') {
       return (
         <ScrollView style={{ width }} contentContainerStyle={styles.slideContent} showsVerticalScrollIndicator={false}>
-          <AccentText style={[styles.trackedCaps, { color: A.hex }]}>On this day in {year}</AccentText>
-          <AccentText style={[styles.coverDate, { fontFamily: A.font800 }]}>
+          <Text style={[styles.trackedCaps, { color: A.hex }]}>ON THIS DAY IN {year}</Text>
+          <Text style={[styles.coverDate, { fontFamily: A.font800 }]}>
             {date?.toLocaleDateString('en-GB', { weekday: 'long' })}{'\n'}{date?.getDate()} {date?.toLocaleDateString('en-GB', { month: 'long' })} {year}
-          </AccentText>
+          </Text>
           <View style={styles.pillRow}>
             {!!weatherPill && (
-              <View style={styles.pill}><AccentText style={styles.pillText}>{weatherPill}</AccentText></View>
+              <View style={styles.pill}><Text style={styles.pillText}>{weatherPill}</Text></View>
             )}
             {totalPhotoCount > 0 && (
               <View style={styles.pill}>
-                <AccentText style={styles.pillText}>{totalPhotoCount} photo{totalPhotoCount === 1 ? '' : 's'}</AccentText>
+                <Text style={styles.pillText}>{totalPhotoCount} photo{totalPhotoCount === 1 ? '' : 's'}</Text>
               </View>
             )}
             {saved && (
               <View style={[styles.pill, { backgroundColor: `rgba(${A.rgb},0.2)`, borderColor: `rgba(${A.rgb},0.4)` }]}>
-                <AccentText style={[styles.pillText, { fontWeight: '700' }]}>In Vault</AccentText>
+                <Text style={[styles.pillText, { fontWeight: '700' }]}>In Vault</Text>
               </View>
             )}
           </View>
           {!!spentWithLine && (
-            <AccentText style={styles.spentWithLine}>With {spentWithLine}</AccentText>
+            <Text style={styles.spentWithLine}>👥 With {spentWithLine}</Text>
           )}
           {(!!tcLocation || editMode) && (
             <TouchableOpacity
               disabled={!editMode}
               onPress={() => openFieldEditor('location', 'Where were you?', tcLocation)}
             >
-              <AccentText style={[styles.spentWithLine, !tcLocation && { color: 'rgba(255,255,255,0.3)' }]}>
-                {tcLocation || 'Add a location...'}
-              </AccentText>
+              <Text style={[styles.spentWithLine, !tcLocation && { color: 'rgba(255,255,255,0.3)' }]}>
+                📍 {tcLocation || 'Add a location...'}
+              </Text>
             </TouchableOpacity>
           )}
           {slides.length > 1 && (
-            <AccentText style={styles.swipeHint}>{editMode ? 'Swipe to add your story →' : 'Swipe →'}</AccentText>
+            <Text style={styles.swipeHint}>{editMode ? 'Swipe to add your story →' : 'Swipe →'}</Text>
           )}
         </ScrollView>
       );
@@ -639,21 +636,21 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
       <ScrollView style={{ width }} contentContainerStyle={styles.slideContent} showsVerticalScrollIndicator={false}>
         {entry?.mood ? (
           <View pointerEvents="none" style={styles.ghostWrap}>
-            <AccentText style={styles.ghostEmoji}>{entry.mood}</AccentText>
+            <Text style={styles.ghostEmoji}>{entry.mood}</Text>
           </View>
         ) : null}
-        <AccentText style={[styles.trackedCaps, { color: A.hex }]}>
+        <Text style={[styles.trackedCaps, { color: A.hex }]}>
           {date?.toLocaleDateString('en-GB', { weekday: 'long' }).toUpperCase()}
-        </AccentText>
-        <AccentText style={[styles.coverDate, { fontFamily: A.font800 }]}>
+        </Text>
+        <Text style={[styles.coverDate, { fontFamily: A.font800 }]}>
           {date?.getDate()} {date?.toLocaleDateString('en-GB', { month: 'long' })}{'\n'}{year}
-        </AccentText>
+        </Text>
         {threeWords.length > 0 && (
-          <AccentText style={[styles.threeWordsBig, { color: `rgba(${A.rgb},0.95)` }]}>{threeWords.join(' · ')}</AccentText>
+          <Text style={[styles.threeWordsBig, { color: `rgba(${A.rgb},0.95)` }]}>{threeWords.join(' · ')}</Text>
         )}
         <View style={styles.pillRow}>
           {!!weatherPill && (
-            <View style={styles.pill}><AccentText style={styles.pillText}>{weatherPill}</AccentText></View>
+            <View style={styles.pill}><Text style={styles.pillText}>{weatherPill}</Text></View>
           )}
           {(!!headlineLocation || editMode) && (
             <TouchableOpacity
@@ -662,17 +659,17 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
               onPress={() => openFieldEditor('location', 'Where were you?', tcLocation)}
             >
               <Ionicons name="location-outline" size={13} color="rgba(255,255,255,0.6)" />
-              <AccentText style={[styles.pillText, !headlineLocation && styles.pillTextMuted]}>
+              <Text style={[styles.pillText, !headlineLocation && styles.pillTextMuted]}>
                 {headlineLocation || 'Add location'}
-              </AccentText>
+              </Text>
             </TouchableOpacity>
           )}
           {!!entry?.mood && (
-            <View style={styles.pill}><AccentText style={styles.pillText}>{entry.mood}</AccentText></View>
+            <View style={styles.pill}><Text style={styles.pillText}>{entry.mood}</Text></View>
           )}
           {saved && (
             <View style={[styles.pill, { backgroundColor: `rgba(${A.rgb},0.2)`, borderColor: `rgba(${A.rgb},0.4)` }]}>
-              <AccentText style={[styles.pillText, { fontWeight: '700' }]}>In Vault</AccentText>
+              <Text style={[styles.pillText, { fontWeight: '700' }]}>In Vault</Text>
             </View>
           )}
         </View>
@@ -684,7 +681,7 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
           </View>
         )}
         {slides.length > 1 && (
-          <AccentText style={styles.swipeHint}>Swipe →</AccentText>
+          <Text style={styles.swipeHint}>Swipe →</Text>
         )}
       </ScrollView>
     );
@@ -707,20 +704,20 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
     const whoChips = [...cats, ...names];
     const linkedPlace = assetId ? places.find(pl => pl.photoUris.includes(uri)) : undefined;
 
-    const fieldRow = (label: string, content: React.ReactNode, hasValue: boolean, onPress: () => void) => (
+    const fieldRow = (emoji: string, label: string, content: React.ReactNode, hasValue: boolean, onPress: () => void) => (
       <TouchableOpacity
-        style={styles.dayBlock}
+        style={[styles.dayBlock, { backgroundColor: A.card, borderColor: `rgba(${A.rgb},${hasValue ? 0.35 : 0.2})` }]}
         disabled={!editMode}
         onPress={onPress}
       >
-        <AccentText style={styles.trackedCapsSmall}>{label}</AccentText>
+        <Text style={[styles.trackedCapsSmall, { color: A.hex }]}>{emoji} {label}</Text>
         {content}
       </TouchableOpacity>
     );
 
     return (
       <ScrollView style={{ width }} contentContainerStyle={styles.slideContentTight} showsVerticalScrollIndicator={false}>
-        <AccentText style={styles.photoSlideHeader}>Photo {idx + 1} of {photoSlideKeys.length}</AccentText>
+        <Text style={styles.photoSlideHeader}>Photo {idx + 1} of {photoSlideKeys.length}</Text>
         <View style={[styles.photoSlideImageWrap, { backgroundColor: A.card }]}>
           <TouchableOpacity style={{ width: '100%', height: '100%' }} activeOpacity={0.9} onPress={() => setFullscreenUri(uri)}>
             <Image source={{ uri }} style={styles.photoSlideImage} resizeMode="contain" />
@@ -732,15 +729,15 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
           )}
           {assetId && assetId === coverId && (
             <View style={[styles.coverBadge, { backgroundColor: `rgba(${A.rgb},0.85)` }]}>
-              <AccentText style={styles.coverBadgeText}>Cover</AccentText>
+              <Text style={styles.coverBadgeText}>Cover</Text>
             </View>
           )}
         </View>
 
-        {fieldRow('Caption',
+        {fieldRow('💬', 'CAPTION',
           caption
-            ? <AccentText style={styles.dayBlockValue}>{caption}</AccentText>
-            : <AccentText style={styles.dayBlockEmpty}>Tap to add...</AccentText>,
+            ? <Text style={styles.dayBlockValue}>{caption}</Text>
+            : <Text style={styles.dayBlockEmpty}>Tap to add...</Text>,
           !!caption,
           () => {
             setFieldText(caption || '');
@@ -748,16 +745,16 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
           }
         )}
 
-        {assetId && fieldRow("Who's in this",
+        {assetId && fieldRow('👥', "WHO'S IN THIS",
           whoChips.length > 0 ? (
             <View style={[styles.chipRow, { marginBottom: 0 }]}>
               {whoChips.map(name => (
                 <View key={name} style={[styles.chip, { backgroundColor: `rgba(${A.rgb},0.15)` }]}>
-                  <AccentText style={[styles.chipText, { color: A.hex }]}>{name}</AccentText>
+                  <Text style={[styles.chipText, { color: A.hex }]}>{name}</Text>
                 </View>
               ))}
             </View>
-          ) : <AccentText style={styles.dayBlockEmpty}>Tap to add...</AccentText>,
+          ) : <Text style={styles.dayBlockEmpty}>Tap to add...</Text>,
           whoChips.length > 0,
           () => {
             setTagSelected(names);
@@ -767,10 +764,10 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
           }
         )}
 
-        {assetId && fieldRow('Where',
+        {assetId && fieldRow('📍', 'WHERE',
           linkedPlace
-            ? <AccentText style={styles.dayBlockValue}>{linkedPlace.name}</AccentText>
-            : <AccentText style={styles.dayBlockEmpty}>Tap to add...</AccentText>,
+            ? <Text style={styles.dayBlockValue}>{linkedPlace.name}</Text>
+            : <Text style={styles.dayBlockEmpty}>Tap to add...</Text>,
           !!linkedPlace,
           () => {
             setPlaceScope('photo');
@@ -782,14 +779,21 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
     );
   };
 
-  const dayBlock = (label: string, value: string, fieldKey: string | null, accentLabel = false, extra?: React.ReactNode) => {
+  const dayBlock = (label: string, value: string, fieldKey: string | null, glow = false, extra?: React.ReactNode) => {
     if (!value && !(editMode && fieldKey)) return null;
     const inner = (
-      <View key={label} style={styles.dayBlock}>
-        <AccentText style={[styles.trackedCapsSmall, accentLabel && { color: A.hex }]}>{label}</AccentText>
+      <View
+        key={label}
+        style={[
+          styles.dayBlock,
+          { backgroundColor: A.card, borderColor: `rgba(${A.rgb},0.2)` },
+          glow && { borderColor: `rgba(${A.rgb},0.35)`, shadowColor: A.hex, shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 0 } },
+        ]}
+      >
+        <Text style={[styles.trackedCapsSmall, { color: A.hex }]}>{label}</Text>
         {value
-          ? <AccentText style={styles.dayBlockValue}>{value}</AccentText>
-          : <AccentText style={styles.dayBlockEmpty}>Tap to add...</AccentText>}
+          ? <Text style={styles.dayBlockValue}>{value}</Text>
+          : <Text style={styles.dayBlockEmpty}>Tap to add...</Text>}
         {extra}
       </View>
     );
@@ -808,34 +812,34 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
       {(description || editMode) && (
         editMode ? (
           <TouchableOpacity onPress={() => openFieldEditor('description', 'What were you doing?', description)}>
-            <AccentText style={description ? styles.pullQuote : styles.pullQuoteEmpty}>
+            <Text style={description ? styles.pullQuote : styles.pullQuoteEmpty}>
               {description ? `"${description}"` : 'Describe this day...'}
-            </AccentText>
+            </Text>
           </TouchableOpacity>
         ) : (
-          <AccentText style={styles.pullQuote}>{`"${description}"`}</AccentText>
+          <Text style={styles.pullQuote}>{`"${description}"`}</Text>
         )
       )}
 
       {!!entry?.voiceMemoUri && (
         <TouchableOpacity
-          style={styles.voiceRow}
+          style={[styles.voiceRow, { backgroundColor: A.card, borderColor: `rgba(${A.rgb},0.25)` }]}
           onPress={playVoiceMemo}
         >
-          <Ionicons name={isPlaying ? 'stop' : 'play'} size={18} color="rgba(255,255,255,0.45)" />
-          <AccentText style={styles.voiceRowText}>{isPlaying ? 'Playing voice memo...' : 'Play voice memo'}</AccentText>
+          <Ionicons name={isPlaying ? 'stop' : 'play'} size={18} color={A.hex} />
+          <Text style={styles.voiceRowText}>{isPlaying ? 'Playing voice memo...' : 'Play voice memo'}</Text>
         </TouchableOpacity>
       )}
 
       {(entry?.dailyQuestion || entry?.dailyAnswer) &&
-        dayBlock(entry?.dailyQuestion || "Today's question", entry?.dailyAnswer || '', entry ? 'dailyAnswer' : null)}
+        dayBlock(entry?.dailyQuestion || "TODAY'S QUESTION", entry?.dailyAnswer || '', entry ? 'dailyAnswer' : null)}
       {(entry?.reflectionQuestion || entry?.reflectionAnswer) &&
-        dayBlock(entry?.reflectionQuestion || 'For future you', entry?.reflectionAnswer || '', entry ? 'reflectionAnswer' : null, true)}
-      {!!entry?.highlight && dayBlock('Highlight', entry.highlight, entry ? 'highlight' : null)}
-      {!!entry?.learned && dayBlock('What I learned', entry.learned, entry ? 'learned' : null)}
-      {!!entry?.songName && dayBlock('The soundtrack', `${entry.songName}${entry.songRating > 0 ? ` — ${entry.songRating}/10` : ''}`, entry ? 'songName' : null)}
-      {!!entry?.watched && dayBlock('What I watched', entry.watched, entry ? 'watched' : null)}
-      {(!!entry?.cookedDish) && dayBlock('What I cooked', entry.cookedDish, entry ? 'cookedDish' : null,
+        dayBlock(entry?.reflectionQuestion || 'FOR FUTURE YOU', entry?.reflectionAnswer || '', entry ? 'reflectionAnswer' : null, true)}
+      {!!entry?.highlight && dayBlock('HIGHLIGHT', entry.highlight, entry ? 'highlight' : null)}
+      {!!entry?.learned && dayBlock('WHAT I LEARNED', entry.learned, entry ? 'learned' : null)}
+      {!!entry?.songName && dayBlock('THE SOUNDTRACK', `🎵 ${entry.songName}${entry.songRating > 0 ? ` — ${entry.songRating}/10` : ''}`, entry ? 'songName' : null)}
+      {!!entry?.watched && dayBlock('WHAT I WATCHED', entry.watched, entry ? 'watched' : null)}
+      {(!!entry?.cookedDish) && dayBlock('WHAT I COOKED', entry.cookedDish, entry ? 'cookedDish' : null,
         false,
         entry?.cookedPhotoUri ? (
           <TouchableOpacity onPress={() => setFullscreenUri(entry.cookedPhotoUri)}>
@@ -844,12 +848,12 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
         ) : undefined
       )}
       {(entry?.taggedPeople?.length > 0) && (
-        <View style={styles.dayBlock}>
-          <AccentText style={styles.trackedCapsSmall}>Who made today better</AccentText>
+        <View style={[styles.dayBlock, { backgroundColor: A.card, borderColor: `rgba(${A.rgb},0.2)` }]}>
+          <Text style={[styles.trackedCapsSmall, { color: A.hex }]}>WHO MADE TODAY BETTER</Text>
           <View style={styles.chipRow}>
             {entry.taggedPeople.map((name: string) => (
               <View key={name} style={[styles.chip, { backgroundColor: `rgba(${A.rgb},0.15)` }]}>
-                <AccentText style={[styles.chipText, { color: A.hex }]}>{name}</AccentText>
+                <Text style={[styles.chipText, { color: A.hex }]}>{name}</Text>
               </View>
             ))}
           </View>
@@ -859,20 +863,20 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
       {(anyContext || editMode) && contextFields.map(f => {
         const val = (dayContext as any)[f.key] || '';
         if (!val && !editMode) return null;
-        return dayBlock(f.label, val, f.key);
+        return dayBlock(`${f.emoji} ${f.label}`, val, f.key);
       })}
     </ScrollView>
   );
 
   const renderLocations = () => (
     <ScrollView style={{ width }} contentContainerStyle={styles.slideContentTight} showsVerticalScrollIndicator={false}>
-      <AccentText style={[styles.trackedCaps, { marginBottom: 20 }]}>Where today took you</AccentText>
+      <Text style={[styles.trackedCaps, { color: A.hex, marginBottom: 20 }]}>WHERE TODAY TOOK YOU</Text>
       {locations.map((loc, i) => (
         <View key={i} style={styles.locationRow}>
           <View style={[styles.locationDot, { backgroundColor: A.hex }]} />
           <View style={{ flex: 1 }}>
-            <AccentText style={styles.locationName}>{loc.name}</AccentText>
-            {!!loc.withWho && <AccentText style={styles.locationWith}>with {loc.withWho}</AccentText>}
+            <Text style={styles.locationName}>{loc.name}</Text>
+            {!!loc.withWho && <Text style={styles.locationWith}>with {loc.withWho}</Text>}
           </View>
         </View>
       ))}
@@ -881,17 +885,17 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
 
   const renderWorld = () => (
     <ScrollView style={{ width }} contentContainerStyle={styles.slideContentTight} showsVerticalScrollIndicator={false}>
-      <AccentText style={[styles.trackedCaps, { marginBottom: 4 }]}>The world that day</AccentText>
-      <AccentText style={[styles.worldTitle, { fontFamily: A.font600 }]}>What was happening in the world</AccentText>
-      <AccentText style={styles.worldSubheader}>
+      <Text style={[styles.trackedCaps, { color: A.hex, marginBottom: 4 }]}>THE WORLD THAT DAY</Text>
+      <Text style={[styles.worldTitle, { fontFamily: A.font600 }]}>What was happening in the world</Text>
+      <Text style={styles.worldSubheader}>
         {date?.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-      </AccentText>
+      </Text>
       {!news ? (
         <ActivityIndicator size="small" color={A.hex} style={{ marginVertical: 24 }} />
       ) : (
         <>
           <View style={styles.footballHeaderRow}>
-            <AccentText style={[styles.footballHeaderText, { fontFamily: A.font600 }]}>Headlines</AccentText>
+            <Text style={[styles.footballHeaderText, { fontFamily: A.font600 }]}>📰 Headlines</Text>
             <Switch
               value={newsSettings.news}
               onValueChange={toggleHeadlines}
@@ -900,34 +904,47 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
             />
           </View>
           {newsSettings.news && (news.headlines || []).slice(0, 4).map((h, i) => (
-            <View key={`hl-${i}`} style={styles.newsRow}>
-              <AccentText style={styles.newsText}>{h.title}</AccentText>
-              <AccentText style={styles.newsSource}>{h.domain}</AccentText>
+            <View key={`hl-${i}`} style={[styles.newsCard, { backgroundColor: A.card }]}>
+              <View style={styles.newsTopRow}>
+                <Text style={styles.newsSource}>{h.domain}</Text>
+                <Text style={styles.newsIcon}>📰</Text>
+              </View>
+              <Text style={styles.newsText}>{h.title}</Text>
             </View>
           ))}
           {newsSettings.news && (!news.headlines || news.headlines.length === 0) && (
-            <AccentText style={styles.mutedNote}>No headlines found for this day.</AccentText>
+            <Text style={styles.mutedNote}>No headlines found for this day.</Text>
           )}
 
           {newsSettings.wiki && (
-            <AccentText style={[styles.footballHeaderText, styles.worldSectionLabel, { fontFamily: A.font600 }]}>On this day in history</AccentText>
+            <Text style={[styles.footballHeaderText, styles.worldSectionLabel, { fontFamily: A.font600 }]}>📅 On this day in history</Text>
           )}
           {newsSettings.wiki && wikiEvents.map((ev, i) => (
-            <View key={`ev-${i}`} style={styles.newsRow}>
-              <AccentText style={styles.newsYearText}>{ev.year}</AccentText>
-              <AccentText style={styles.newsText}>{ev.text}</AccentText>
-              <AccentText style={styles.newsSource}>Wikipedia</AccentText>
+            <View key={`ev-${i}`} style={[styles.newsCard, { backgroundColor: A.card }]}>
+              <View style={styles.newsTopRow}>
+                <View style={[styles.newsYearPill, { backgroundColor: `rgba(${A.rgb},0.15)`, borderColor: `rgba(${A.rgb},0.3)` }]}>
+                  <Text style={[styles.newsYearText, { fontFamily: A.font600 }]}>{ev.year}</Text>
+                </View>
+                <Text style={styles.newsIcon}>📅</Text>
+              </View>
+              <Text style={styles.newsText}>{ev.text}</Text>
+              <Text style={styles.newsSource}>Wikipedia</Text>
             </View>
           ))}
           {newsSettings.wiki && wikiBirth && (
-            <View style={styles.newsRow}>
-              <AccentText style={styles.newsYearText}>{wikiBirth.year}</AccentText>
-              <AccentText style={styles.newsText}>{wikiBirth.text}</AccentText>
-              <AccentText style={styles.newsSource}>Born on this day · Wikipedia</AccentText>
+            <View style={[styles.newsCard, { backgroundColor: A.card }]}>
+              <View style={styles.newsTopRow}>
+                <View style={[styles.newsYearPill, { backgroundColor: `rgba(${A.rgb},0.15)`, borderColor: `rgba(${A.rgb},0.3)` }]}>
+                  <Text style={[styles.newsYearText, { fontFamily: A.font600 }]}>{wikiBirth.year}</Text>
+                </View>
+                <Text style={styles.newsIcon}>🎂</Text>
+              </View>
+              <Text style={styles.newsText}>{wikiBirth.text}</Text>
+              <Text style={styles.newsSource}>Born on this day · Wikipedia</Text>
             </View>
           )}
           <View style={styles.footballHeaderRow}>
-            <AccentText style={[styles.footballHeaderText, { fontFamily: A.font600 }]}>Football</AccentText>
+            <Text style={[styles.footballHeaderText, { fontFamily: A.font600 }]}>⚽ Football</Text>
             <Switch
               value={newsSettings.football}
               onValueChange={toggleFootball}
@@ -936,25 +953,25 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
             />
           </View>
           {newsSettings.football && (news.football || []).slice(0, 5).map((m: any, i: number) => (
-            <View key={`fb-${i}`} style={styles.newsRow}>
-              <AccentText style={styles.matchComp}>{m.competition?.name || 'Football'}</AccentText>
+            <View key={`fb-${i}`} style={[styles.newsCard, { backgroundColor: A.card }]}>
+              <Text style={styles.matchComp}>⚽ {m.competition?.name || 'Football'}</Text>
               <View style={styles.matchRow}>
-                <AccentText style={styles.matchTeam} numberOfLines={1}>{m.homeTeam?.shortName || m.homeTeam?.name || 'Home'}</AccentText>
-                <AccentText style={styles.matchScore}>{m.score?.fullTime?.home ?? '–'} — {m.score?.fullTime?.away ?? '–'}</AccentText>
-                <AccentText style={[styles.matchTeam, { textAlign: 'right' }]} numberOfLines={1}>{m.awayTeam?.shortName || m.awayTeam?.name || 'Away'}</AccentText>
+                <Text style={styles.matchTeam} numberOfLines={1}>{m.homeTeam?.shortName || m.homeTeam?.name || 'Home'}</Text>
+                <Text style={styles.matchScore}>{m.score?.fullTime?.home ?? '–'} — {m.score?.fullTime?.away ?? '–'}</Text>
+                <Text style={[styles.matchTeam, { textAlign: 'right' }]} numberOfLines={1}>{m.awayTeam?.shortName || m.awayTeam?.name || 'Away'}</Text>
               </View>
-              <AccentText style={styles.matchStatus}>{m.status === 'FINISHED' ? 'FT' : m.status}</AccentText>
+              <Text style={styles.matchStatus}>{m.status === 'FINISHED' ? 'FT' : m.status}</Text>
             </View>
           ))}
           {newsSettings.football && (!news.football || news.football.length === 0) && (
-            <AccentText style={styles.mutedNote}>No football results for this day.</AccentText>
+            <Text style={styles.mutedNote}>No football results for this day.</Text>
           )}
           {newsSettings.weather && news.weather && (
             <>
-              <AccentText style={[styles.footballHeaderText, styles.worldSectionLabel, { fontFamily: A.font600 }]}>Weather</AccentText>
-              <View style={styles.newsRow}>
-                <AccentText style={styles.newsText}>The weather that day</AccentText>
-                <AccentText style={styles.weatherBig}>{news.weather.emoji} {news.weather.max}°C / {news.weather.min}°C</AccentText>
+              <Text style={[styles.footballHeaderText, styles.worldSectionLabel, { fontFamily: A.font600 }]}>🌤 Weather</Text>
+              <View style={[styles.newsCard, { backgroundColor: A.card }]}>
+                <Text style={styles.newsText}>The weather that day</Text>
+                <Text style={styles.weatherBig}>{news.weather.emoji} {news.weather.max}°C / {news.weather.min}°C</Text>
               </View>
             </>
           )}
@@ -969,27 +986,27 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
     const lyWords = (lastYear.threeWords || []).filter(Boolean);
     return (
       <View style={[{ width }, styles.slideContent]}>
-        <AccentText style={[styles.trackedCaps, { marginBottom: 20 }]}>One year ago today</AccentText>
+        <Text style={[styles.trackedCaps, { color: A.hex, marginBottom: 20 }]}>ONE YEAR AGO TODAY</Text>
         {lastYear.thumbUri ? (
           <Image source={{ uri: lastYear.thumbUri }} style={styles.lastYearThumb} resizeMode="cover" />
         ) : (
           <View style={[styles.lastYearThumb, { backgroundColor: `rgba(${A.rgb},0.1)`, justifyContent: 'center', alignItems: 'center' }]}>
-            {lastYear.mood ? <AccentText style={{ fontSize: 40 }}>{lastYear.mood}</AccentText> : <Ionicons name="book-outline" size={36} color="rgba(255,255,255,0.3)" />}
+            <Text style={{ fontSize: 40 }}>{lastYear.mood || '📖'}</Text>
           </View>
         )}
         {lyWords.length > 0 ? (
-          <AccentText style={styles.threeWords}>{lyWords.join(' · ')}</AccentText>
+          <Text style={styles.threeWords}>{lyWords.join(' · ')}</Text>
         ) : lastYear.mood ? (
-          <AccentText style={{ fontSize: 32, marginTop: 16 }}>{lastYear.mood}</AccentText>
+          <Text style={{ fontSize: 32, marginTop: 16 }}>{lastYear.mood}</Text>
         ) : null}
-        <AccentText style={styles.lastYearDate}>
+        <Text style={styles.lastYearDate}>
           {lyDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        </AccentText>
+        </Text>
         <TouchableOpacity
           style={[styles.lastYearBtn, { backgroundColor: A.hex }]}
           onPress={() => onOpenDate && onOpenDate(lastYear.dateKey)}
         >
-          <AccentText style={styles.lastYearBtnText}>Open that day</AccentText>
+          <Text style={styles.lastYearBtnText}>Open that day</Text>
         </TouchableOpacity>
       </View>
     );
@@ -1023,14 +1040,14 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
         <View style={styles.headerRight}>
           {accent === 'past' && !saved ? (
             <TouchableOpacity style={[styles.saveBtn, { backgroundColor: A.hex }]} onPress={saveDay}>
-              <AccentText style={styles.saveBtnText}>Save to Vault</AccentText>
+              <Text style={styles.saveBtnText}>Save to Vault</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
               style={[styles.editBtn, { borderColor: `rgba(${A.rgb},0.45)` }, editMode && { backgroundColor: `rgba(${A.rgb},0.25)` }]}
               onPress={() => setEditMode(e => !e)}
             >
-              <AccentText style={styles.editBtnText}>{editMode ? 'Done' : 'Edit'}</AccentText>
+              <Text style={styles.editBtnText}>{editMode ? 'Done' : 'Edit'}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1095,18 +1112,18 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
           <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setPhotoMenuId(null)}>
             <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
             <View style={[styles.menuBox, { borderColor: `rgba(${A.rgb},0.15)` }]}>
-              <AccentText style={styles.menuTitle}>Photo options</AccentText>
+              <Text style={styles.menuTitle}>Photo options</Text>
               <TouchableOpacity style={styles.menuItem} onPress={() => setCoverPhoto(photoMenuId!)}>
-                <Ionicons name="star-outline" size={20} color="rgba(255,255,255,0.45)" />
-                <AccentText style={styles.menuItemText}>Set as cover photo</AccentText>
+                <Text style={styles.menuItemEmoji}>⭐</Text>
+                <Text style={styles.menuItemText}>Set as cover photo</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuItem} onPress={() => sharePhoto(photoMenuId!)}>
-                <Ionicons name="share-outline" size={20} color="rgba(255,255,255,0.45)" />
-                <AccentText style={styles.menuItemText}>Share photo</AccentText>
+                <Text style={styles.menuItemEmoji}>📤</Text>
+                <Text style={styles.menuItemText}>Share photo</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuItem} onPress={() => copyCaption(photoMenuId!)}>
-                <Ionicons name="copy-outline" size={20} color="rgba(255,255,255,0.45)" />
-                <AccentText style={styles.menuItemText}>Copy caption</AccentText>
+                <Text style={styles.menuItemEmoji}>📋</Text>
+                <Text style={styles.menuItemText}>Copy caption</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={() => {
                 Alert.alert('Hide photo', 'This photo will be hidden from Chronicle. It stays on your camera roll.', [
@@ -1114,11 +1131,11 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
                   { text: 'Hide', style: 'destructive', onPress: () => hidePhoto(photoMenuId!) },
                 ]);
               }}>
-                <Ionicons name="eye-off-outline" size={20} color="#ff4444" />
-                <AccentText style={[styles.menuItemText, { color: '#ff4444' }]}>Hide this photo</AccentText>
+                <Text style={styles.menuItemEmoji}>🙈</Text>
+                <Text style={[styles.menuItemText, { color: '#ff4444' }]}>Hide this photo</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.menuCancel} onPress={() => setPhotoMenuId(null)}>
-                <AccentText style={styles.menuCancelText}>Cancel</AccentText>
+                <Text style={styles.menuCancelText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -1130,10 +1147,10 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
             <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
               <View style={[styles.modalBox, { borderColor: `rgba(${A.rgb},0.15)` }]}>
-                <AccentText style={styles.modalTitle}>Add context</AccentText>
-                <AccentText style={styles.modalSubtitle}>What do you remember about this photo?</AccentText>
+                <Text style={styles.modalTitle}>Add context</Text>
+                <Text style={styles.modalSubtitle}>What do you remember about this photo?</Text>
                 <TextInput
-                  style={[styles.textInput, { fontFamily: A.font400 }]}
+                  style={styles.textInput}
                   placeholder="Write something for future you..."
                   placeholderTextColor="rgba(255,255,255,0.25)"
                   multiline
@@ -1142,10 +1159,10 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
                   autoFocus
                 />
                 <TouchableOpacity style={[styles.modalSave, { backgroundColor: A.hex }]} onPress={saveCaption}>
-                  <AccentText style={styles.modalSaveText}>Save</AccentText>
+                  <Text style={styles.modalSaveText}>Save</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalCancel} onPress={() => setCaptionModalId(null)}>
-                  <AccentText style={styles.modalCancelText}>Cancel</AccentText>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>
@@ -1158,7 +1175,7 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
             <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
               <View style={[styles.modalBox, { borderColor: `rgba(${A.rgb},0.15)` }]}>
-                <AccentText style={styles.modalTitle}>Tag people</AccentText>
+                <Text style={styles.modalTitle}>Tag people</Text>
                 <View style={[styles.chipRow, { marginBottom: 14 }]}>
                   {QUICK_TAGS.map(cat => {
                     const isSel = tagCategories.includes(cat);
@@ -1168,9 +1185,9 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
                         style={[styles.quickTagChip, { borderColor: `rgba(${A.rgb},0.4)` }, isSel && { backgroundColor: `rgba(${A.rgb},0.3)`, borderColor: A.hex }]}
                         onPress={() => setTagCategories(prev => isSel ? prev.filter(c => c !== cat) : [...prev, cat])}
                       >
-                        <AccentText style={[styles.quickTagChipText, isSel && { color: '#ffffff' }]}>
-                          {cat}
-                        </AccentText>
+                        <Text style={[styles.quickTagChipText, isSel && { color: '#ffffff' }]}>
+                          {cat === 'Family' ? '👨‍👩‍👧 Family' : '⭐ Friends'}
+                        </Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -1185,7 +1202,7 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
                           style={[styles.tagChip, isSel && { backgroundColor: `rgba(${A.rgb},0.25)`, borderColor: `rgba(${A.rgb},0.5)` }]}
                           onPress={() => setTagSelected(prev => isSel ? prev.filter(n => n !== name) : [...prev, name])}
                         >
-                          <AccentText style={[styles.tagChipText, isSel && { color: '#ffffff', fontWeight: '600' }]}>{name}</AccentText>
+                          <Text style={[styles.tagChipText, isSel && { color: '#ffffff', fontWeight: '600' }]}>{name}</Text>
                         </TouchableOpacity>
                       );
                     })}
@@ -1193,7 +1210,7 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
                 )}
                 <View style={styles.tagInputRow}>
                   <TextInput
-                    style={[styles.textInput, { flex: 1, minHeight: 44, marginBottom: 0, fontFamily: A.font400 }]}
+                    style={[styles.textInput, { flex: 1, minHeight: 44, marginBottom: 0 }]}
                     placeholder="Add a new name..."
                     placeholderTextColor="rgba(255,255,255,0.25)"
                     value={tagText}
@@ -1216,10 +1233,10 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
                   </TouchableOpacity>
                 </View>
                 <TouchableOpacity style={[styles.modalSave, { backgroundColor: A.hex, marginTop: 16 }]} onPress={saveTags}>
-                  <AccentText style={styles.modalSaveText}>Save</AccentText>
+                  <Text style={styles.modalSaveText}>Save</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalCancel} onPress={() => { setTagModalId(null); setTagText(''); setTagCategories([]); }}>
-                  <AccentText style={styles.modalCancelText}>Cancel</AccentText>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>
@@ -1232,7 +1249,7 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
             <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
               <View style={[styles.modalBox, { borderColor: `rgba(${A.rgb},0.15)` }]}>
-                <AccentText style={styles.modalTitle}>Add to a place</AccentText>
+                <Text style={styles.modalTitle}>Add to a place</Text>
                 <View style={styles.scopeRow}>
                   {(['photo', 'day'] as const).map(s => (
                     <TouchableOpacity
@@ -1240,16 +1257,16 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
                       style={[styles.scopePill, { borderColor: `rgba(${A.rgb},0.25)` }, placeScope === s && { backgroundColor: `rgba(${A.rgb},0.25)`, borderColor: `rgba(${A.rgb},0.45)` }]}
                       onPress={() => setPlaceScope(s)}
                     >
-                      <AccentText style={[styles.scopeText, placeScope === s && { color: '#ffffff' }]}>
+                      <Text style={[styles.scopeText, placeScope === s && { color: '#ffffff' }]}>
                         {s === 'photo' ? 'Just this photo' : 'The whole day'}
-                      </AccentText>
+                      </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
                 {newPlaceMode ? (
                   <>
                     <TextInput
-                      style={[styles.textInput, { fontFamily: A.font400 }]}
+                      style={styles.textInput}
                       placeholder="Place name..."
                       placeholderTextColor="rgba(255,255,255,0.25)"
                       value={newPlaceName}
@@ -1263,31 +1280,31 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
                           style={[styles.scopePill, { borderColor: `rgba(${A.rgb},0.25)` }, newPlaceType === t && { backgroundColor: A.hex, borderColor: A.hex }]}
                           onPress={() => setNewPlaceType(t)}
                         >
-                          <AccentText style={[styles.scopeText, newPlaceType === t && { color: '#ffffff' }]}>
+                          <Text style={[styles.scopeText, newPlaceType === t && { color: '#ffffff' }]}>
                             {t.charAt(0).toUpperCase() + t.slice(1)}
-                          </AccentText>
+                          </Text>
                         </TouchableOpacity>
                       ))}
                     </View>
                     <TouchableOpacity style={[styles.modalSave, { backgroundColor: A.hex }]} onPress={createPlaceAndAdd}>
-                      <AccentText style={styles.modalSaveText}>Create & add</AccentText>
+                      <Text style={styles.modalSaveText}>Create & add</Text>
                     </TouchableOpacity>
                   </>
                 ) : (
                   <ScrollView style={{ maxHeight: 260 }}>
                     {places.map(p => (
                       <TouchableOpacity key={p.id} style={styles.placeRow} onPress={() => addToPlace(p.id)}>
-                        <AccentText style={styles.placeRowName}>{p.name}</AccentText>
-                        <AccentText style={styles.placeRowType}>{p.type.toUpperCase()}</AccentText>
+                        <Text style={styles.placeRowName}>{p.name}</Text>
+                        <Text style={styles.placeRowType}>{p.type.toUpperCase()}</Text>
                       </TouchableOpacity>
                     ))}
                     <TouchableOpacity style={styles.newPlaceBtn} onPress={() => setNewPlaceMode(true)}>
-                      <AccentText style={[styles.newPlaceBtnText, { color: A.hex }]}>＋ Create new place</AccentText>
+                      <Text style={[styles.newPlaceBtnText, { color: A.hex }]}>＋ Create new place</Text>
                     </TouchableOpacity>
                   </ScrollView>
                 )}
                 <TouchableOpacity style={styles.modalCancel} onPress={() => { setPlaceModalTarget(null); setNewPlaceMode(false); }}>
-                  <AccentText style={styles.modalCancelText}>Cancel</AccentText>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>
@@ -1300,9 +1317,9 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
             <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ width: '100%' }}>
               <View style={[styles.modalBox, { borderColor: `rgba(${A.rgb},0.15)` }]}>
-                <AccentText style={styles.modalTitle}>{editingField?.label || ''}</AccentText>
+                <Text style={styles.modalTitle}>{editingField?.label || ''}</Text>
                 <TextInput
-                  style={[styles.textInput, { fontFamily: A.font400 }]}
+                  style={styles.textInput}
                   placeholder={editingField?.placeholder || 'Write something...'}
                   placeholderTextColor="rgba(255,255,255,0.25)"
                   multiline
@@ -1311,10 +1328,10 @@ export default function DayCard({ dateKey, accent, visible, onClose, onOpenDate 
                   autoFocus
                 />
                 <TouchableOpacity style={[styles.modalSave, { backgroundColor: A.hex }]} onPress={saveField}>
-                  <AccentText style={styles.modalSaveText}>Save</AccentText>
+                  <Text style={styles.modalSaveText}>Save</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalCancel} onPress={() => setEditingField(null)}>
-                  <AccentText style={styles.modalCancelText}>Cancel</AccentText>
+                  <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>
@@ -1341,8 +1358,8 @@ const styles = StyleSheet.create({
   slideContentTight: { paddingTop: 70, paddingHorizontal: 20, paddingBottom: 40 },
   ghostWrap: { position: 'absolute', top: 40, right: -10 },
   ghostEmoji: { fontSize: 110, opacity: 0.1 },
-  trackedCaps: { fontSize: 14, color: 'rgba(255,255,255,0.4)' },
-  trackedCapsSmall: { fontSize: 14, color: 'rgba(255,255,255,0.4)', marginBottom: 6 },
+  trackedCaps: { fontSize: 13, fontWeight: '700', letterSpacing: 2 },
+  trackedCapsSmall: { fontSize: 11, fontWeight: '700', letterSpacing: 1.5, marginBottom: 6 },
   coverDate: { fontSize: 42, fontWeight: '800', color: '#ffffff', lineHeight: 48, marginTop: 8 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 20 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
@@ -1380,7 +1397,7 @@ const styles = StyleSheet.create({
   // Your day slide
   pullQuote: { fontSize: 20, color: '#ffffff', fontStyle: 'italic', lineHeight: 29, marginBottom: 20 },
   pullQuoteEmpty: { fontSize: 18, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic', marginBottom: 20 },
-  voiceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, marginBottom: 4 },
+  voiceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 14 },
   voiceRowText: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
   dayBlock: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 10 },
   dayBlockValue: { fontSize: 15, color: '#ffffff', lineHeight: 22 },
@@ -1395,19 +1412,22 @@ const styles = StyleSheet.create({
 
   // World slide
   worldTitle: { fontSize: 20, color: '#ffffff', marginTop: 8 },
-  worldSubheader: { fontSize: 14, color: 'rgba(255,255,255,0.4)', marginBottom: 8, marginTop: 4 },
-  worldSectionLabel: { marginTop: 22, marginBottom: 4 },
-  newsRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
-  newsYearText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 3 },
-  newsText: { fontSize: 15, color: '#ffffff', lineHeight: 21 },
-  newsSource: { fontSize: 13, color: 'rgba(255,255,255,0.3)', marginTop: 4 },
-  footballHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 22, marginBottom: 4 },
+  worldSubheader: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 8, marginTop: 4 },
+  worldSectionLabel: { marginTop: 18, marginBottom: 8 },
+  newsCard: { borderRadius: 12, padding: 14, marginBottom: 8 },
+  newsTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  newsYearPill: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 },
+  newsYearText: { fontSize: 13, color: '#ffffff' },
+  newsIcon: { fontSize: 14 },
+  newsText: { fontSize: 14, color: '#ffffff', lineHeight: 20 },
+  newsSource: { fontSize: 11, color: 'rgba(255,255,255,0.25)', marginTop: 6 },
+  footballHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, marginBottom: 8 },
   footballHeaderText: { fontSize: 16, color: '#ffffff' },
-  matchComp: { fontSize: 13, color: 'rgba(255,255,255,0.4)', marginBottom: 8 },
+  matchComp: { fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 8 },
   matchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   matchTeam: { flex: 1, fontSize: 14, color: '#ffffff' },
   matchScore: { fontSize: 16, fontWeight: '800', color: '#ffffff' },
-  matchStatus: { fontSize: 13, color: 'rgba(255,255,255,0.3)', marginTop: 6, textAlign: 'center' },
+  matchStatus: { fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6, textAlign: 'center' },
   mutedNote: { fontSize: 14, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic', marginBottom: 12 },
   weatherBig: { fontSize: 22, fontWeight: '800', color: '#ffffff', marginTop: 8 },
 
@@ -1425,6 +1445,7 @@ const styles = StyleSheet.create({
   menuBox: { backgroundColor: 'rgba(13,13,20,0.98)', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, borderWidth: 1 },
   menuTitle: { fontSize: 16, color: 'rgba(255,255,255,0.35)', fontWeight: '600', marginBottom: 16, textAlign: 'center' },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
+  menuItemEmoji: { fontSize: 22 },
   menuItemText: { fontSize: 16, color: '#ffffff', fontWeight: '600' },
   menuCancel: { marginTop: 12, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, padding: 14, alignItems: 'center' },
   menuCancelText: { color: '#ffffff', fontWeight: '600', fontSize: 15 },

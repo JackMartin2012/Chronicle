@@ -485,15 +485,9 @@ git push
 - **Places list**: cards capped at min(28% screen, 220); ⋯ manage sheet per card (Edit details / Delete with confirm)
 - **Year cards**: bigger badge (17pt) and bottom-bar text (15/14pt)
 
-## Session Summary (July 2026 — design-language sweep: de-AI-template pass)
+## Session Summary (July 2026 — privacy policy + sweep revert)
 
-Restyle-only pass, no feature/data/navigation changes, across index.tsx, explore.tsx, DayCard.tsx, DailySelfie.tsx, settings.tsx.
+- **app/privacy.tsx** created — scrollable privacy policy screen (`#17102a` bg, Fraunces, back chevron, 8 sections, mailto contact link). Auto-registered by expo-router; no `_layout.tsx` change needed. Settings screen got a hairline divider + "Privacy Policy" row at the bottom (`router.push('/privacy')`)
+- **Design-language sweep REVERTED** (July 2026): a restyle-only "de-AI-template" pass (commit ede8554 — total font coverage, box removal, emoji-icon purge) was applied and then rolled back at Jack's request. index.tsx, explore.tsx, DayCard.tsx, DailySelfie.tsx, settings.tsx were restored to their pre-sweep versions. Do not re-apply that sweep's styling decisions unless asked
 
-- **Total font commitment**: every Text in Your Past (index.tsx, DayCard accent='past', settings.tsx) uses Fraunces; every Text in Your Present (explore.tsx, DailySelfie.tsx, DayCard accent='present') uses Space Grotesk. DayCard is shared across both accents, so it now defines a local `AccentText` wrapper (`{ fontFamily: A.font400 }` default, explicit overrides still win) applied to all ~100 Text elements in that file instead of hand-editing each one. DailySelfie had **no custom font at all** before this — added Space Grotesk + `useFonts`/`fontsLoaded` gate. TextInputs fonted too. Added `SpaceGrotesk_500Medium` (was missing from the loaded weights).
-- **Boxes removed** except the 4 standing exceptions (year cards, calendar cells, place/person cover photos, DayCard photo areas). explore.tsx Today tab restructured: hero capture is full-bleed (threeWords + weather/mood/photo-count overlaid on the photo itself), mood slider + three-words input moved to open sections under the hero, the journal is one open flow (question as a statement, "Write more"/"Speak it" as text links, no boxed buttons), "For future you" is a plain block (no glow/border), the details grid became label/value list rows with hairlines, capsules collapsed to a plain two-line row (gold text only), save button is flat solid accent with a muted caption underneath. index.tsx People tab is now open avatar+name+count (no card per person); place-profile action buttons became icon+text rows; Archive teaser is an open row. DayCard's per-photo caption/who/where and "Your Day" blocks are hairline list rows; World slide news items are open rows, source as tiny muted text.
-- **Emoji-as-icon purged**: only mood emoji, weather-condition emoji, and the capsule-reveal 🎁 graphic survive as genuine user-content/signature visuals. Everything else (section icons, photo-menu icons, camera chrome ✕⟳‹›▶⏸, person chips, empty-state illustrations) became Ionicons `*-outline` in muted grey — never accent-coloured.
-- **Tracked-caps purged** at the data/string level (not just CSS) — field-label arrays in index.tsx and DayCard.tsx were rewritten to sentence case, not merely restyled.
-- **Accent budget**: colour pulled back to active tab/toggle state, primary buttons, and DayCard's "For future you" label; borders/pills/counts/icons that were accent-tinted before are now muted white/grey.
-- `privacy.tsx` doesn't exist yet in this project (still on the pre-App-Store checklist) — skipped, not part of this pass.
-
-*Chronicle is functional and running on iOS via Expo Go. All core screens complete. Next up: privacy policy page, then TestFlight.*
+*Chronicle is functional and running on iOS via Expo Go. All core screens complete. Next up: TestFlight.*

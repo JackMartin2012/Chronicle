@@ -68,7 +68,7 @@ export default function Settings() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionHeader}>News feed</Text>
+        <Text style={styles.sectionHeader}>News Feed</Text>
         {rows.map((row) => (
           <View key={row.label} style={styles.row}>
             <Text style={styles.rowLabel}>{row.label}</Text>
@@ -101,10 +101,10 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingTop: 64, paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
   backButton: { padding: 4 },
   headerTitle: { fontSize: 28, fontFamily: 'Fraunces_800ExtraBold', color: '#ffffff' },
-  sectionHeader: { fontSize: 14, fontFamily: 'Fraunces_600SemiBold', color: 'rgba(255,255,255,0.4)', letterSpacing: 0.3, marginBottom: 8, marginTop: 28, marginLeft: 22 },
-  row: { paddingHorizontal: 22, paddingVertical: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
-  rowLabel: { fontSize: 15, fontFamily: 'Fraunces_400Regular', color: '#ffffff' },
-  placeholderText: { fontSize: 14, fontFamily: 'Fraunces_400Regular', color: 'rgba(255,255,255,0.3)' },
+  sectionHeader: { fontSize: 16, fontFamily: 'Fraunces_600SemiBold', color: 'rgba(155,114,255,0.7)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8, marginTop: 24, marginLeft: 16 },
+  row: { paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  rowLabel: { fontSize: 15, color: '#ffffff' },
+  placeholderText: { fontSize: 14, color: 'rgba(255,255,255,0.3)' },
   divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 0 },
   privacyRow: { paddingHorizontal: 16, paddingVertical: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   privacyLabel: { fontSize: 15, fontFamily: 'Fraunces_400Regular', color: '#ffffff' },
