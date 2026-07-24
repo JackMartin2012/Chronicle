@@ -491,3 +491,4 @@ git push
 - **Design-language sweep REVERTED** (July 2026): a restyle-only "de-AI-template" pass (commit ede8554 — total font coverage, box removal, emoji-icon purge) was applied and then rolled back at Jack's request. index.tsx, explore.tsx, DayCard.tsx, DailySelfie.tsx, settings.tsx were restored to their pre-sweep versions. Do not re-apply that sweep's styling decisions unless asked
 
 *Chronicle is functional and running on iOS via Expo Go. All core screens complete. Next up: TestFlight.*
+Design decisions live in CHRONICLE_DESIGN_SPEC.md — read it before any UI work.
