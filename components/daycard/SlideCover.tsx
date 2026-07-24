@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -106,15 +105,7 @@ export default function SlideCover({
       {/* 4. GLOBE */}
       <View style={styles.globeContainer}>
         <View style={[styles.glowWrap, { shadowColor: w.accent }]}>
-          <View style={styles.globeCircle}>
-            {/* TODO replace with assets/images/globe.png */}
-            <LinearGradient
-              colors={['rgba(40,60,90,0.9)', 'rgba(6,10,18,1)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </View>
+          <Image source={require('@/assets/images/globe.png')} resizeMode="contain" style={styles.globe} />
           <View style={styles.pinContainer}>
             <View style={[styles.pinRing, { borderColor: w.accent }]} />
             <View style={[styles.pinDot, { backgroundColor: w.accent }]} />
@@ -197,18 +188,14 @@ const styles = StyleSheet.create({
   glowWrap: {
     width: sizes.globeDiameter,
     height: sizes.globeDiameter,
-    borderRadius: sizes.globeDiameter / 2,
-    backgroundColor: '#0a1220', // TODO replace with assets/images/globe.png
     shadowOpacity: 0.55,
     shadowRadius: 40,
     shadowOffset: { width: 0, height: 0 },
     elevation: 0,
   },
-  globeCircle: {
+  globe: {
     width: sizes.globeDiameter,
     height: sizes.globeDiameter,
-    borderRadius: sizes.globeDiameter / 2,
-    overflow: 'hidden',
   },
   pinContainer: {
     position: 'absolute',
