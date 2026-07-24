@@ -1,15 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Fraunces_400Regular, Fraunces_700Bold, useFonts } from '@expo-google-fonts/fraunces';
 import { useRouter } from 'expo-router';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const EMAIL = 'j.w.d.m@icloud.com';
 
 export default function PrivacyPolicy() {
-  const [fontsLoaded] = useFonts({ Fraunces_400Regular, Fraunces_700Bold });
   const router = useRouter();
-
-  if (!fontsLoaded) return <View style={styles.container} />;
 
   return (
     <View style={styles.container}>

@@ -1,12 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { Fraunces_400Regular, Fraunces_600SemiBold, Fraunces_800ExtraBold, useFonts } from '@expo-google-fonts/fraunces';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 
 export default function Settings() {
-  const [fontsLoaded] = useFonts({ Fraunces_400Regular, Fraunces_600SemiBold, Fraunces_800ExtraBold });
   const router = useRouter();
 
   const [footballFeed, setFootballFeed] = useState(false);
@@ -32,8 +30,6 @@ export default function Settings() {
   const saveToggle = async (key: string, value: boolean) => {
     await AsyncStorage.setItem(key, value ? 'true' : 'false');
   };
-
-  if (!fontsLoaded) return <View style={styles.container} />;
 
   const rows: { label: string; value: boolean; onChange: (v: boolean) => void }[] = [
     {

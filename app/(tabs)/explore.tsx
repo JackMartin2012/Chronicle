@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold, useFonts } from '@expo-google-fonts/space-grotesk';
 import { Audio } from 'expo-av';
 import { BlurView } from 'expo-blur';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -321,7 +320,6 @@ const sliderStyles = StyleSheet.create({
 });
 
 export default function ThePresent() {
-  const [fontsLoaded] = useFonts({ SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold });
   const [activeTab, setActiveTab] = useState<'today' | 'archive' | 'selfie' | 'favourites'>('today');
 
   const [entry, setEntry] = useState<DayEntry>(emptyEntry);
@@ -977,8 +975,6 @@ export default function ThePresent() {
     : '';
   const peopleValue = (entry.taggedPeople || []).join(', ');
   const nextCapsuleDays = sealedCapsules.length > 0 ? Math.min(...sealedCapsules.map(c => daysUntil(c.openDate))) : 0;
-
-  if (!fontsLoaded) return null;
 
   return (
     <View style={styles.outerContainer}>
