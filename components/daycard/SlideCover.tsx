@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { getWorld, palette, sizes, space, type } from '@/constants/chronicleTheme';
 
@@ -15,8 +14,6 @@ type Props = {
   mood?: string;
   photoCount?: number;
   people?: Person[];
-  onDismiss: () => void;
-  onShare: () => void;
 };
 
 // "Spent with Alex, Sam & Mum" — commas between all but the last, "&" before the last.
@@ -28,16 +25,8 @@ function spentWithLine(people: Person[]): string {
   return `Spent with ${names.slice(0, -1).join(', ')} & ${last}`;
 }
 
-export default function SlideCover({
-  world,
-  date,
-  weatherTemp,
-  mood,
-  photoCount,
-  people,
-  onDismiss,
-  onShare,
-}: Props) {
+// Body only — the top bar and page dots now come from DayCardCarousel's shared chrome.
+export default function SlideCover({ world, date, weatherTemp, mood, photoCount, people }: Props) {
   const w = getWorld(world);
 
   const weekday = date.toLocaleDateString('en-GB', { weekday: 'long' });
@@ -74,25 +63,15 @@ export default function SlideCover({
   }
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: w.bg }]}>
-      {/* 1. TOP BAR */}
-      <View style={styles.topBar}>
-        <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="chevron-down" size={26} color={palette.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={onShare} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="share-outline" size={22} color={palette.textSecondary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* 2. DATE BLOCK */}
+    <View style={styles.root}>
+      {/* DATE BLOCK */}
       <View style={styles.dateBlock}>
         <Text style={[styles.weekday, { fontFamily: w.fontRegular }]}>{weekday}</Text>
         <Text style={[styles.dateHero, { fontFamily: w.fontBold }]}>{dateLine}</Text>
         <Text style={[styles.year, { fontFamily: w.fontRegular }]}>{year}</Text>
       </View>
 
-      {/* 3. METADATA ROW */}
+      {/* METADATA ROW */}
       <View style={styles.metaRow}>
         {metaItems.map((item, i) => (
           <React.Fragment key={i}>
@@ -102,7 +81,7 @@ export default function SlideCover({
         ))}
       </View>
 
-      {/* 4. GLOBE */}
+      {/* GLOBE */}
       <View style={styles.globeContainer}>
         <View style={[styles.glowWrap, { shadowColor: w.accent }]}>
           <Image source={require('@/assets/images/globe.png')} resizeMode="contain" style={styles.globe} />
@@ -113,7 +92,7 @@ export default function SlideCover({
         </View>
       </View>
 
-      {/* 5. PEOPLE */}
+      {/* PEOPLE */}
       {hasPeople && (
         <View style={styles.peopleBlock}>
           <View style={styles.peopleRow}>
@@ -134,33 +113,12 @@ export default function SlideCover({
           </Text>
         </View>
       )}
-
-      {/* 6. PAGE DOTS */}
-      <View style={styles.dotsBlock}>
-        <View style={styles.dotsRow}>
-          {Array.from({ length: 8 }).map((_, i) =>
-            i === 0 ? (
-              <View key={i} style={[styles.dotActive, { backgroundColor: w.accent }]} />
-            ) : (
-              <View key={i} style={styles.dot} />
-            )
-          )}
-        </View>
-        <Text style={[styles.dotsCaption, { fontFamily: w.fontRegular }]}>1 of 8</Text>
-      </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: space.screenX },
-
-  topBar: {
-    height: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
 
   dateBlock: { alignItems: 'center', marginTop: space.lg },
   weekday: { ...type.label, color: palette.textSecondary, marginBottom: 2 },
@@ -238,21 +196,4 @@ const styles = StyleSheet.create({
   },
   personInitial: { ...type.caption, color: palette.textSecondary },
   peopleCaption: { ...type.caption, color: palette.textMuted, marginTop: space.sm },
-
-  dotsBlock: { alignItems: 'center', marginBottom: space.base },
-  dotsRow: { flexDirection: 'row', alignItems: 'center' },
-  dot: {
-    width: sizes.pageDot,
-    height: sizes.pageDot,
-    borderRadius: sizes.pageDot / 2,
-    marginHorizontal: 4,
-    backgroundColor: palette.textFaint,
-  },
-  dotActive: {
-    width: sizes.pageDotActive,
-    height: sizes.pageDotActive,
-    borderRadius: sizes.pageDotActive / 2,
-    marginHorizontal: 4,
-  },
-  dotsCaption: { ...type.micro, color: palette.textMuted, marginTop: space.sm },
 });

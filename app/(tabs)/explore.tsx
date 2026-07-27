@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router'; // TEMP: remove before launch
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -978,6 +979,11 @@ export default function ThePresent() {
 
   return (
     <View style={styles.outerContainer}>
+
+      {/* TEMP: remove before launch */}
+      <TouchableOpacity onPress={() => router.push('/preview')}>
+        <Text style={styles.tempPreviewLink}>PREVIEW</Text>
+      </TouchableOpacity>
 
       {/* 3.1 HEADER ROW */}
       <View style={styles.header}>
@@ -2062,6 +2068,7 @@ export default function ThePresent() {
 
 const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#0b1526' },
+  tempPreviewLink: { color: '#4a90d9', fontSize: 12, fontWeight: '600', letterSpacing: 1, paddingTop: 56, paddingHorizontal: 20, paddingBottom: 4 }, // TEMP: remove before launch
   container: { flex: 1 },
   header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#0b1526' },
   headerTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },
