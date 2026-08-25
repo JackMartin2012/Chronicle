@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
 import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
+import { captureFileName, persistFile } from '@/lib/media';
 
 const w = getWorld('present');
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get('window');
@@ -78,6 +79,9 @@ type LibraryPhoto = { id: string; uri: string };
 // formatDateKey now comes from lib/dayEntry — the shared date module this file
 // was waiting on. The local copy has been removed.
 
+// persistFile and the filename conventions live in lib/media.ts — both this
+// editor and StoryEditor need them.
+
 /**
  * The local day's start and end for a date key. Parsing is anchored at MIDDAY
  * (`T12:00:00`) because midnight can roll into the adjacent day across a DST
@@ -116,7 +120,9 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
   // mirrors it exactly instead of inventing a second interaction.
   const [selfieIsBig, setSelfieIsBig] = useState(false);
 
-  // TODO: local only — nothing is persisted yet. Captured file URIs by slot.
+  // Working URIs by slot, still pointing at the cache or the photo library.
+  // They're copied into permanent storage on Done, not before — a shot you
+  // retake three times shouldn't leave three files behind.
   const [photos, setPhotos] = useState<Record<Slot, string | null>>({
     main: null,
     selfie: null,
@@ -283,14 +289,21 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
 
   const handleDone = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // TODO: the URIs are saved as-is. A camera capture lives in the app's cache
-    // directory and a picked photo is a MediaLibrary reference — neither is
-    // guaranteed to resolve after a restart. Copying them into app storage is
-    // its own step.
-    saveDayEntry(formatDateKey(new Date()), {
+    const dateKey = formatDateKey(new Date());
+
+    // copy both slots into permanent storage before recording where they are.
+    // A failed copy stores an empty slot rather than a path to a missing file.
+    const mainPhotoUri = photos.main
+      ? persistFile(photos.main, captureFileName('main', dateKey))
+      : null;
+    const selfieUri = photos.selfie
+      ? persistFile(photos.selfie, captureFileName('selfie', dateKey))
+      : null;
+
+    saveDayEntry(dateKey, {
       capture: {
-        mainPhotoUri: photos.main ?? '',
-        selfieUri: photos.selfie ?? '',
+        mainPhotoUri: mainPhotoUri ?? '',
+        selfieUri: selfieUri ?? '',
         selfieIsBig,
       },
     });

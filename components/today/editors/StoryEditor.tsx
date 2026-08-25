@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
 import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
+import { deleteFileIfPresent, documentPath, persistFile, voiceNoteFileName } from '@/lib/media';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -47,6 +48,9 @@ const ENTRY_FONT_SIZE = 18;
 const PAGE_TOP_PADDING = RULE_SPACING;
 
 const REVEAL_MS = 200;
+
+// persistFile, deleteFileIfPresent and the filename conventions live in
+// lib/media.ts — CaptureEditor needs them too.
 
 // ---- the voice row ----
 // 04 warns that this is easy to lose by making the player too tall. All three
@@ -339,6 +343,19 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
   const deleteVoiceNote = async () => {
     await soundRef.current?.unloadAsync().catch(() => {});
     soundRef.current = null;
+
+    const dateKey = formatDateKey(new Date());
+
+    // delete the FILE, not just the reference — both the recording currently
+    // held (which may still be the cache copy) and any copy already saved
+    deleteFileIfPresent(voiceUri);
+    deleteFileIfPresent(documentPath(voiceNoteFileName(dateKey)));
+
+    // clear it in storage too. Without this, closing the sheet after a delete
+    // would leave the record pointing at a file that no longer exists. The
+    // partial merge means the page text is untouched.
+    saveDayEntry(dateKey, { story: { voiceNoteUri: '', voiceNoteDuration: 0 } });
+
     setVoiceUri(null);
     setIsPlaying(false);
     setWave([]);
@@ -349,16 +366,21 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
 
   const handleDone = () => {
     if (hasEntry) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const dateKey = formatDateKey(new Date());
+
+    // copy the recording out of the cache before recording where it is. A
+    // failed copy stores no voice note rather than a path to a missing file.
+    const persistedVoiceUri = voiceUri
+      ? persistFile(voiceUri, voiceNoteFileName(dateKey))
+      : null;
+
     // text and voice go together — they coexist, so saving one without the
-    // other would read as the other having been cleared.
-    // TODO: voiceNoteUri is saved as-is. expo-av writes the recording into the
-    // app's cache directory, which iOS may reclaim; copying it into permanent
-    // app storage is its own step.
-    saveDayEntry(formatDateKey(new Date()), {
+    // other would read as the other having been cleared
+    saveDayEntry(dateKey, {
       story: {
         text: entry,
-        voiceNoteUri: voiceUri ?? '',
-        voiceNoteDuration: voiceUri ? elapsed : 0,
+        voiceNoteUri: persistedVoiceUri ?? '',
+        voiceNoteDuration: persistedVoiceUri ? elapsed : 0,
       },
     });
     dismiss();

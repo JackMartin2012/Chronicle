@@ -30,7 +30,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (onboardingComplete === null || !fontsLoaded) return;
     // TODO: TEMPORARY PREVIEW — revert to the onboarding/tabs redirect below.
-    router.replace('/data-layer-check');
+    router.replace('/capture-editor-preview');
     return;
     // eslint-disable-next-line no-unreachable
     if (onboardingComplete) {
