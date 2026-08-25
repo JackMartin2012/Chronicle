@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
+import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -97,12 +98,33 @@ export default function FutureNoteEditor({
           year: 'numeric',
         })}.`;
 
+  /**
+   * Resolve the "when" choice to a concrete date key.
+   *
+   * Included because otherwise `pickedDate` is lost on save and a note has no
+   * date at all — 'random' in particular has to be decided once and stored,
+   * not re-rolled on every read, or the note never actually arrives.
+   */
+  const resolveSurfaceKey = () => {
+    if (when === 'date') return formatDateKey(pickedDate);
+    const days =
+      when === 'month' ? 30 : when === 'year' ? 365 : 60 + Math.floor(Math.random() * 670);
+    const target = new Date();
+    target.setDate(target.getDate() + days);
+    return formatDateKey(target);
+  };
+
   const handleDone = () => {
-    if (hasNote) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // TODO: real wiring (AsyncStorage / DayEntry) comes later
-      console.log('FutureNote', { note, when, isQuestion, reply });
-    }
+    if (hasNote) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    saveDayEntry(formatDateKey(new Date()), {
+      futureNote: {
+        note: note.trim(),
+        when,
+        surfaceKey: resolveSurfaceKey(),
+        isQuestion,
+        reply: reply.trim(),
+      },
+    });
     dismiss();
   };
 

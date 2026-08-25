@@ -24,6 +24,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
+import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H, width: SCREEN_W } = Dimensions.get('window');
@@ -74,19 +75,8 @@ const MAX_TODAY_PHOTOS = 120;
 
 type LibraryPhoto = { id: string; uri: string };
 
-/**
- * Local-time date key. NEVER toISOString().split('T')[0] — that converts to UTC
- * first, so anyone east or west of it gets the wrong day near midnight.
- *
- * Duplicated from the legacy screens, which each declare their own copy. There
- * is no shared date module yet; when one exists this should move there.
- */
-const formatDateKey = (date: Date) => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
+// formatDateKey now comes from lib/dayEntry — the shared date module this file
+// was waiting on. The local copy has been removed.
 
 /**
  * The local day's start and end for a date key. Parsing is anchored at MIDDAY
@@ -293,8 +283,17 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
 
   const handleDone = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // TODO: real wiring (AsyncStorage / DayEntry) comes later
-    console.log('Capture', photos);
+    // TODO: the URIs are saved as-is. A camera capture lives in the app's cache
+    // directory and a picked photo is a MediaLibrary reference — neither is
+    // guaranteed to resolve after a restart. Copying them into app storage is
+    // its own step.
+    saveDayEntry(formatDateKey(new Date()), {
+      capture: {
+        mainPhotoUri: photos.main ?? '',
+        selfieUri: photos.selfie ?? '',
+        selfieIsBig,
+      },
+    });
     dismiss();
   };
 

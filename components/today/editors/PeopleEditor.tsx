@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, motion, palette, space, type } from '@/constants/chronicleTheme';
+import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -127,11 +128,10 @@ export default function PeopleEditor({ onClose }: { onClose?: () => void }) {
   };
 
   const handleDone = () => {
-    if (tagged.length > 0) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // TODO: real wiring (AsyncStorage / DayEntry) comes later
-      console.log('People', tagged);
-    }
+    if (tagged.length > 0) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // fire-and-forget: dismissal shouldn't wait on a write, and saveDayEntry
+    // merges a partial so nothing else on the day is touched
+    saveDayEntry(formatDateKey(new Date()), { people: tagged });
     dismiss();
   };
 

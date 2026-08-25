@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, motion, palette, space, type } from '@/constants/chronicleTheme';
+import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -167,11 +168,10 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
   const untag = (id: string) => setTagged((prev) => prev.filter((p) => p.id !== id));
 
   const handleDone = () => {
-    if (hasPlaces) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // TODO: real wiring (AsyncStorage / DayEntry) comes later
-      console.log('Places', tagged);
-    }
+    if (hasPlaces) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // the full tagged list, merged-away entries included — the day still
+    // records you were there, they just don't render as their own pill
+    saveDayEntry(formatDateKey(new Date()), { places: tagged });
     dismiss();
   };
 

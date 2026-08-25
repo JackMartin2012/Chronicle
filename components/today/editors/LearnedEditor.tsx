@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
+import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -61,11 +62,8 @@ export default function LearnedEditor({ onClose }: { onClose?: () => void }) {
   };
 
   const handleDone = () => {
-    if (hasText) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // TODO: real wiring (AsyncStorage / DayEntry) comes later
-      console.log('Learned', text);
-    }
+    if (hasText) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    saveDayEntry(formatDateKey(new Date()), { learned: text.trim() });
     dismiss();
   };
 

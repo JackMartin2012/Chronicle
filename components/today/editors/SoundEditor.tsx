@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, motion, palette, space, type } from '@/constants/chronicleTheme';
+import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -260,11 +261,12 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
   };
 
   const handleDone = () => {
-    if (anyFilled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // TODO: real wiring (AsyncStorage / DayEntry) comes later
-      console.log('SoundEntries', { listen: entries.listen, watch: entries.watch });
-    }
+    if (anyFilled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // both slots together — they're independent, but saving one alone would
+    // read as "the other was cleared"
+    saveDayEntry(formatDateKey(new Date()), {
+      sound: { listen: entries.listen, watch: entries.watch },
+    });
     dismiss();
   };
 

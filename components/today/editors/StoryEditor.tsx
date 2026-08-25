@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
+import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -348,8 +349,18 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
 
   const handleDone = () => {
     if (hasEntry) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // TODO: real wiring (AsyncStorage / DayEntry) comes later
-    console.log('Story', entry);
+    // text and voice go together — they coexist, so saving one without the
+    // other would read as the other having been cleared.
+    // TODO: voiceNoteUri is saved as-is. expo-av writes the recording into the
+    // app's cache directory, which iOS may reclaim; copying it into permanent
+    // app storage is its own step.
+    saveDayEntry(formatDateKey(new Date()), {
+      story: {
+        text: entry,
+        voiceNoteUri: voiceUri ?? '',
+        voiceNoteDuration: voiceUri ? elapsed : 0,
+      },
+    });
     dismiss();
   };
 
