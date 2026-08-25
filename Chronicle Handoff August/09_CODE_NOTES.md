@@ -27,8 +27,23 @@ away. When you fix one, tick it here AND in its source file.
       films + TV), so the slide needs to display all four media types. Not a
       blocker — do it in the wiring pass. *(02:84)*
 - [ ] **`SlideStory.tsx`** — body text should use Fraunces serif to match the
-      Story editor (diegetic exception #4). Check whether it already does.
-      *(02:88)*
+      Story editor (diegetic exception #4). **Checked Aug 2026: it does NOT.**
+      Line 77 passes `w.fontRegular`, which is Space Grotesk in the Present
+      world, so the same day currently renders in a different font in the
+      editor and on the card. *(02:88)*
+- [ ] **`SlideStory.tsx` page treatment has diverged from `StoryEditor.tsx`** —
+      the editor was tuned on device and the slide was left alone deliberately
+      (unreviewed edit). The page is meant to be ONE object in both places, so
+      the slide should be brought up to match once the editor is signed off:
+      | | slide | editor |
+      |---|---|---|
+      | `RULE_SPACING` | 36 | 28 |
+      | entry font size | `type.body` (16) | 18 |
+      | rule opacity | 0.04 | 0.08 |
+      | entry font | Space Grotesk | Fraunces |
+      Neither value is shared — both files declare their own module const and
+      inline style, so they must be changed in two places. Consider lifting
+      them into `chronicleTheme.ts` at that point. *(new, Aug 2026 build)*
 
 ---
 
@@ -43,6 +58,23 @@ away. When you fix one, tick it here AND in its source file.
 ---
 
 ## EDITORS
+
+### ALL EDITORS — shared chrome, keyboard behaviour (source: this session)
+- [ ] **The `08` keyboard pattern breaks on a fixed-height sheet.** `08:44`
+      prescribes wrapping the sheet in `KeyboardAvoidingView` with
+      `behavior='padding'`. But every editor's sheet is a FIXED height (78%,
+      Places 92%) anchored to the bottom, so the padding translates the whole
+      sheet upward and pushes the title, chevron and top Done row off the top
+      of the screen. Confirmed on device in the Story editor.
+      **All six other editors use the identical pattern and have the same
+      latent bug** — `SoundEditor`, `LearnedEditor`, `FutureNoteEditor`,
+      `PeopleEditor`, `PlacesEditor`, `CaptureEditor`. It shows most in
+      whichever editor you type in longest, which is why Story surfaced it.
+      `StoryEditor.tsx` now does it correctly instead: track keyboard height via
+      `Keyboard.addListener`, keep the sheet's top edge fixed, set
+      `marginBottom: keyboardHeight` so it rests on the keyboard, and let the
+      content area absorb the difference. **Port that approach to the other six
+      and update the pattern in `08_EDITOR_BUILD_SPECS.md`.** *(new, Aug 2026)*
 
 ### People (source: 04_TODAY_AND_EDITORS.md)
 - [ ] Tagged and Recent rows look too similar on device — a "Tagged" label above
