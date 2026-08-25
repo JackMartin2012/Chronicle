@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -46,6 +47,58 @@ const PAGE_TOP_PADDING = RULE_SPACING;
 
 const REVEAL_MS = 200;
 
+// ---- the voice row ----
+// 04 warns that this is easy to lose by making the player too tall. All three
+// states are pinned to the SAME 44pt height — well under the 56pt ceiling — so
+// the row can never grow into a second hero, and switching state shifts nothing.
+const VOICE_ROW_HEIGHT = 44;
+
+const WAVE_BARS = 28;
+const WAVE_MIN_BAR = 3;
+const WAVE_MAX_BAR = 18;
+
+// expo-av reports loudness in dBFS: -160 is silence, 0 is maximum. Anything
+// below -60 is effectively room tone, so that's the floor for a visible bar.
+const METERING_FLOOR = -60;
+
+const meteringToBar = (metering?: number) => {
+  if (metering === undefined) return WAVE_MIN_BAR;
+  const level = Math.max(0, Math.min(1, (metering - METERING_FLOOR) / -METERING_FLOOR));
+  return WAVE_MIN_BAR + level * (WAVE_MAX_BAR - WAVE_MIN_BAR);
+};
+
+const formatDuration = (millis: number) => {
+  const total = Math.floor(millis / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+};
+
+type VoiceState = 'resting' | 'recording' | 'recorded';
+
+// Fixed-height strip of level bars. Pads to a constant bar count so the row's
+// width and height never shift as levels arrive.
+function Waveform({ bars, live = false }: { bars: number[]; live?: boolean }) {
+  const padded =
+    bars.length >= WAVE_BARS
+      ? bars.slice(bars.length - WAVE_BARS)
+      : [...Array(WAVE_BARS - bars.length).fill(WAVE_MIN_BAR), ...bars];
+
+  return (
+    <View style={styles.wave}>
+      {padded.map((h, i) => (
+        <View
+          key={i}
+          style={[
+            styles.waveBar,
+            { height: h, backgroundColor: live ? w.accent : palette.textMuted },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
 // TODO: real day entry; sample text so the serif can be judged at real length.
 const SAMPLE_ENTRY = `Spent most of the afternoon in the garden with Alex and Sam. Mum made the cake she always makes, the one with too much lemon in it, and nobody said anything.
 
@@ -82,11 +135,25 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
     ? Math.min(SHEET_HEIGHT, SCREEN_H - keyboardHeight - insets.top - space.sm)
     : SHEET_HEIGHT;
 
+  // declared up here because the collapse behaviour below depends on it
+  const [voiceState, setVoiceState] = useState<VoiceState>('resting');
+  const isRecording = voiceState === 'recording';
+
   // While typing, nothing but the page is doing any work: the voice row, the
   // completion line and the dots all collapse and fade, and the page — which
   // flexes — takes the height they release. Done, the title and the top row
   // stay. 1 = resting, 0 = typing.
+  //
+  // AN ACTIVE RECORDING OVERRIDES THIS for the voice row. Recording invisibly
+  // with no stop control is how you end up with a twenty-minute file you didn't
+  // know about. Typing while recording is rare — if you're reading your entry
+  // aloud the text already exists — so the writing space is the right thing to
+  // trade for an always-visible stop. The footer still collapses either way.
+  const hideVoiceRow = keyboardUp && !isRecording;
+
   const reveal = useRef(new Animated.Value(1)).current;
+  const voiceReveal = useRef(new Animated.Value(1)).current;
+
   useEffect(() => {
     Animated.timing(reveal, {
       toValue: keyboardUp ? 0 : 1,
@@ -95,17 +162,26 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
     }).start();
   }, [keyboardUp, reveal]);
 
+  useEffect(() => {
+    Animated.timing(voiceReveal, {
+      toValue: hideVoiceRow ? 0 : 1,
+      duration: REVEAL_MS,
+      useNativeDriver: false,
+    }).start();
+  }, [hideVoiceRow, voiceReveal]);
+
   // Natural heights, measured so the collapse has somewhere to animate from.
   const [voiceRowHeight, setVoiceRowHeight] = useState(0);
   const [footerExtraHeight, setFooterExtraHeight] = useState(0);
 
-  // Only accept a measurement while at rest. Once collapsed the wrapper is
-  // 0-high with overflow hidden, and a re-fire there would overwrite the real
-  // natural height with a squashed one — the row would then restore too short.
-  const measureAtRest = (setter: (h: number) => void) => (e: LayoutChangeEvent) => {
-    const h = e.nativeEvent.layout.height;
-    if (!keyboardUp && h > 0) setter(h);
-  };
+  // Only accept a measurement while the wrapper is EXPANDED. Once collapsed it
+  // is 0-high with overflow hidden, and a re-fire there would overwrite the
+  // real natural height with a squashed one — the row would restore too short.
+  const measureWhenOpen =
+    (setter: (h: number) => void, collapsed: boolean) => (e: LayoutChangeEvent) => {
+      const h = e.nativeEvent.layout.height;
+      if (!collapsed && h > 0) setter(h);
+    };
 
   /**
    * Height for a collapsing wrapper.
@@ -117,11 +193,11 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
    * So when there's no measurement yet, collapse to a hard 0 instead: it snaps
    * rather than animating on that first open, but it never leaves a gap.
    */
-  const collapseTo = (natural: number) => {
+  const collapseTo = (value: Animated.Value, natural: number, collapsed: boolean) => {
     if (natural > 0) {
-      return reveal.interpolate({ inputRange: [0, 1], outputRange: [0, natural] });
+      return value.interpolate({ inputRange: [0, 1], outputRange: [0, natural] });
     }
-    return keyboardUp ? 0 : undefined;
+    return collapsed ? 0 : undefined;
   };
 
   // the page flexes, so its height is measured rather than computed
@@ -134,8 +210,141 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
 
   const hasEntry = entry.trim().length > 0;
 
-  // TODO: starts a real recording once expo-av is wired; logs for now
-  const recordVoiceNote = () => console.log('Record a voice note tapped');
+  // ---- VOICE ----
+  // expo-av, deliberately: it's deprecated in SDK 54 but the expo-audio
+  // migration is deferred project-wide. Do not migrate this in isolation.
+  //
+  // The recording is a COMPANION to the page, never a replacement. Nothing here
+  // touches `entry` — a day can be written, spoken, or both.
+  // voiceState is declared further up — the collapse behaviour depends on it
+  const [micBlocked, setMicBlocked] = useState(false);
+  const [wave, setWave] = useState<number[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+  const [voiceUri, setVoiceUri] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  // release the mic and the player if the editor closes mid-recording
+  useEffect(() => {
+    return () => {
+      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
+      soundRef.current?.unloadAsync().catch(() => {});
+    };
+  }, []);
+
+  const startRecording = async () => {
+    try {
+      // permission on first tap, never on mount
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        setMicBlocked(true);
+        return;
+      }
+      setMicBlocked(false);
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      setWave([]);
+      setElapsed(0);
+
+      const { recording } = await Audio.Recording.createAsync(
+        // HIGH_QUALITY already sets isMeteringEnabled, which is what feeds the
+        // live waveform — the bars are real levels, not a decorative loop
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+        (status) => {
+          if (!status.isRecording) return;
+          setElapsed(status.durationMillis);
+          setWave((prev) => {
+            const next = [...prev, meteringToBar(status.metering)];
+            return next.length > WAVE_BARS ? next.slice(next.length - WAVE_BARS) : next;
+          });
+        },
+        100 // ~10 bars a second
+      );
+
+      recordingRef.current = recording;
+      setVoiceState('recording');
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {
+      console.warn('Could not start recording', e);
+      setVoiceState('resting');
+    }
+  };
+
+  const stopRecording = async () => {
+    const recording = recordingRef.current;
+    if (!recording) return;
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      recordingRef.current = null;
+
+      // hand the route back to the speaker — left on, iOS keeps playback in
+      // the earpiece and the note sounds broken
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+
+      if (uri) {
+        setVoiceUri(uri);
+        setVoiceState('recorded');
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } else {
+        setVoiceState('resting');
+      }
+    } catch (e) {
+      console.warn('Could not stop recording', e);
+      setVoiceState('resting');
+    }
+  };
+
+  const togglePlayback = async () => {
+    if (!voiceUri) return;
+    try {
+      if (soundRef.current) {
+        const status = await soundRef.current.getStatusAsync();
+        if (status.isLoaded && status.isPlaying) {
+          await soundRef.current.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await soundRef.current.replayAsync();
+          setIsPlaying(true);
+        }
+        return;
+      }
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: voiceUri },
+        { shouldPlay: true },
+        (status) => {
+          if (!status.isLoaded) return;
+          setIsPlaying(status.isPlaying);
+          if (status.didJustFinish) setIsPlaying(false);
+        }
+      );
+      soundRef.current = sound;
+      setIsPlaying(true);
+    } catch (e) {
+      console.warn('Could not play the voice note', e);
+    }
+  };
+
+  const deleteVoiceNote = async () => {
+    await soundRef.current?.unloadAsync().catch(() => {});
+    soundRef.current = null;
+    setVoiceUri(null);
+    setIsPlaying(false);
+    setWave([]);
+    setElapsed(0);
+    setVoiceState('resting');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
 
   const handleDone = () => {
     if (hasEntry) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -227,18 +436,71 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
             {/* VOICE ROW — a quiet companion to the page, never an equal path.
                 Collapses entirely while typing. */}
             <Animated.View
-              style={[styles.collapsible, { opacity: reveal, height: collapseTo(voiceRowHeight) }]}
-              pointerEvents={keyboardUp ? 'none' : 'auto'}
+              style={[
+                styles.collapsible,
+                {
+                  opacity: voiceReveal,
+                  height: collapseTo(voiceReveal, voiceRowHeight, hideVoiceRow),
+                },
+              ]}
+              pointerEvents={hideVoiceRow ? 'none' : 'auto'}
             >
-              <View onLayout={measureAtRest(setVoiceRowHeight)}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  onPress={recordVoiceNote}
-                  style={styles.voiceRow}
-                >
-                  <Ionicons name="mic-outline" size={18} color={W40} />
-                  <Text style={styles.voiceLabel}>Record a voice note</Text>
-                </TouchableOpacity>
+              <View onLayout={measureWhenOpen(setVoiceRowHeight, hideVoiceRow)}>
+                {voiceState === 'resting' && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={startRecording}
+                    style={styles.voiceRow}
+                  >
+                    <Ionicons name="mic-outline" size={18} color={W40} />
+                    <Text style={styles.voiceLabel}>Record a voice note</Text>
+                  </TouchableOpacity>
+                )}
+
+                {voiceState === 'recording' && (
+                  <View style={styles.voiceRow}>
+                    <TouchableOpacity
+                      onPress={stopRecording}
+                      hitSlop={10}
+                      activeOpacity={0.8}
+                      style={styles.voiceStop}
+                    >
+                      <View style={styles.voiceStopSquare} />
+                    </TouchableOpacity>
+                    <Waveform bars={wave} live />
+                    <Text style={styles.voiceTimer}>{formatDuration(elapsed)}</Text>
+                  </View>
+                )}
+
+                {voiceState === 'recorded' && (
+                  <View style={styles.voiceRow}>
+                    <TouchableOpacity onPress={togglePlayback} hitSlop={10} activeOpacity={0.8}>
+                      <Ionicons
+                        name={isPlaying ? 'pause' : 'play'}
+                        size={20}
+                        color={w.accent}
+                      />
+                    </TouchableOpacity>
+                    <Waveform bars={wave} />
+                    <Text style={styles.voiceTimer}>{formatDuration(elapsed)}</Text>
+                    <TouchableOpacity
+                      onPress={deleteVoiceNote}
+                      hitSlop={10}
+                      activeOpacity={0.7}
+                      style={styles.voiceDelete}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={W40} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* denial is a state to explain quietly, not a dead control */}
+                {micBlocked && (
+                  <Text style={styles.micNote}>
+                    Chronicle needs microphone access to record a voice note. You can
+                    turn it on in Settings.
+                  </Text>
+                )}
               </View>
             </Animated.View>
           </View>
@@ -249,10 +511,16 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
 
             {/* completion line + dots — nothing to read while writing */}
             <Animated.View
-              style={[styles.collapsible, { opacity: reveal, height: collapseTo(footerExtraHeight) }]}
+              style={[
+                styles.collapsible,
+                {
+                  opacity: reveal,
+                  height: collapseTo(reveal, footerExtraHeight, keyboardUp),
+                },
+              ]}
               pointerEvents={keyboardUp ? 'none' : 'auto'}
             >
-              <View onLayout={measureAtRest(setFooterExtraHeight)}>
+              <View onLayout={measureWhenOpen(setFooterExtraHeight, keyboardUp)}>
                 <Text style={styles.footerNote}>This becomes your day card</Text>
                 <View style={styles.progressRow}>
                   {Array.from({ length: 8 }, (_, i) => (
@@ -382,11 +650,12 @@ const styles = StyleSheet.create({
     padding: 0, // no input box — you are writing on paper
   },
 
-  // VOICE ROW — secondary by construction; total height stays under 48pt
+  // VOICE ROW — secondary by construction. Every state is the SAME height, so
+  // the companion can never grow into a second hero (04's specific warning).
   voiceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    height: VOICE_ROW_HEIGHT,
     marginTop: space.sm,
   },
   voiceLabel: {
@@ -394,6 +663,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: W40,
     marginLeft: space.sm,
+  },
+
+  // recording
+  voiceStop: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: palette.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceStopSquare: {
+    width: 9,
+    height: 9,
+    borderRadius: 1.5,
+    backgroundColor: palette.danger,
+  },
+
+  // shared strip
+  wave: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: WAVE_MAX_BAR,
+    marginHorizontal: space.md,
+  },
+  waveBar: { width: 2, borderRadius: 1 },
+  voiceTimer: {
+    fontFamily: w.fontRegular,
+    fontSize: type.caption.fontSize,
+    color: W40,
+    minWidth: 34, // stops the row twitching as the timer ticks past 0:09
+    textAlign: 'right',
+  },
+  voiceDelete: { marginLeft: space.md },
+
+  micNote: {
+    fontFamily: w.fontRegular,
+    fontSize: type.caption.fontSize,
+    lineHeight: 16,
+    color: W40,
+    marginTop: space.xs,
   },
 
   // FOOTER
