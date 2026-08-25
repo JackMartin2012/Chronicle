@@ -247,8 +247,25 @@ ignore.
 
 **Technical rules (non-negotiable):** in-app `CameraView`, NOT
 `ImagePicker.launchCameraAsync` (avoids the native iOS confirmation-screen
-inversion bug). Selfie flip via `ImageManipulator` `FlipType.Horizontal`, NOT CSS
-`scaleX`.
+inversion bug).
+
+**Selfie mirroring — CORRECTED Aug 2026.** This rule previously read "flip via
+`ImageManipulator` `FlipType.Horizontal`". That is **wrong** and was verified
+wrong on device: it produces a backwards selfie.
+
+The current rule:
+- `mirror={true}` on `CameraView` and **nothing else**. On expo-camera 17 that
+  one prop mirrors the PREVIEW (so shooting yourself feels like a mirror) and
+  un-mirrors the SAVED FILE (so text reads correctly when you look back).
+- **Do NOT add an `ImageManipulator` flip on top.** It applies a second time and
+  inverts the result. `CaptureEditor.tsx` carries a comment at both sites saying
+  so — do not "fix" the missing flip.
+- **Never CSS `scaleX`.** Still true, and for the original reason: a transform
+  only flips the display and leaves the file mirrored on disk.
+
+**Version dependency:** the above holds for **expo-camera 17**. The `mirror`
+prop's file behaviour is what makes it true. If the package is ever downgraded,
+re-test by capturing something with text on it before trusting either form.
 
 ## EDITOR 8 — STORY 🎨 DESIGNED, NOT BUILT (HARD)
 Title "Your day". **The hero is a ruled notebook page** — the same dark journal

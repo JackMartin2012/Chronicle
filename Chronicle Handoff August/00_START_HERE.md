@@ -87,7 +87,16 @@ hero with quiet supporting controls.
 3. Append `T12:00:00` when parsing dateKey strings back to Date
 4. Use `localUri` from `getAssetInfoAsync` for MediaLibrary photos
 5. Never stack independent modals — nest child modals in parent JSX
-6. Selfie capture: `ImageManipulator` with `FlipType.Horizontal`, not CSS scaleX
+6. Selfie capture: `mirror={true}` on `CameraView` — never CSS `scaleX`, and
+   **never an `ImageManipulator` flip on top of it.** On expo-camera 17 the
+   `mirror` prop does BOTH jobs: it mirrors the preview so shooting yourself
+   feels like a mirror, AND un-mirrors the saved file so text reads correctly
+   later. Adding a `FlipType.Horizontal` flip applies a second time and the
+   selfie saves backwards. *(Corrected Aug 2026 — this rule previously said the
+   opposite and was verified wrong on device. Version-dependent: if
+   expo-camera is ever downgraded, re-test with text before trusting either
+   form. `scaleX` stays banned regardless — a transform only flips the display
+   and leaves the file mirrored on disk.)*
 7. Use in-app `CameraView`, not `ImagePicker.launchCameraAsync` (avoids the
    native iOS confirmation-screen inversion bug)
 8. `expo-av` retained for voice memos (migration to expo-audio deferred)

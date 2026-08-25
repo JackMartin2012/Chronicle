@@ -73,12 +73,12 @@ Permission on first use, denial explained in a quiet line. After the shutter a
 built as our own screen inside the existing Modal with `CameraView` still
 mounted, so the native iOS confirmation screen is never involved.
 
-**⚠️ NO ImageManipulator flip on the selfie, deliberately.** `04` and
-`00_START_HERE` both state the flip as non-negotiable. On **expo-camera 17 that
-is wrong**: the `mirror` prop un-mirrors the saved file as well as mirroring the
-preview, so an explicit flip applies twice and the selfie saves backwards.
-Verified on device. Both code sites carry a comment. **The rule still needs
-correcting at source in 04 and 00.**
+**⚠️ NO ImageManipulator flip on the selfie, deliberately.** On expo-camera 17
+the `mirror` prop un-mirrors the saved file as well as mirroring the preview, so
+an explicit flip applies twice and the selfie saves backwards. Verified on
+device. Both code sites carry a comment. The rule was stated the OTHER way round
+in `04`, `00_START_HERE` and `08` — **all three corrected Aug 2026.**
+Version-dependent: re-test if expo-camera is ever downgraded.
 
 **Camera roll picker:** `expo-media-library`, filtered to photos created today,
 3-column grid, tap to choose — no confirm step, since you're picking a photo

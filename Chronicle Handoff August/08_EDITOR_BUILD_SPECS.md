@@ -153,21 +153,28 @@ The Bog (food).
 
 ---
 
-## STILL TO WRITE — CAPTURE & STORY FABLE PROMPTS
-Both designs are approved (see 04). Neither prompt has been written. When writing
-them:
+## ✅ DONE — CAPTURE & STORY (built Aug 2026)
+Both are now built, both passes each. See `02_BUILD_STATUS.md` for what they do
+and `CaptureEditor.tsx` / `StoryEditor.tsx` for the code.
 
-**Capture** — needs real camera permissions, an in-app `CameraView`, the camera
-roll picker filtered to today, `ImageManipulator` flip for the selfie, and the
-tap-inset-to-swap interaction. Consider building it in two passes: layout with
-sample images first, then wire the camera — the layout can be judged without
-permissions, and it keeps the risky part isolated.
+**The two-pass approach worked and is worth reusing** for anything touching a
+real device feature: build the layout against placeholders first, judge it, then
+wire the hardware. It keeps the risky part isolated and means a layout problem
+never gets tangled up with a permissions problem.
 
-**Story** — needs `expo-av` recording, a live waveform while recording, and a
-playback strip. Same two-pass logic: page + serif body + static voice strip
-first, then the real recording. The page must stay the hero; the voice row must
-stay visibly secondary (Stitch got this right, and it's easy to lose in code by
-making the player too tall).
+**⚠️ The selfie flip instruction that used to be in this section was WRONG.** It
+said Capture "needs an `ImageManipulator` flip for the selfie". On expo-camera 17
+`mirror={true}` on `CameraView` already handles both preview and saved file, so
+an added flip double-applies and inverts the selfie. Verified on device. The
+corrected rule is in `04` (Editor 7) and `00_START_HERE` rule 6 — **do not
+re-add a flip.**
 
-Both are HARD relative to the six built ones — build them alone, never batched,
-and commit before each run.
+**What each build taught, worth carrying into the wiring pass:**
+- Capture's 3:4 frame must derive its height from `aspectRatio` with the WIDTH
+  capped by available space. Driving it from full-bleed width overflows every
+  phone and pushes the controls off screen.
+- Story's keyboard handling had to depart from the shared chrome pattern above —
+  see the note there, and `09_CODE_NOTES.md`.
+- A collapsing wrapper whose height depends on an `onLayout` measurement must
+  collapse to a hard 0 when unmeasured. Falling back to "size normally" leaves
+  an invisible element occupying full height.
