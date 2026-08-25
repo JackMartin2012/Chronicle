@@ -1,0 +1,121 @@
+# CHRONICLE — DEFERRED CODE NOTES (collected)
+
+Every deferred "code note", fix, and open item scattered across files 00–08,
+gathered in one place. Grouped by screen, newest additions last.
+
+**This file collects — it does not fix.** Nothing here has been actioned. Each
+line says what and where it came from, so the original context is one lookup
+away. When you fix one, tick it here AND in its source file.
+
+---
+
+## DAY CARD — SLIDES (source: 03_DAY_CARD_CAROUSEL.md)
+
+- [ ] **Slide 5 Story** — learned text must not render larger than the story
+      body; the hierarchy was inverted in an early mock. *(03:83)*
+- [ ] **Slide 6 Sound** — rating boxes need larger tap targets (44pt hitSlop).
+      *(03:98)*
+- [ ] **Slide 8 Newspaper** — add bottom padding so the full reflection note
+      scrolls into view; the headline must not truncate. *(03:136)*
+- [ ] **Slide numbering** — when the map slide is added it becomes slide 7 and
+      the newspaper stays LAST at 8 of 8. *(03:137)*
+
+## DAY CARD — SLIDES OUT OF DATE (source: 02_BUILD_STATUS.md)
+
+- [ ] **`SlideSound.tsx`** — still tap-swaps between *music* and *film*. The
+      Sound editor is now Listen/Watch (Listen = songs + podcasts, Watch =
+      films + TV), so the slide needs to display all four media types. Not a
+      blocker — do it in the wiring pass. *(02:84)*
+- [ ] **`SlideStory.tsx`** — body text should use Fraunces serif to match the
+      Story editor (diegetic exception #4). Check whether it already does.
+      *(02:88)*
+
+---
+
+## TODAY SCREEN (source: 04_TODAY_AND_EDITORS.md)
+
+- [ ] Headings in sentence case — the mock reverted to caps. *(04:42)*
+- [ ] The album-art "Listening to" tile must be a fixed square, matched in
+      height to the People tile beside it. *(04:42)*
+- [ ] The "See today as a day card" button needs safe-area padding above the
+      tab bar. *(04:43)*
+
+---
+
+## EDITORS
+
+### People (source: 04_TODAY_AND_EDITORS.md)
+- [ ] Tagged and Recent rows look too similar on device — a "Tagged" label above
+      the top row would make the two zones instantly readable. *(04:101)*
+- [ ] Dead middle space in the empty state (the same issue Sound had). *(04:103)*
+
+### Places (source: 02_BUILD_STATUS.md, 05_ROADMAP_UNBUILT.md)
+- [ ] Real place search is still a local sample list — blocked on the geo API
+      decision below. *(05:218)*
+
+### Capture (source: 04_TODAY_AND_EDITORS.md + this session)
+- [ ] Title must stay "Capture today" — Stitch drifted it to "New Entry" in
+      title case. *(04:244)*
+- [ ] Ignore the Stitch watermark on the mock's selfie inset. *(04:245)*
+- [ ] **Once a selfie has been taken, the button should offer "Retake selfie"**
+      rather than "Take a selfie". *(new, Aug 2026 build)*
+- [ ] **Re-confirm the main frame holds 3:4 once real photos are in it** —
+      measured at exactly **3:4.00** on device against placeholder gradients
+      (Aug 2026). The frame uses `aspectRatio` with no explicit height and
+      `overflow: 'hidden'`, so content cannot change it; this is a belt-and-
+      braces check for pass two, not a known problem. *(new, Aug 2026 build)*
+
+### Story (source: 04_TODAY_AND_EDITORS.md)
+- [ ] Title must be left-aligned like every other editor — Stitch centred it.
+      *(04:271)*
+- [ ] The ruled page could sit slightly lower. *(04:272)*
+
+### Learned / For future you (source: 04_TODAY_AND_EDITORS.md)
+- [ ] The surfaced note-question → answered-in-Learned hook needs the note vault
+      before it can work. Roadmap, not a code fix. *(04:166)*
+
+---
+
+## DESIGN SYSTEM (source: 01_DESIGN_SYSTEM.md)
+
+- [ ] **Token conflict** — `type.caption` (12pt) and `type.micro` (11pt) fall
+      below the theme's own `FRAUNCES_MIN_SIZE = 13`. Harmless in the Present
+      (Space Grotesk), but when the PAST variants are built, Past must override
+      caption/micro to 13pt rather than lowering the floor. *(01:110)*
+- [ ] Sentence case reverts to caps constantly across mocks — always fix as a
+      code note, never as a Stitch re-run. *(01:64)*
+
+---
+
+## TEMP STATE — REVERT BEFORE LAUNCH (source: 02_BUILD_STATUS.md)
+
+- [ ] **`app/_layout.tsx` boots straight into a preview route** instead of
+      onboarding/tabs. Fine while reviewing editors, must go before launch.
+      *(02:67)*
+- [ ] All `app/*-preview.tsx` routes are throwaway scaffolding. *(02:69)*
+- [ ] **`HAS_SAMPLE_PHOTOS` in `CaptureEditor.tsx`** — dev const filling both
+      photo slots with placeholder gradients; delete when the camera is wired.
+      *(new, Aug 2026 build)*
+
+---
+
+## BLOCKED / DECISIONS OUTSTANDING (source: 07_INFRASTRUCTURE.md, 05)
+
+- [ ] **Apple Developer Program enrolment (£79/yr)** — not started. Gates the
+      dev build → gates Mapbox → gates slide 7. 24–48h to approve and can be
+      done from a phone. Pure waiting time, so start it early. *(07:113)*
+- [ ] **Geo API decision** — Google Places vs Mapbox for place search. Blocks
+      slide 7 AND real search in the Places editor. Mapbox is already installed
+      and configured (argues for consolidating); Google Places has better name
+      coverage for small venues. *(07:117, 05:215)*
+- [ ] **Mapbox token rotation tidy-up** still outstanding. *(07:119)*
+
+---
+
+## CLOSED THIS SESSION
+
+- [x] **Places editor rework verified as applied** — 02 and 00 both flagged this
+      as unconfirmed. Checked the committed file: 92% sheet height, eight
+      category chips, separate `meaningful` toggle, and merge-into-existing are
+      all present. The `08_EDITOR_BUILD_SPECS.md` rework spec does NOT need
+      running. *(was 02:50, 00:22)*

@@ -44,6 +44,9 @@ Jack then went away for three weeks. The project is in a clean committed state.
 8. **06_METHODOLOGY.md** — how we work (Stitch → spec → Fable pipeline), the
    two-round Stitch rule, why the last full restyle failed.
 9. **07_INFRASTRUCTURE.md** — Mapbox / EAS / Apple / API decisions / packages.
+10. **09_CODE_NOTES.md** — every deferred code note from 00–08 collected into
+    one checklist, plus the temp state that must be reverted before launch.
+    Check it before starting on any screen.
 
 ---
 
