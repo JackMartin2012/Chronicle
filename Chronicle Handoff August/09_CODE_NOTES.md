@@ -131,6 +131,31 @@ away. When you fix one, tick it here AND in its source file.
 
 ---
 
+## NATIVE PERMISSION STRINGS (source: this session)
+
+Expo Go ships its own Info.plist entries, so permissions "work" there with no
+config at all. **A dev build or TestFlight build does not** — a missing usage
+description terminates the app the moment it asks. Verify with
+`npx expo config --type introspect --json` and grep for `Usage`.
+
+- [x] **`NSCameraUsageDescription`** — was absent; would have crashed the dev
+      build on the Capture editor's first camera request. Fixed Aug 2026: the
+      `expo-camera` plugin is now configured in `app.config.js` with a real
+      string. `recordAudioAndroid: false` because Chronicle never records video.
+- [ ] **`NSPhotoLibraryUsageDescription`** — present but GENERIC ("Allow
+      $(PRODUCT_NAME) to access your photos"), inherited from an autolinked
+      default rather than written for Chronicle. Won't crash the camera-roll
+      picker in Capture pass two, but it's the text the user actually reads in
+      the system prompt, and App Review dislikes boilerplate. Write a real one.
+- [ ] **`NSPhotoLibraryAddUsageDescription`** — same, generic.
+- [ ] **`NSMicrophoneUsageDescription`** — same, generic. This is the one the
+      Story editor's voice recording will use in ITS pass two, so write it
+      before that lands.
+- [ ] **`NSLocationWhenInUseUsageDescription`** (+ the two Always variants) —
+      same, generic. Used by the weather fetch and by photo-GPS place detection.
+
+---
+
 ## BLOCKED / DECISIONS OUTSTANDING (source: 07_INFRASTRUCTURE.md, 05)
 
 - [ ] **Apple Developer Program enrolment (£79/yr)** — not started. Gates the

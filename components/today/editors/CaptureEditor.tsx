@@ -1,12 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -58,15 +62,11 @@ const MODE_FADE_MS = 180;
 
 type Slot = 'main' | 'selfie';
 
-// ---- DEV ONLY — delete when the camera is wired ----
-// Flip to false to check the empty state. True fills both slots so the swap
-// gesture and the mode-aware buttons can actually be exercised.
-const HAS_SAMPLE_PHOTOS = true;
+// ---- DEV ONLY — delete when this is wired to storage ----
+// True fills both slots with placeholder gradients so the swap gesture and the
+// mode-aware buttons can be exercised without taking photos.
+const HAS_SAMPLE_PHOTOS = false;
 
-// Stand-ins for the real photos: fixed-size gradients, both cool-toned so
-// nothing reads as a debug colour. Distinguishable by hue — the main slot is
-// blue, the selfie greyer slate. Never Image components — one that fails to
-// load collapses the frame and the layout can't be judged.
 const SAMPLE: Record<Slot, { colors: [string, string]; label: string }> = {
   main: { colors: ['#1e3050', '#31527a'], label: 'your day' },
   selfie: { colors: ['#2b3a44', '#47606f'], label: 'you' },
@@ -86,13 +86,17 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
   // mirrors it exactly instead of inventing a second interaction.
   const [selfieIsBig, setSelfieIsBig] = useState(false);
 
-  // TODO: driven by real photos once the camera is wired. Until then the dev
-  // const above decides — an empty slot is a capture affordance, a filled one
-  // takes part in the swap.
-  const [filled] = useState<Record<Slot, boolean>>({
-    main: HAS_SAMPLE_PHOTOS,
-    selfie: HAS_SAMPLE_PHOTOS,
+  // TODO: local only — nothing is persisted yet. Captured file URIs by slot.
+  const [photos, setPhotos] = useState<Record<Slot, string | null>>({
+    main: null,
+    selfie: null,
   });
+
+  // a slot counts as filled by a real photo, or by the dev placeholder
+  const filled: Record<Slot, boolean> = {
+    main: HAS_SAMPLE_PHOTOS || photos.main !== null,
+    selfie: HAS_SAMPLE_PHOTOS || photos.selfie !== null,
+  };
 
   const bigSlot: Slot = selfieIsBig ? 'selfie' : 'main';
   const insetSlot: Slot = selfieIsBig ? 'main' : 'selfie';
@@ -118,14 +122,116 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
 
   const mainControlsOpacity = modeAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
-  // TODO: opens the camera once this is wired; logs the slot for now
-  const capture = (slot: Slot) => console.log('Capture tapped', slot);
+  // ---- CAMERA ----
+  // Permission is requested on first use, not on mount: opening an editor
+  // should never fire a system prompt before you've asked for anything.
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [cameraSlot, setCameraSlot] = useState<Slot | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [permissionBlocked, setPermissionBlocked] = useState(false);
+  // a shot awaiting accept/retake — nothing reaches the frame until it's
+  // accepted. A selfie is one-shot; you need to see it before it becomes
+  // your day.
+  const [pending, setPending] = useState<string | null>(null);
+  const cameraRef = useRef<CameraView>(null);
+
+  const capture = async (slot: Slot) => {
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission();
+      if (!result.granted) {
+        // denial is a state to explain, not an error to throw
+        setPermissionBlocked(true);
+        return;
+      }
+    }
+    setPermissionBlocked(false);
+    setCameraSlot(slot);
+  };
+
+  const closeCamera = () => {
+    setCameraSlot(null);
+    setPending(null);
+  };
+
+  // accept — the reviewed shot becomes the slot's photo
+  const acceptPending = () => {
+    if (!pending || !cameraSlot) return;
+    setPhotos((prev) => ({ ...prev, [cameraSlot]: pending }));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    closeCamera();
+  };
+
+  // retake — discard and drop straight back to the live camera, which never
+  // unmounted, so there's no reopening delay
+  const retakePending = () => setPending(null);
+
+  const shoot = async () => {
+    if (!cameraRef.current || !cameraSlot || busy) return;
+    setBusy(true);
+    try {
+      const shot = await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      if (!shot?.uri) return;
+
+      // NO EXPLICIT FLIP HERE — deliberately. See the note above `mirror` on
+      // CameraView: in expo-camera 17 that prop un-mirrors the SAVED FILE as
+      // well as mirroring the preview, so an ImageManipulator flip on top of it
+      // applies a second time and the selfie comes out backwards. Verified on
+      // device. Do not re-add one without re-testing against text.
+      setPending(shot.uri);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {
+      // a failed shot shouldn't strand the user in the camera
+      console.warn('Capture failed', e);
+      closeCamera();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleDone = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // TODO: real wiring (AsyncStorage / DayEntry) comes later
-    console.log('Capture', { selfieIsBig, filled });
+    console.log('Capture', photos);
     dismiss();
+  };
+
+  /**
+   * A slot's contents: the real photo if one has been taken, the dev
+   * placeholder if that's on, otherwise the empty capture affordance.
+   * `resizeMode="cover"` is what keeps the 3:4 honest — the frame CROPS the
+   * photo rather than stretching it to fit.
+   */
+  const renderSlot = (slot: Slot, variant: 'big' | 'inset') => {
+    const uri = photos[slot];
+    if (uri) {
+      return <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />;
+    }
+
+    if (HAS_SAMPLE_PHOTOS) {
+      return (
+        <View style={styles.centerFill} pointerEvents="none">
+          <LinearGradient
+            colors={SAMPLE[slot].colors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <Text style={styles.sampleLabel}>{SAMPLE[slot].label}</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.centerFill} pointerEvents="none">
+        <Ionicons name="camera-outline" size={variant === 'big' ? 32 : 18} color={W40} />
+        {variant === 'big' && slot === 'main' && (
+          <Text style={styles.framePrompt}>Take today&apos;s photo</Text>
+        )}
+        {variant === 'inset' && slot === 'selfie' && (
+          <Text style={styles.insetSlotLabel}>You</Text>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -169,24 +275,7 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
               onPress={filled[bigSlot] ? undefined : () => capture(bigSlot)}
               style={[styles.frame, { width: frameWidth }]}
             >
-              {filled[bigSlot] ? (
-                <View style={styles.centerFill} pointerEvents="none">
-                  <LinearGradient
-                    colors={SAMPLE[bigSlot].colors}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                  <Text style={styles.sampleLabel}>{SAMPLE[bigSlot].label}</Text>
-                </View>
-              ) : (
-                <View style={styles.centerFill} pointerEvents="none">
-                  <Ionicons name="camera-outline" size={32} color={W40} />
-                  {bigSlot === 'main' && (
-                    <Text style={styles.framePrompt}>Take today&apos;s photo</Text>
-                  )}
-                </View>
-              )}
+              {renderSlot(bigSlot, 'big')}
 
               {/* empty → capture that slot; filled → swap which photo is large */}
               <Pressable
@@ -197,22 +286,7 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
                 }
                 style={styles.selfieInset}
               >
-                {filled[insetSlot] ? (
-                  <View style={styles.centerFill} pointerEvents="none">
-                    <LinearGradient
-                      colors={SAMPLE[insetSlot].colors}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={StyleSheet.absoluteFill}
-                    />
-                    <Text style={styles.sampleLabel}>{SAMPLE[insetSlot].label}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.centerFill} pointerEvents="none">
-                    <Ionicons name="camera-outline" size={18} color={W40} />
-                    {insetSlot === 'selfie' && <Text style={styles.insetSlotLabel}>You</Text>}
-                  </View>
-                )}
+                {renderSlot(insetSlot, 'inset')}
               </Pressable>
             </Pressable>
 
@@ -231,8 +305,11 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
                   style={styles.option}
                   onPress={() => capture('main')}
                 >
-                  <Text style={styles.optionLabel}>Take a photo</Text>
+                  <Text style={styles.optionLabel}>
+                    {photos.main ? 'Retake photo' : 'Take a photo'}
+                  </Text>
                 </TouchableOpacity>
+                {/* TODO: pass two — the camera roll picker, filtered to today */}
                 <TouchableOpacity activeOpacity={0.85} style={styles.option}>
                   <Text style={styles.optionLabel}>Choose from today</Text>
                 </TouchableOpacity>
@@ -248,10 +325,20 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
                   style={[styles.option, styles.optionSingle]}
                   onPress={() => capture('selfie')}
                 >
-                  <Text style={styles.optionLabel}>Take a selfie</Text>
+                  <Text style={styles.optionLabel}>
+                    {photos.selfie ? 'Retake selfie' : 'Take a selfie'}
+                  </Text>
                 </TouchableOpacity>
               </Animated.View>
             </View>
+
+            {/* denial is a state to explain quietly, not a dead button */}
+            {permissionBlocked && (
+              <Text style={styles.permissionNote}>
+                Chronicle needs camera access to take today&apos;s photo. You can turn it
+                on in Settings.
+              </Text>
+            )}
           </ScrollView>
 
           {/* footer */}
@@ -277,6 +364,82 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
           </View>
         </Pressable>
       </View>
+
+      {/* THE CAMERA — in-app CameraView, never ImagePicker.launchCameraAsync:
+          the native iOS confirmation screen inverts the image. Nested here in
+          the parent's JSX rather than raised as an independent modal. */}
+      <Modal
+        visible={cameraSlot !== null}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={closeCamera}
+      >
+        <View style={styles.cameraRoot}>
+          {cameraSlot && (
+            <CameraView
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              facing={cameraSlot === 'selfie' ? 'front' : 'back'}
+              // Mirrors the preview so shooting yourself feels like a mirror,
+              // AND un-mirrors the saved file so text reads correctly later.
+              // Verified on device: this one prop does both, which is why
+              // shoot() must NOT also flip — see the note there.
+              mirror={cameraSlot === 'selfie'}
+            />
+          )}
+
+          {pending ? (
+            /* REVIEW — our own screen, never the native iOS confirmation
+               screen (rule 7): that's the thing that inverts images. The
+               CameraView stays mounted underneath so Retake is instant. */
+            <View style={StyleSheet.absoluteFill}>
+              <Image
+                source={{ uri: pending }}
+                style={StyleSheet.absoluteFill}
+                resizeMode="cover"
+              />
+
+              <View style={[styles.reviewRow, { paddingBottom: insets.bottom + space.xl }]}>
+                <TouchableOpacity onPress={retakePending} hitSlop={12} activeOpacity={0.7}>
+                  <Text style={styles.reviewRetake}>Retake</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={acceptPending} activeOpacity={0.85}>
+                  <View style={styles.reviewAccept}>
+                    <Ionicons name="checkmark" size={32} color={palette.textPrimary} />
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <>
+              <View style={[styles.cameraTopRow, { paddingTop: insets.top + space.sm }]}>
+                <TouchableOpacity onPress={closeCamera} hitSlop={12}>
+                  <Ionicons name="close" size={28} color={palette.textPrimary} />
+                </TouchableOpacity>
+                <Text style={styles.cameraLabel}>
+                  {cameraSlot === 'selfie' ? 'You' : 'Your day'}
+                </Text>
+                {/* balances the row so the label stays centred */}
+                <View style={styles.cameraTopSpacer} />
+              </View>
+
+              <View style={[styles.cameraBottomRow, { paddingBottom: insets.bottom + space.xl }]}>
+                <TouchableOpacity
+                  onPress={shoot}
+                  disabled={busy}
+                  activeOpacity={0.8}
+                  style={styles.shutterOuter}
+                >
+                  <View style={styles.shutterInner}>
+                    {busy && <ActivityIndicator color={palette.presentBg} />}
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -385,6 +548,87 @@ const styles = StyleSheet.create({
   // lone button: centred, held to exactly one pair-button's width
   optionLayerSingle: { justifyContent: 'center' },
   optionSingle: { flex: 0, width: SINGLE_BUTTON_WIDTH },
+  permissionNote: {
+    marginTop: space.base,
+    textAlign: 'center',
+    fontFamily: w.fontRegular,
+    fontSize: type.label.fontSize,
+    lineHeight: 18,
+    color: W40,
+  },
+
+  // THE CAMERA
+  cameraRoot: { flex: 1, backgroundColor: '#000000' },
+  cameraTopRow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: space.xl,
+    paddingBottom: space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cameraLabel: {
+    fontFamily: w.fontMedium,
+    fontSize: type.body.fontSize,
+    color: palette.textPrimary,
+  },
+  cameraTopSpacer: { width: 28 },
+  cameraBottomRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+  },
+  shutterOuter: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 4,
+    borderColor: palette.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shutterInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: palette.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // REVIEW — the photo is the hero, so only two controls sit on it
+  reviewRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: space.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reviewRetake: {
+    fontFamily: w.fontRegular,
+    fontSize: type.body.fontSize,
+    color: palette.textPrimary,
+    // a legible shadow instead of a chip, so nothing boxes the photo off
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  reviewAccept: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: w.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   optionLabel: { fontFamily: w.fontRegular, fontSize: 15, color: palette.textPrimary },
 
   // FOOTER

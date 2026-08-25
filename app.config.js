@@ -23,5 +23,24 @@ module.exports = ({ config }) => ({
     ...(config.plugins ?? []),
     // No download-token prop — the plugin picks up RNMAPBOX_MAPS_DOWNLOAD_TOKEN from the env.
     '@rnmapbox/maps',
+
+    // Camera — the Capture editor's in-app CameraView.
+    //
+    // Expo Go ships its own Info.plist entries, so the camera works there with
+    // no config at all. A dev build or a TestFlight build does NOT: without
+    // NSCameraUsageDescription iOS terminates the app the moment it asks for
+    // camera access. This plugin generates that key from `cameraPermission`.
+    //
+    // recordAudioAndroid is false because Chronicle never records video — the
+    // voice memo uses expo-av separately. Leaving it true would request the
+    // Android microphone permission for no reason.
+    [
+      'expo-camera',
+      {
+        cameraPermission:
+          'Chronicle uses the camera to take your daily photo and selfie.',
+        recordAudioAndroid: false,
+      },
+    ],
   ],
 });
