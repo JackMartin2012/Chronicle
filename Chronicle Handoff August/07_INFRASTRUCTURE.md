@@ -93,3 +93,55 @@ Expo flagged: expo 54.0.34→54.0.36, expo-font 14.0.11→14.0.12, expo-router
 - Anonymous API queries (weather coords, place names, public feeds) don't count as
   collection. Keep the two privacy artifacts separate: hosted `privacy-policy.html`
   (GitHub Pages, for App Store Connect URL) and in-app `privacy.tsx`.
+
+---
+
+## UPDATES (August 2026)
+
+### Committed at `24efd4d`
+- **Mapbox config migrated** to the `RNMAPBOX_MAPS_DOWNLOAD_TOKEN` env-var
+  approach in `app.config.js` (the old `RNMapboxMapsDownloadToken` key was
+  deprecated and printing a warning). The secret stays in the gitignored `.env`.
+- **Package versions aligned** — expo, expo-font and expo-router bumps are in
+  (`package.json` + lockfile).
+- **The handoff docs are now in the repo** as `Chronicle Hand OFF/` (8 markdown
+  files). This new set supersedes them — replace the folder contents.
+- Verified at commit time: `.env` not staged, no `sk.`/`pk.` token anywhere in the
+  committed diff.
+
+### Still blocked / still to do
+- **Apple Developer Program enrolment (£79/yr)** — not started as of the last
+  session. Gates the dev build → gates Mapbox → gates slide 7. Takes 24–48h to
+  approve, and enrolment can be done from a phone. **Start this early; it is pure
+  waiting time.**
+- **Geo API decision unresolved** — Google Places vs Mapbox for place search.
+  Blocks slide 7 AND real search in the Places editor.
+- Token rotation tidy-up (see the Mapbox section above) still outstanding.
+
+### A recurring environment failure worth knowing
+Metro failed to bundle with `Cannot find module '.../@expo/metro-config/build/
+transform-worker/transform-worker.js'`. This is a **corrupted `node_modules`
+install**, not a code problem — nothing Jack or Fable wrote caused it, and no
+project files are affected.
+
+Fix, in order:
+```bash
+cd ~/Chronicle
+npx expo start -c            # clears Metro's cache — often enough on its own
+```
+If that fails:
+```bash
+cd ~/Chronicle
+rm -rf node_modules
+rm -rf $TMPDIR/metro-*
+npm install
+npx expo start -c
+```
+`node_modules` is gitignored and rebuilt from `package.json`, so deleting it is
+safe and can't be recovered (or lost) via git. If it still fails after a full
+reinstall, the next suspect is an Expo SDK 54 / Metro version mismatch.
+
+### Expo Go quirk to expect during previews
+Expo Go overlays a white "Downloading 100.00%" strip at the bottom of the screen,
+which can clip a pinned Done button in screenshots. It does not exist in a real
+build — don't redesign around it.

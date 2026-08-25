@@ -66,3 +66,59 @@ undersell in a static mock and only come alive in motion.
   diagnose the root cause, don't just tweak.
 - Frustrated by the same fix attempted repeatedly without diagnosing root cause.
 - Is NOT a coder — explain terminal/build/jargon plainly, translate Fable's output.
+
+---
+
+## LESSONS ADDED (August 2026 — the editor build sessions)
+
+### The two-round Stitch rule was proven again, twice
+- Asked to tighten the Sound editor's spacing, Stitch **returned the identical
+  image unchanged** — same 220px art, same caps label, same cut-off rating. A
+  third round would have burned another turn for the same result. We stopped,
+  moved the remaining fixes to the spec, and let Fable resolve them.
+- A later retry of the same screen DID work. So the rule isn't "Stitch can't do
+  it" — it's "don't iterate more than twice in a row; bank what's approved and
+  move on."
+
+### Batching: one at a time, with two deliberate exceptions
+Jack asked to run all eight editors in a single Fable prompt. Pushed back, because
+that's the same shape as the full-app restyle that ended in `git reset --hard`:
+if run six goes wrong you can't tell whether it's that editor's spec, a bad
+assumption inherited from run two, or accumulated drift — and there's no clean
+commit between them.
+
+**The pattern that worked instead:**
+1. Build the FIRST editor alone. Its chrome becomes the shared pattern.
+2. Then batch only the genuinely similar, low-risk ones (Learned + Future You;
+   People + Places) — they can say "same chrome as `SoundEditor.tsx`" instead of
+   respecifying every pixel and hoping it lands identically.
+3. Keep anything touching the camera or microphone SOLO. Always.
+
+**Why the first build matters most:** half the decisions this session were only
+gettable by *looking* — the fill-gauge rating pills, the purple whisper, the
+selfie inset, the serif journal. Batching would have meant screenshotting eight
+finished screens and correcting backwards.
+
+### Design decisions that came from device review, not mocks
+- The Sound sheet sized itself to its content, so it hugged the bottom third when
+  empty. Fixed height + pinned footer fixed it. **A static mock cannot reveal
+  this** — only the empty state on a real device does.
+- Empty middle space is a recurring failure mode across editors. Quiet empty
+  states (faint icon + one line) fix it.
+- The keyboard trapped the user with Done hidden behind it. Every editor with a
+  text input needs the dismissal pattern (see 08).
+
+### When a fix "doesn't look right", diagnose the root cause
+The Sound editor's real problem wasn't a caps label or a stray margin — it was
+that the hero art was too large for what it had to share the sheet with, which
+pushed the rating below the fold and left the art floating. Shrinking the art
+fixed four symptoms at once. Tweaking the symptoms would have fixed none.
+
+### Working format (confirmed preference — always follow)
+- **All terminal commands, Stitch prompts, and Fable prompts go in code blocks**,
+  each with a plain-English explanation of what it does. Jack is not a coder.
+- Explain the reasoning and the trade-offs BEFORE writing the prompt.
+- Stitch prompts must be written as CONTINUATIONS of the existing Chronicle
+  session (which already knows the app's design language), never as briefs for a
+  new app. A prompt that reintroduces the colours and fonts from scratch produces
+  a screen that looks like it belongs to a different product.

@@ -148,3 +148,40 @@ and the newspaper stays LAST (8 of 8).
 - Slide 6 film side: no transport/progress, "Apple TV" label
 - Slide 5: learned text ≤ story size
 - Progress counters reflect live filled-input count, not slide position
+
+---
+
+## UPDATES SINCE THE JULY HANDOFF (August 2026)
+
+### Slide 6 — needs a Listen/Watch update
+The Sound EDITOR was restructured from three modes (Music / Film / Podcast) to
+two verbs:
+- **Listen** = songs + podcasts
+- **Watch** = films + TV shows
+
+The user now records **one Listen AND one Watch per day** (not one or the other),
+each with a 1–10 rating and a note. The slide currently only tap-swaps between
+music and film, so it needs to handle all four media types and the two-entry
+model. Do this during the wiring pass, not as a separate design round.
+
+The **note field doubles as the episode field** for podcasts and TV — its
+placeholder changes by media type:
+- song → "Why did this stick with you today?"
+- podcast → "Which episode? How did it land?"
+- film → "What did you make of it?"
+- tv → "Which episode? What happened?"
+
+This was a deliberate decision to avoid RSS-feed parsing: the iTunes API indexes
+podcast *shows* but not episodes, and show-level is arguably the better memory
+anyway. Episode-level search is explicitly NOT a gap to fix.
+
+### Slide 5 — journal body should be serif
+Diegetic exception #4 (see 01_DESIGN_SYSTEM.md): journal body text is Fraunces
+serif in BOTH the Story editor and the Story slide, so the written day looks
+identical in the place you write it and the place you read it. Chrome around it
+stays Space Grotesk. Verify the slide matches.
+
+### Slide 2 — the tap-to-swap interaction is shared with the Capture editor
+The Capture EDITOR uses the same BeReal pair as this slide, and the same
+tap-the-inset-to-swap gesture. Build them to feel like the same object in two
+places — the editor is where you make the pair, the slide is where you see it.

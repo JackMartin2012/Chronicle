@@ -185,3 +185,47 @@ touches the camera/photos. The Today screen and editors need connecting to real
 photo GPS needs reading; iTunes/GDELT/etc. need fetching with crash-proofing.
 This is substantial, unglamorous, and necessary — probably the single biggest
 remaining chunk after the editors are designed.
+
+---
+
+## UPDATES (August 2026)
+
+### Monetisation sequencing (refined)
+- **Launch FREE.** No paywall at v1.0 — the free tier has to be genuinely good.
+- **Chronicle Plus arrives in v1.1**, implemented via **RevenueCat** (handles
+  subscription plumbing, receipts and restore-purchases so it doesn't have to be
+  built by hand).
+- **v1.2: the Wrapped-style recap** ("Your Year, Chronicled") — identified as the
+  single highest-leverage marketing moment in the roadmap, because it's the one
+  feature people screenshot and share unprompted.
+- No ads, ever. Unchanged and non-negotiable.
+
+### The note-vault loop — design now exists for the input half
+The For-Future-You editor is BUILT, including the surfaced-note card with the
+reply field and the "when should this come back?" picker. What's still missing is
+everything downstream: the data model, notification scheduling, the surfacing
+logic that decides a note is due today, and the vault itself (which needs the
+dashboard, which doesn't exist).
+
+The `isQuestion` toggle in the built editor already stores the flag that the
+"answer it later in the Learned editor" pairing will read. Nothing consumes it
+yet — that was deliberate, so the editor doesn't need redesigning when the loop
+lands.
+
+### Geo API decision — still open, now blocking two things
+Google Places vs Mapbox for real place search. It blocks:
+1. Slide 7 (the map route slide), and
+2. Real search in the Places editor (currently a local sample list).
+
+Mapbox is already installed and configured, which argues for consolidating on it.
+Google Places has better name coverage for small venues. This needs deciding
+before either can be finished.
+
+### The wiring pass — scope reminder
+Now that six editors exist, the wiring job is concrete: Today tile tap → open the
+right editor → editor writes to real `DayEntry` storage → tile re-renders with
+saved content → progress ring counts live filled inputs. Plus photo GPS reading,
+iTunes fetching with crash-proofing, and the two slides that need updating
+(Sound → Listen/Watch model; Story → serif body).
+
+This remains the single biggest remaining chunk and the least glamorous.

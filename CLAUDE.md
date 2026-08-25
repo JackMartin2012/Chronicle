@@ -1,5 +1,35 @@
 # Chronicle — Project Context (Updated July 2026)
 
+---
+
+## ⚠️ READ THIS FIRST — `Chronicle Handoff August/`
+
+**`Chronicle Handoff August/` is the source of truth for the current state of the
+project.** Read `00_START_HERE.md` in that folder before doing anything, and
+`02_BUILD_STATUS.md` before assuming anything is or isn't built.
+
+The app is **mid-UI-overhaul**. The rest of THIS file describes the OLD UI
+(`app/(tabs)/index.tsx`, `explore.tsx`, `components/DayCard.tsx`) which is being
+replaced screen by screen. It is still accurate about the old screens, the
+AsyncStorage keys, and the critical technical rules — but it does NOT describe
+the rebuild in `components/daycard/` and `components/today/`. Where the two
+disagree, the August handoff wins.
+
+`CHRONICLE_DESIGN_SPEC.md` is the design language reference — read it before any
+UI work, but it sits BELOW the August handoff set.
+
+**Never treat a doc as current without checking its date against the handoff.**
+A superseded July handoff folder once sat in this repo and led to work being
+built on decisions that had already been reversed. It has been deleted; if you
+find another stale copy, the August folder is the one that counts.
+
+Decisions recorded as made in the handoff are LOCKED — do not re-open them or
+present them as still-open questions. Notably: the Story editor's notebook page
+is always writable and voice is an OPTIONAL attached recording, never a
+replacement (`04_TODAY_AND_EDITORS.md`, Editor 8).
+
+---
+
 ## What is Chronicle?
 Chronicle is a React Native / Expo iOS app for documenting memories and life. The core concept is the **time loop** — what you capture today becomes a flashback in the future. Tagline: *"We have all these pictures for a reason."*
 
@@ -491,4 +521,7 @@ git push
 - **Design-language sweep REVERTED** (July 2026): a restyle-only "de-AI-template" pass (commit ede8554 — total font coverage, box removal, emoji-icon purge) was applied and then rolled back at Jack's request. index.tsx, explore.tsx, DayCard.tsx, DailySelfie.tsx, settings.tsx were restored to their pre-sweep versions. Do not re-apply that sweep's styling decisions unless asked
 
 *Chronicle is functional and running on iOS via Expo Go. All core screens complete. Next up: TestFlight.*
-Design decisions live in CHRONICLE_DESIGN_SPEC.md — read it before any UI work.
+
+**The above describes the OLD UI.** For where the project actually stands, see
+`Chronicle Handoff August/` — start at `00_START_HERE.md`. Design language:
+`CHRONICLE_DESIGN_SPEC.md`.
