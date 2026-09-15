@@ -11,7 +11,6 @@ import {
   FlatList,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -155,6 +154,33 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
 
   const bigSlot: Slot = selfieIsBig ? 'selfie' : 'main';
   const insetSlot: Slot = selfieIsBig ? 'main' : 'selfie';
+
+  // The sheet is FIXED-HEIGHT and bottom-anchored, so KeyboardAvoidingView's
+  // padding behaviour translates the whole thing upward and takes the title and
+  // top row off screen. Instead the keyboard height is tracked directly: the
+  // sheet's top edge stays put, its bottom sits on the keyboard, and the middle
+  // absorbs the difference. Ported from StoryEditor.tsx. This editor has no
+  // TextInput of its own, so the keyboard never actually rises here — this
+  // keeps it consistent with the other seven rather than fixing a live bug.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) =>
+      setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  const keyboardUp = keyboardHeight > 0;
+  // never taller than the space left above the keyboard
+  const sheetHeight = keyboardUp
+    ? Math.min(SHEET_HEIGHT, SCREEN_H - keyboardHeight - insets.top - space.sm)
+    : SHEET_HEIGHT;
 
   // The frame is given a WIDTH only; aspectRatio 3/4 derives its height, and
   // flexGrow/flexShrink 0 stop the column from adjusting it. The width is
@@ -369,13 +395,19 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.root}
-    >
+    <View style={styles.root}>
       <Pressable style={styles.backdrop} onPress={dismiss} />
 
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
+      <View
+        style={[
+          styles.sheet,
+          {
+            height: sheetHeight,
+            marginBottom: keyboardHeight,
+            paddingBottom: keyboardUp ? 12 : insets.bottom + 12,
+          },
+        ]}
+      >
         <Pressable style={styles.sheetInner} onPress={Keyboard.dismiss} accessible={false}>
           {/* grabber */}
           <View style={styles.grabber} />
@@ -631,7 +663,7 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
           )}
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -640,7 +672,7 @@ const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: BACKDROP },
 
   sheet: {
-    height: SHEET_HEIGHT,
+    // height is set per-render — it shrinks to sit above the keyboard
     backgroundColor: w.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,

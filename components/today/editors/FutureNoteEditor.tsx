@@ -4,7 +4,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -101,6 +100,31 @@ export default function FutureNoteEditor({
 
   const hasNote = note.trim().length > 0;
 
+  // The sheet is FIXED-HEIGHT and bottom-anchored, so KeyboardAvoidingView's
+  // padding behaviour translates the whole thing upward and takes the title and
+  // top row off screen. Instead the keyboard height is tracked directly: the
+  // sheet's top edge stays put, its bottom sits on the keyboard, and the middle
+  // absorbs the difference. Ported from StoryEditor.tsx.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) =>
+      setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  const keyboardUp = keyboardHeight > 0;
+  // never taller than the space left above the keyboard
+  const sheetHeight = keyboardUp
+    ? Math.min(SHEET_HEIGHT, SCREEN_H - keyboardHeight - insets.top - space.sm)
+    : SHEET_HEIGHT;
+
   const stepMonth = (delta: number) =>
     setPickedDate((prev) => {
       const d = new Date(prev);
@@ -152,10 +176,19 @@ export default function FutureNoteEditor({
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.root}>
+    <View style={styles.root}>
       <Pressable style={styles.backdrop} onPress={dismiss} />
 
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
+      <View
+        style={[
+          styles.sheet,
+          {
+            height: sheetHeight,
+            marginBottom: keyboardHeight,
+            paddingBottom: keyboardUp ? 12 : insets.bottom + 12,
+          },
+        ]}
+      >
         <Pressable style={styles.sheetInner} onPress={Keyboard.dismiss} accessible={false}>
         {/* grabber */}
         <View style={styles.grabber} />
@@ -302,7 +335,7 @@ export default function FutureNoteEditor({
         </Pressable>
       </View>
       <KeyboardDismissBar />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -310,7 +343,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end', backgroundColor: w.bg },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: BACKDROP },
   sheet: {
-    height: SHEET_HEIGHT,
+    // height is set per-render — it shrinks to sit above the keyboard
     backgroundColor: w.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
