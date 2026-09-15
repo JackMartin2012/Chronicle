@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -19,7 +19,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, motion, palette, space, type } from '@/constants/chronicleTheme';
-import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
+import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
+import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -32,7 +33,6 @@ const W20 = 'rgba(255,255,255,0.2)';
 const INPUT_BG = '#16233d';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 
-const COMPLETED = 4; // TODO: real day-progress count comes with wiring
 
 const withAlpha = (hex: string, alpha: number) => {
   const h = hex.replace('#', '');
@@ -107,7 +107,21 @@ export default function PeopleEditor({ onClose }: { onClose?: () => void }) {
   const insets = useSafeAreaInsets();
   const dismiss = onClose ?? (() => {});
 
-  const [tagged, setTagged] = useState<Person[]>(() => KNOWN.filter((p) => p.id === 'ella' || p.id === 'tom'));
+  const [tagged, setTagged] = useState<Person[]>([]);
+  const [completed, setCompleted] = useState(0);
+
+  // Seed from today's record so reopening shows who you already tagged.
+  useEffect(() => {
+    let active = true;
+    loadDayEntry(formatDateKey(new Date())).then((day) => {
+      if (!active) return;
+      setTagged(day.people);
+      setCompleted(countFilledInputs(day));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [query, setQuery] = useState('');
 
   const q = query.trim();
@@ -190,6 +204,7 @@ export default function PeopleEditor({ onClose }: { onClose?: () => void }) {
             <View style={styles.searchField}>
               <Ionicons name="search-outline" size={18} color={palette.textMuted} />
               <TextInput
+                inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
                 style={styles.searchInput}
                 value={query}
                 onChangeText={setQuery}
@@ -250,9 +265,9 @@ export default function PeopleEditor({ onClose }: { onClose?: () => void }) {
             <Text style={styles.footerNote}>This builds your people</Text>
             <View style={styles.progressRow}>
               {Array.from({ length: 8 }, (_, i) => (
-                <View key={i} style={[styles.progressDot, { backgroundColor: i < COMPLETED ? w.accent : palette.ringSubtle }]} />
+                <View key={i} style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]} />
               ))}
-              <Text style={styles.progressText}>This completes {COMPLETED} of 8 for today</Text>
+              <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
             </View>
             <TouchableOpacity
               activeOpacity={tagged.length > 0 ? 0.85 : 1}
@@ -264,6 +279,7 @@ export default function PeopleEditor({ onClose }: { onClose?: () => void }) {
           </View>
         </Pressable>
       </View>
+      <KeyboardDismissBar />
     </KeyboardAvoidingView>
   );
 }

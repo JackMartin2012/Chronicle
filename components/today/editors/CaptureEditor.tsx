@@ -24,7 +24,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
-import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
+import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 import { captureFileName, persistFile } from '@/lib/media';
 
 const w = getWorld('present');
@@ -38,7 +38,6 @@ const W20 = 'rgba(255,255,255,0.2)';
 const W15 = 'rgba(255,255,255,0.15)';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 
-const COMPLETED = 3; // TODO: real day-progress count comes with wiring
 
 // ---- the hero pair ----
 // The frame takes a WIDTH and derives its height from aspectRatio 3/4. The
@@ -127,6 +126,26 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
     main: null,
     selfie: null,
   });
+  const [completed, setCompleted] = useState(0);
+
+  // Seed from today's record so reopening shows the photos you saved. These
+  // are already the permanent copies, so persistFile short-circuits if they're
+  // saved again untouched.
+  useEffect(() => {
+    let active = true;
+    loadDayEntry(formatDateKey(new Date())).then((day) => {
+      if (!active) return;
+      setPhotos({
+        main: day.capture.mainPhotoUri || null,
+        selfie: day.capture.selfieUri || null,
+      });
+      setSelfieIsBig(day.capture.selfieIsBig);
+      setCompleted(countFilledInputs(day));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // a slot counts as filled by a real photo, or by the dev placeholder
   const filled: Record<Slot, boolean> = {
@@ -473,10 +492,10 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
               {Array.from({ length: 8 }, (_, i) => (
                 <View
                   key={i}
-                  style={[styles.progressDot, { backgroundColor: i < COMPLETED ? w.accent : palette.ringSubtle }]}
+                  style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
                 />
               ))}
-              <Text style={styles.progressText}>This completes {COMPLETED} of 8 for today</Text>
+              <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
             </View>
             <TouchableOpacity
               activeOpacity={0.85}

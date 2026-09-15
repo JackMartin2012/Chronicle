@@ -19,7 +19,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, motion, palette, space, type } from '@/constants/chronicleTheme';
-import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
+import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
+import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -165,6 +166,25 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
     listen: null,
     watch: null,
   });
+  const [completed, setCompleted] = useState(0);
+
+  // Seed from today's record so reopening shows both slots as you left them,
+  // and lands on whichever side you actually filled.
+  useEffect(() => {
+    let active = true;
+    loadDayEntry(formatDateKey(new Date())).then((day) => {
+      if (!active) return;
+      setEntries({ listen: day.sound.listen, watch: day.sound.watch });
+      if (!day.sound.listen && day.sound.watch) {
+        setMode('watch');
+        setDisplayMode('watch');
+      }
+      setCompleted(countFilledInputs(day));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const entry = entries[mode]; // the current mode's slot
   const anyFilled = !!entries.listen || !!entries.watch;
@@ -328,6 +348,7 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
             <View style={styles.searchField}>
               <Ionicons name="search-outline" size={18} color={palette.textMuted} />
               <TextInput
+                inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
                 style={styles.searchInput}
                 value={query}
                 onChangeText={setQuery}
@@ -467,6 +488,7 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
               <Text style={[styles.fieldLabel, styles.reactionLabel]}>Add a note</Text>
               <View style={styles.reactionBox}>
                 <TextInput
+                  inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
                   style={styles.reactionInput}
                   value={entry.note}
                   onChangeText={(txt) =>
@@ -494,6 +516,17 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
           <Text style={styles.footerNote}>
             {bothFilled ? 'Both join your sound history' : 'This joins your sound history'}
           </Text>
+          {/* the progress row the shared chrome specifies — this editor was
+              the only one of the eight missing it */}
+          <View style={styles.progressRow}>
+            {Array.from({ length: 8 }, (_, i) => (
+              <View
+                key={i}
+                style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
+              />
+            ))}
+            <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
+          </View>
           <TouchableOpacity
             activeOpacity={anyFilled ? 0.85 : 1}
             onPress={anyFilled ? handleDone : undefined}
@@ -504,6 +537,7 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
         </View>
         </Pressable>
       </View>
+      <KeyboardDismissBar />
     </KeyboardAvoidingView>
   );
 }
@@ -688,6 +722,9 @@ const styles = StyleSheet.create({
   // footer
   footer: {},
   footerDivider: { height: 1, backgroundColor: palette.hairline, marginTop: space.lg },
+  progressRow: { marginTop: space.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  progressDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 6 },
+  progressText: { marginLeft: 4, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
   footerNote: {
     marginTop: 14,
     textAlign: 'center',

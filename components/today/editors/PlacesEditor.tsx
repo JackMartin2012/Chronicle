@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -20,7 +20,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, motion, palette, space, type } from '@/constants/chronicleTheme';
-import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
+import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
+import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -37,7 +38,6 @@ const INPUT_BG = '#16233d';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 const PIN_BG = 'rgba(0,0,0,0.6)';
 
-const COMPLETED = 5; // TODO: real day-progress count comes with wiring
 
 const withAlpha = (hex: string, alpha: number) => {
   const h = hex.replace('#', '');
@@ -117,7 +117,21 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
   const insets = useSafeAreaInsets();
   const dismiss = onClose ?? (() => {});
 
-  const [tagged, setTagged] = useState<Place[]>([{ id: 'home', name: 'Home', category: 'home', meaningful: true }]);
+  const [tagged, setTagged] = useState<Place[]>([]);
+  const [completed, setCompleted] = useState(0);
+
+  // Seed from today's record so reopening shows the places you already tagged.
+  useEffect(() => {
+    let active = true;
+    loadDayEntry(formatDateKey(new Date())).then((day) => {
+      if (!active) return;
+      setTagged(day.places);
+      setCompleted(countFilledInputs(day));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>(INITIAL_SUGGESTIONS);
   // a place awaiting the picker (opened from a suggestion, recent, result, or add-new)
@@ -336,6 +350,7 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
             <View style={styles.searchField}>
               <Ionicons name="search-outline" size={18} color={palette.textMuted} />
               <TextInput
+                inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
                 style={styles.searchInput}
                 value={query}
                 onChangeText={setQuery}
@@ -395,9 +410,9 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
             <Text style={styles.footerNote}>This maps your days</Text>
             <View style={styles.progressRow}>
               {Array.from({ length: 8 }, (_, i) => (
-                <View key={i} style={[styles.progressDot, { backgroundColor: i < COMPLETED ? w.accent : palette.ringSubtle }]} />
+                <View key={i} style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]} />
               ))}
-              <Text style={styles.progressText}>This completes {COMPLETED} of 8 for today</Text>
+              <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
             </View>
             <TouchableOpacity
               activeOpacity={hasPlaces ? 0.85 : 1}
@@ -409,6 +424,7 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
           </View>
         </Pressable>
       </View>
+      <KeyboardDismissBar />
     </KeyboardAvoidingView>
   );
 }

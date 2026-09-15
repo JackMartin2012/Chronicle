@@ -2,6 +2,20 @@
 
 Single source of truth for what exists vs designed vs planned.
 
+> ## ⚠️ THIS FILE DESCRIBES CODE, NOT DESIGNS
+> An entry here means **the code does this**, verified by opening the file — not
+> that a Stitch mock was approved, not that a prompt was written, not that it
+> looked right in a screenshot. Designs belong in `03`, `04` and `08`.
+>
+> **This has already gone wrong once.** ThreeWordsEditor was listed as *"Built.
+> Emoji-suggested-from-words confirmed working"* for months. The mock was
+> approved and working; the component had no `useState` and no `TextInput` and
+> could not accept a single character. It was only caught when the wiring pass
+> tried to save its output and found there was none.
+>
+> Before writing "Built", open the file. If you cannot point at the state and
+> the inputs, it is DESIGNED, not built.
+
 **Updated 25 August 2026 — all 8 editors are now BUILT.**
 
 **NOTHING is wired to storage.** Every editor holds its input in local component

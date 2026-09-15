@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -17,7 +17,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
-import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
+import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
+import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -31,7 +32,6 @@ const W20 = 'rgba(255,255,255,0.2)';
 const W06 = 'rgba(255,255,255,0.06)';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 
-const COMPLETED = 6; // TODO: real day-progress count comes with wiring
 
 const QUESTIONS = [
   'What surprised you today?',
@@ -47,6 +47,21 @@ export default function LearnedEditor({ onClose }: { onClose?: () => void }) {
   const dismiss = onClose ?? (() => {});
 
   const [text, setText] = useState('');
+  const [completed, setCompleted] = useState(0);
+
+  // Seed from today's record so reopening shows what you saved. Runs once on
+  // mount; a later save never re-seeds and can't clobber what you're typing.
+  useEffect(() => {
+    let active = true;
+    loadDayEntry(formatDateKey(new Date())).then((day) => {
+      if (!active) return;
+      setText(day.learned);
+      setCompleted(countFilledInputs(day));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [qIndex, setQIndex] = useState(() => Math.floor(Math.random() * QUESTIONS.length));
   const shuffleScale = useRef(new Animated.Value(1)).current;
 
@@ -106,6 +121,7 @@ export default function LearnedEditor({ onClose }: { onClose?: () => void }) {
         <View style={styles.body}>
           <Ionicons name="bulb-outline" size={26} color={w.accent} />
           <TextInput
+            inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
             style={styles.hero}
             value={text}
             onChangeText={setText}
@@ -124,10 +140,10 @@ export default function LearnedEditor({ onClose }: { onClose?: () => void }) {
             {Array.from({ length: 8 }, (_, i) => (
               <View
                 key={i}
-                style={[styles.progressDot, { backgroundColor: i < COMPLETED ? w.accent : palette.ringSubtle }]}
+                style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
               />
             ))}
-            <Text style={styles.progressText}>This completes {COMPLETED} of 8 for today</Text>
+            <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
           </View>
           <TouchableOpacity
             activeOpacity={hasText ? 0.85 : 1}
@@ -139,6 +155,7 @@ export default function LearnedEditor({ onClose }: { onClose?: () => void }) {
         </View>
         </Pressable>
       </View>
+      <KeyboardDismissBar />
     </KeyboardAvoidingView>
   );
 }

@@ -19,7 +19,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
-import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
+import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
+import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 import { deleteFileIfPresent, documentPath, persistFile, voiceNoteFileName } from '@/lib/media';
 
 const w = getWorld('present');
@@ -33,7 +34,6 @@ const W30 = 'rgba(255,255,255,0.3)';
 const W25 = 'rgba(255,255,255,0.25)';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 
-const COMPLETED = 4; // TODO: real day-progress count comes with wiring
 
 // ---- the page ----
 // Matched to SlideStory.tsx so the editor and the day card are visibly the same
@@ -104,16 +104,31 @@ function Waveform({ bars, live = false }: { bars: number[]; live?: boolean }) {
   );
 }
 
-// TODO: real day entry; sample text so the serif can be judged at real length.
-const SAMPLE_ENTRY = `Spent most of the afternoon in the garden with Alex and Sam. Mum made the cake she always makes, the one with too much lemon in it, and nobody said anything.
-
-It rained at six and not one person moved. We just sat there getting wet and laughing about it.`;
-
 export default function StoryEditor({ onClose }: { onClose?: () => void }) {
   const insets = useSafeAreaInsets();
   const dismiss = onClose ?? (() => {});
 
-  const [entry, setEntry] = useState(SAMPLE_ENTRY);
+  const [entry, setEntry] = useState('');
+  const [completed, setCompleted] = useState(0);
+
+  // Seed from today's record so reopening shows the page you wrote, and the
+  // voice note you attached to it.
+  useEffect(() => {
+    let active = true;
+    loadDayEntry(formatDateKey(new Date())).then((day) => {
+      if (!active) return;
+      setEntry(day.story.text);
+      if (day.story.voiceNoteUri) {
+        setVoiceUri(day.story.voiceNoteUri);
+        setElapsed(day.story.voiceNoteDuration);
+        setVoiceState('recorded');
+      }
+      setCompleted(countFilledInputs(day));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // The sheet is FIXED-HEIGHT and bottom-anchored, so KeyboardAvoidingView's
   // padding behaviour translates the whole thing upward and takes the title and
@@ -452,6 +467,7 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
 
                   {/* writing directly on the paper — no box, no border, no fill */}
                   <TextInput
+                    inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
                     style={styles.entry}
                     value={entry}
                     onChangeText={setEntry}
@@ -559,10 +575,10 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
                   {Array.from({ length: 8 }, (_, i) => (
                     <View
                       key={i}
-                      style={[styles.progressDot, { backgroundColor: i < COMPLETED ? w.accent : palette.ringSubtle }]}
+                      style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
                     />
                   ))}
-                  <Text style={styles.progressText}>This completes {COMPLETED} of 8 for today</Text>
+                  <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
                 </View>
               </View>
             </Animated.View>
@@ -579,6 +595,7 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
           </View>
         </Pressable>
       </View>
+      <KeyboardDismissBar />
     </View>
   );
 }

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   Keyboard,
@@ -17,7 +17,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
-import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
+import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '@/components/today/KeyboardDismissBar';
+import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 import { MOOD_PALETTE, suggestMoods } from '@/lib/moodSuggestions';
 import type { ThreeWord } from '@/lib/types';
 
@@ -39,7 +40,6 @@ const W30 = 'rgba(255,255,255,0.3)';
 const W20 = 'rgba(255,255,255,0.2)';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 
-const COMPLETED = 2; // TODO: real day-progress count comes with wiring
 
 // 8 columns inside the panel: sheet padding (24 each side) + panel padding (8 each side)
 // The SLIDE uses type.wordHero (46/58). The editor can't: it has to fit three
@@ -72,12 +72,32 @@ export default function ThreeWordsEditor({ world = 'present', onClose = () => {}
 
   const [slots, setSlots] = useState<ThreeWord[]>(EMPTY_SLOTS);
   const [mood, setMood] = useState('');
+  const [completed, setCompleted] = useState(0);
   // which slots have their reason field open. A written reason keeps its box
   // open so it can be edited; an unwritten one is opened by tapping "Add why".
   const [whyOpen, setWhyOpen] = useState<number[]>([]);
   // the grid behind the "+", so anything the map missed is still reachable —
   // by picking, never by typing
   const [emojiPanelOpen, setEmojiPanelOpen] = useState(false);
+
+  // Seed from today's record so reopening shows the words you saved. Stored
+  // words are padded back out to three slots — the record only keeps the ones
+  // that were actually written.
+  useEffect(() => {
+    let active = true;
+    loadDayEntry(formatDateKey(new Date())).then((day) => {
+      if (!active) return;
+      const stored = day.threeWords.words;
+      setSlots([0, 1, 2].map((i) => ({ word: stored[i]?.word ?? '', why: stored[i]?.why ?? '' })));
+      // a written reason opens its field so it can be edited
+      setWhyOpen(stored.map((word, i) => (word.why ? i : -1)).filter((i) => i >= 0));
+      setMood(day.threeWords.mood);
+      setCompleted(countFilledInputs(day));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const setWord = (index: number, word: string) =>
     setSlots((prev) => prev.map((s, i) => (i === index ? { ...s, word } : s)));
@@ -155,6 +175,7 @@ export default function ThreeWordsEditor({ world = 'present', onClose = () => {}
             return (
               <View key={i} style={styles.slot}>
                 <TextInput
+                  inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
                   style={[styles.word, { fontFamily: w.fontBold }]}
                   value={item.word}
                   onChangeText={(text) => setWord(i, text)}
@@ -174,6 +195,7 @@ export default function ThreeWordsEditor({ world = 'present', onClose = () => {}
                   (showWhy ? (
                     <View style={styles.whyRow}>
                       <TextInput
+                        inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
                         style={[styles.whyText, { fontFamily: w.fontRegular }]}
                         value={item.why}
                         onChangeText={(text) => setWhy(i, text)}
@@ -289,11 +311,11 @@ export default function ThreeWordsEditor({ world = 'present', onClose = () => {}
               {Array.from({ length: 8 }, (_, i) => (
                 <View
                   key={i}
-                  style={[styles.progressDot, { backgroundColor: i < COMPLETED ? w.accent : palette.ringSubtle }]}
+                  style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
                 />
               ))}
               <Text style={[styles.progressText, { fontFamily: w.fontRegular }]}>
-                This completes {COMPLETED} of 8 for today
+                {completed} of 8 filled in today
               </Text>
             </View>
             <TouchableOpacity
@@ -313,6 +335,7 @@ export default function ThreeWordsEditor({ world = 'present', onClose = () => {}
           </View>
         </Pressable>
       </View>
+      <KeyboardDismissBar />
     </KeyboardAvoidingView>
   );
 }

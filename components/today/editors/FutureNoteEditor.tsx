@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   Keyboard,
@@ -18,7 +18,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
-import { formatDateKey, saveDayEntry } from '@/lib/dayEntry';
+import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
+import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -34,7 +35,6 @@ const W10 = 'rgba(255,255,255,0.1)';
 const W04 = 'rgba(255,255,255,0.04)';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 
-const COMPLETED = 7; // TODO: real day-progress count comes with wiring
 
 // rgba from a hex token so past-world purple can be used at partial opacity
 const withAlpha = (hex: string, alpha: number) => {
@@ -67,6 +67,29 @@ export default function FutureNoteEditor({
   const replyRef = useRef<TextInput>(null);
 
   const [note, setNote] = useState('');
+  const [completed, setCompleted] = useState(0);
+
+  // Seed from today's record so reopening shows the note you left, and the
+  // "when" you chose for it.
+  useEffect(() => {
+    let active = true;
+    loadDayEntry(formatDateKey(new Date())).then((day) => {
+      if (!active) return;
+      const stored = day.futureNote;
+      setNote(stored.note);
+      setIsQuestion(stored.isQuestion);
+      setReply(stored.reply);
+      if (stored.when) setWhen(stored.when);
+      // a picked date is only recoverable from the resolved surface key
+      if (stored.when === 'date' && stored.surfaceKey) {
+        setPickedDate(new Date(`${stored.surfaceKey}T12:00:00`));
+      }
+      setCompleted(countFilledInputs(day));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [reply, setReply] = useState('');
   const [when, setWhen] = useState<WhenKey>('year');
   const [isQuestion, setIsQuestion] = useState(false);
@@ -174,6 +197,7 @@ export default function FutureNoteEditor({
                 </TouchableOpacity>
                 <View style={styles.replyBox}>
                   <TextInput
+                    inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
                     ref={replyRef}
                     style={styles.replyInput}
                     value={reply}
@@ -193,6 +217,7 @@ export default function FutureNoteEditor({
           {/* PART 2 — compose a new note */}
           <Ionicons name="mail-outline" size={24} color={w.accent} style={styles.composeIcon} />
           <TextInput
+            inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
             style={styles.composeInput}
             value={note}
             onChangeText={setNote}
@@ -261,10 +286,10 @@ export default function FutureNoteEditor({
             {Array.from({ length: 8 }, (_, i) => (
               <View
                 key={i}
-                style={[styles.progressDot, { backgroundColor: i < COMPLETED ? w.accent : palette.ringSubtle }]}
+                style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
               />
             ))}
-            <Text style={styles.progressText}>This completes {COMPLETED} of 8 for today</Text>
+            <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
           </View>
           <TouchableOpacity
             activeOpacity={hasNote ? 0.85 : 1}
@@ -276,6 +301,7 @@ export default function FutureNoteEditor({
         </View>
         </Pressable>
       </View>
+      <KeyboardDismissBar />
     </KeyboardAvoidingView>
   );
 }
