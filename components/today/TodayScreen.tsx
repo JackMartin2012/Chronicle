@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,6 +25,8 @@ import {
   space,
   type,
 } from '@/constants/chronicleTheme';
+import { countFilledInputs, emptyDayEntry, formatDateKey, loadDayEntry, TOTAL_INPUTS } from '@/lib/dayEntry';
+import type { DayEntry } from '@/lib/types';
 
 // Present-world tokens are used throughout this presentation-only screen.
 const w = getWorld('present');
@@ -30,29 +35,20 @@ const { height: SCREEN_H } = Dimensions.get('window');
 const CAPTURE_HEIGHT = Math.round(SCREEN_H * 0.22);
 const ALBUM_ART_SIZE = 96; // fixed square — must not stretch to fill the tile
 
-// TODO: throwaway placeholder fill for where real media will go — NOT a theme
-// colour. Swap these blocks for real photos when the screen is wired up.
+// Fallback fill for a photo slot that has nothing saved yet — not a theme
+// colour, just a neutral surface behind an icon.
 const PLACEHOLDER_BLOCK = '#3a3f4a';
 
-// ---------------------------------------------------------------------------
-// SAMPLE DATA (presentation only — not wired to storage/camera/navigation)
-// ---------------------------------------------------------------------------
-
-const SAMPLE = {
-  weekday: 'Friday',
-  dateLine: '24 July',
-  progress: { done: 5, total: 8 },
-  captureTime: '18:04',
-  threeWords: 'Warm · Unhurried · Reunion',
-  moodEmoji: '😌',
-  dayText:
-    'Woke up late and let the morning drift. Met the others by the river and we walked the long way round, stopping for coffee where the light came through the trees. Nobody was in a hurry and it felt like the old days again, before everyone scattered.',
-  trackName: 'Glittering Horizon',
-  peopleLine: 'Alex, Sam & Mum',
-};
-
-// Static waveform placeholder heights.
+// Purely decorative — indicates "a voice note exists", not real audio data.
+// The record only stores duration, never a waveform.
 const WAVE = [6, 12, 18, 9, 14, 20, 8, 11, 16, 10, 7, 15, 19, 12, 9, 13, 17, 8, 14, 11];
+
+// Oxford-style join: "Alex" / "Alex & Sam" / "Alex, Sam & Mum"
+const joinNames = (names: string[]): string => {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+};
 
 // ---------------------------------------------------------------------------
 // PROGRESS RING
@@ -63,8 +59,28 @@ const RING_STROKE = 4;
 const RING_R = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRC = 2 * Math.PI * RING_R;
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
 function ProgressRing({ done, total }: { done: number; total: number }) {
-  const offset = RING_CIRC * (1 - done / total);
+  const progress = useRef(new Animated.Value(0)).current;
+  const prevDone = useRef<number | null>(null);
+
+  useEffect(() => {
+    Animated.spring(progress, {
+      toValue: total > 0 ? done / total : 0,
+      useNativeDriver: false, // strokeDashoffset isn't supported by the native driver
+      speed: motion.springSpeed,
+      bounciness: motion.springBounciness,
+    }).start();
+
+    if (prevDone.current !== null && prevDone.current !== done) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    prevDone.current = done;
+  }, [done, total, progress]);
+
+  const offset = progress.interpolate({ inputRange: [0, 1], outputRange: [RING_CIRC, 0] });
+
   return (
     <View style={styles.ringWrap}>
       <Svg width={RING_SIZE} height={RING_SIZE}>
@@ -79,7 +95,7 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
         />
         {/* blue progress arc, starting at 12 o'clock */}
         <G rotation={-90} origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}>
-          <Circle
+          <AnimatedCircle
             cx={RING_SIZE / 2}
             cy={RING_SIZE / 2}
             r={RING_R}
@@ -155,12 +171,71 @@ function TileHeading({ children }: { children: string }) {
   return <Text style={styles.tileHeading}>{children}</Text>;
 }
 
+// Shared empty-state body: thin-line icon + short prompt, centred.
+function EmptyBody({ icon, prompt }: { icon: keyof typeof Ionicons.glyphMap; prompt: string }) {
+  return (
+    <View style={styles.emptyBody}>
+      <Ionicons name={icon} size={24} color={palette.textMuted} />
+      <Text style={styles.emptyPrompt}>{prompt}</Text>
+    </View>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // SCREEN
 // ---------------------------------------------------------------------------
 
 export default function TodayScreen() {
   const insets = useSafeAreaInsets();
+  const dateKey = formatDateKey(new Date());
+
+  const [day, setDay] = useState<DayEntry>(() => emptyDayEntry(dateKey));
+
+  // Reload every time the screen regains focus — coming back from an editor
+  // should always show what was just saved, not a stale mount-time snapshot.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      loadDayEntry(dateKey).then((loaded) => {
+        if (active) setDay(loaded);
+      });
+      return () => {
+        active = false;
+      };
+    }, [dateKey])
+  );
+
+  const now = new Date();
+  const weekday = now.toLocaleDateString('en-GB', { weekday: 'long' });
+  const dateLine = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
+
+  const done = countFilledInputs(day);
+
+  // ---- CAPTURE ----
+  const capturePhotos: Record<'main' | 'selfie', string | null> = {
+    main: day.capture.mainPhotoUri || null,
+    selfie: day.capture.selfieUri || null,
+  };
+  const bigSlot: 'main' | 'selfie' = day.capture.selfieIsBig ? 'selfie' : 'main';
+  const insetSlot: 'main' | 'selfie' = bigSlot === 'selfie' ? 'main' : 'selfie';
+  const hasCapture = capturePhotos.main !== null || capturePhotos.selfie !== null;
+
+  // ---- THREE WORDS ----
+  const threeWordsList = day.threeWords.words.map((word) => word.word.trim()).filter(Boolean);
+  const hasThreeWords = threeWordsList.length > 0 || day.threeWords.mood !== '';
+
+  // ---- YOUR DAY ----
+  const hasStory = day.story.text.trim() !== '' || day.story.voiceNoteUri !== '';
+
+  // ---- SOUND — one tile covers both slots; listen wins when both are filled ----
+  const soundEntry = day.sound.listen ?? day.sound.watch;
+  const soundHeading = day.sound.listen ? 'Listening to' : 'Watching';
+
+  // ---- PEOPLE ----
+  const peopleLine = joinNames(day.people.map((p) => p.name));
+
+  // ---- PLACES — merged tags don't render their own pill ----
+  const placePills = day.places.filter((p) => !p.mergedIntoId);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -176,103 +251,180 @@ export default function TodayScreen() {
         {/* TOP BAR */}
         <View style={styles.topBar}>
           <View>
-            <Text style={styles.topWeekday}>{SAMPLE.weekday}</Text>
-            <Text style={styles.topDate}>{SAMPLE.dateLine}</Text>
+            <Text style={styles.topWeekday}>{weekday}</Text>
+            <Text style={styles.topDate}>{dateLine}</Text>
           </View>
-          <ProgressRing done={SAMPLE.progress.done} total={SAMPLE.progress.total} />
+          <ProgressRing done={done} total={TOTAL_INPUTS} />
         </View>
 
         {/* 1 — TODAY'S CAPTURE */}
         <PressableTile innerStyle={{ height: CAPTURE_HEIGHT }} padded={false}>
-          {/* TODO: real captured photo — solid fallback block so the tile always shows */}
-          <View style={[StyleSheet.absoluteFill, styles.capturePhotoFallback]} />
+          {hasCapture ? (
+            <>
+              {capturePhotos[bigSlot] ? (
+                <Image
+                  source={{ uri: capturePhotos[bigSlot]! }}
+                  style={StyleSheet.absoluteFill}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={[StyleSheet.absoluteFill, styles.capturePhotoFallback]} />
+              )}
 
-          {/* TODO: real selfie — solid fallback block */}
-          <View style={styles.selfieInset} />
+              {capturePhotos[insetSlot] && (
+                <Image source={{ uri: capturePhotos[insetSlot]! }} style={styles.selfieInset} />
+              )}
 
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.65)']}
-            style={styles.captureGradient}
-          >
-            <Text style={styles.captureHeading}>Today&apos;s capture</Text>
-            <Text style={styles.captureTime}>{SAMPLE.captureTime}</Text>
-          </LinearGradient>
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.65)']}
+                style={styles.captureGradient}
+              >
+                <Text style={styles.captureHeading}>Today&apos;s capture</Text>
+              </LinearGradient>
+            </>
+          ) : (
+            <View style={[StyleSheet.absoluteFill, styles.capturePhotoFallback, styles.captureEmptyFill]}>
+              <EmptyBody icon="camera-outline" prompt="Capture today" />
+            </View>
+          )}
         </PressableTile>
 
         {/* 2 — THREE WORDS */}
         <PressableTile>
           <TileHeading>Today in three words</TileHeading>
-          <Text style={styles.threeWords}>
-            {SAMPLE.threeWords} {SAMPLE.moodEmoji}
-          </Text>
+          {hasThreeWords ? (
+            <Text style={styles.threeWords}>
+              {threeWordsList.join(' · ')}
+              {day.threeWords.mood ? ` ${day.threeWords.mood}` : ''}
+            </Text>
+          ) : (
+            <EmptyBody icon="text-outline" prompt="Sum up your day in three words" />
+          )}
         </PressableTile>
 
         {/* 3 — YOUR DAY */}
         <PressableTile>
           <TileHeading>Your day</TileHeading>
-          <Text style={styles.dayBody} numberOfLines={3}>
-            {SAMPLE.dayText}
-          </Text>
-          <Text style={styles.moreLink}>more</Text>
-          <View style={styles.waveform}>
-            {WAVE.map((h, i) => (
-              <View key={i} style={[styles.waveBar, { height: h }]} />
-            ))}
-          </View>
+          {hasStory ? (
+            <>
+              {day.story.text.trim() !== '' && (
+                <>
+                  <Text style={styles.dayBody} numberOfLines={3}>
+                    {day.story.text.trim()}
+                  </Text>
+                  <Text style={styles.moreLink}>more</Text>
+                </>
+              )}
+              {day.story.voiceNoteUri !== '' && (
+                <View style={styles.waveform}>
+                  {WAVE.map((h, i) => (
+                    <View key={i} style={[styles.waveBar, { height: h }]} />
+                  ))}
+                </View>
+              )}
+            </>
+          ) : (
+            <EmptyBody icon="book-outline" prompt="Write or record your day" />
+          )}
         </PressableTile>
 
-        {/* 4 & 5 — LISTENING TO / WITH PEOPLE */}
+        {/* 4 & 5 — LISTENING TO (OR WATCHING) / WITH PEOPLE */}
         <View style={styles.halfRow}>
           <PressableTile style={styles.halfTile} innerStyle={styles.halfTileInner}>
-            <TileHeading>Listening to</TileHeading>
-            {/* TODO: real album artwork — solid placeholder block */}
-            <View style={styles.albumArt} />
-            <View style={styles.trackRow}>
-              <Ionicons name="play" size={14} color={w.accent} />
-              <Text style={styles.trackName} numberOfLines={1}>
-                {SAMPLE.trackName}
-              </Text>
-            </View>
+            <TileHeading>{soundEntry ? soundHeading : 'Listening to'}</TileHeading>
+            {soundEntry ? (
+              <>
+                {soundEntry.artworkUrl ? (
+                  <Image source={{ uri: soundEntry.artworkUrl }} style={styles.albumArt} />
+                ) : (
+                  <View style={styles.albumArt} />
+                )}
+                <View style={styles.trackRow}>
+                  <Ionicons name="play" size={14} color={w.accent} />
+                  <Text style={styles.trackName} numberOfLines={1}>
+                    {soundEntry.title}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <EmptyBody icon="headset-outline" prompt="What did you listen to or watch?" />
+            )}
           </PressableTile>
 
           <PressableTile style={styles.halfTile} innerStyle={styles.halfTileInner}>
             <TileHeading>With people</TileHeading>
-            <View style={styles.facesRow}>
-              {/* TODO: real people photos — solid placeholder blocks */}
-              {[0, 1, 2].map((i) => (
-                <View key={i} style={[styles.faceCircle, i > 0 && styles.faceOverlap]} />
-              ))}
-            </View>
-            <Text style={styles.peopleLine}>{SAMPLE.peopleLine}</Text>
+            {day.people.length > 0 ? (
+              <>
+                <View style={styles.facesRow}>
+                  {day.people.slice(0, 3).map((person, i) =>
+                    person.photoUri ? (
+                      <Image
+                        key={person.id}
+                        source={{ uri: person.photoUri }}
+                        style={[styles.faceCircle, i > 0 && styles.faceOverlap]}
+                      />
+                    ) : (
+                      <View key={person.id} style={[styles.faceCircle, i > 0 && styles.faceOverlap]} />
+                    )
+                  )}
+                </View>
+                <Text style={styles.peopleLine} numberOfLines={1}>
+                  {peopleLine}
+                </Text>
+              </>
+            ) : (
+              <EmptyBody icon="people-outline" prompt="Who were you with?" />
+            )}
           </PressableTile>
         </View>
 
-        {/* 6 & 7 — SOMETHING YOU LEARNED / PLACES (empty) */}
+        {/* 6 & 7 — SOMETHING YOU LEARNED / PLACES */}
         <View style={styles.halfRow}>
           <PressableTile style={styles.halfTile}>
             <TileHeading>Something you learned</TileHeading>
-            <View style={styles.emptyBody}>
-              <Ionicons name="bulb-outline" size={24} color={palette.textMuted} />
-              <Text style={styles.emptyPrompt}>Add something you learned</Text>
-            </View>
+            {day.learned.trim() !== '' ? (
+              <Text style={styles.dayBody} numberOfLines={4}>
+                {day.learned.trim()}
+              </Text>
+            ) : (
+              <EmptyBody icon="bulb-outline" prompt="Add something you learned" />
+            )}
           </PressableTile>
 
           <PressableTile style={styles.halfTile}>
             <TileHeading>Places</TileHeading>
-            <View style={styles.emptyBody}>
-              <Ionicons name="location-outline" size={24} color={palette.textMuted} />
-              <Text style={styles.emptyPrompt}>Where did today take you?</Text>
-            </View>
+            {placePills.length > 0 ? (
+              <View style={styles.placePillsRow}>
+                {placePills.map((place) => (
+                  <View key={place.id} style={styles.placePill}>
+                    <Text style={styles.placePillText} numberOfLines={1}>
+                      {place.name}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <EmptyBody icon="location-outline" prompt="Where did today take you?" />
+            )}
           </PressableTile>
         </View>
 
-        {/* 8 — FOR FUTURE YOU (empty) */}
+        {/* 8 — FOR FUTURE YOU */}
         <PressableTile>
           <TileHeading>For future you</TileHeading>
-          <View style={styles.futureRow}>
-            <Ionicons name="mail-outline" size={20} color={palette.textMuted} />
-            <Text style={styles.futurePrompt}>Leave a note for future you</Text>
-          </View>
+          {day.futureNote.note.trim() !== '' ? (
+            <View style={styles.futureRow}>
+              <Ionicons name="mail-outline" size={20} color={palette.textMuted} />
+              <Text style={styles.futureNoteText} numberOfLines={2}>
+                {day.futureNote.note.trim()}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.futureRow}>
+              <Ionicons name="mail-outline" size={20} color={palette.textMuted} />
+              <Text style={styles.futurePrompt}>Leave a note for future you</Text>
+            </View>
+          )}
         </PressableTile>
 
         {/* BOTTOM — SEE TODAY AS A DAY CARD */}
@@ -323,6 +475,7 @@ const styles = StyleSheet.create({
 
   // 1 — CAPTURE
   capturePhotoFallback: { backgroundColor: w.surface },
+  captureEmptyFill: { alignItems: 'center', justifyContent: 'center' },
   selfieInset: {
     position: 'absolute',
     top: space.base,
@@ -332,7 +485,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.35)',
-    backgroundColor: PLACEHOLDER_BLOCK, // TODO: real selfie
+    backgroundColor: PLACEHOLDER_BLOCK,
   },
   captureGradient: {
     position: 'absolute',
@@ -344,7 +497,6 @@ const styles = StyleSheet.create({
     paddingBottom: space.base,
   },
   captureHeading: { ...type.caption, fontFamily: w.fontRegular, color: palette.textPrimary },
-  captureTime: { ...type.caption, fontFamily: w.fontRegular, color: palette.textPrimary, marginTop: 2 },
 
   // 2 — THREE WORDS
   threeWords: {
@@ -382,13 +534,13 @@ const styles = StyleSheet.create({
   halfTile: { flex: 1 },
   halfTileInner: { flex: 1 }, // fill the row's stretched height so both tiles match
 
-  // 4 — LISTENING TO
+  // 4 — LISTENING TO / WATCHING
   albumArt: {
     width: ALBUM_ART_SIZE,
     height: ALBUM_ART_SIZE,
     borderRadius: radius.md,
     marginTop: space.sm,
-    backgroundColor: PLACEHOLDER_BLOCK, // TODO: real album artwork
+    backgroundColor: PLACEHOLDER_BLOCK,
   },
   trackRow: { flexDirection: 'row', alignItems: 'center', marginTop: space.sm },
   trackName: {
@@ -407,7 +559,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: w.surface,
-    backgroundColor: PLACEHOLDER_BLOCK, // TODO: real people photos
+    backgroundColor: PLACEHOLDER_BLOCK,
   },
   faceOverlap: { marginLeft: -10 },
   peopleLine: {
@@ -417,7 +569,7 @@ const styles = StyleSheet.create({
     marginTop: space.sm,
   },
 
-  // 6 & 7 — EMPTY TILES
+  // EMPTY TILES (shared)
   emptyBody: { alignItems: 'center', justifyContent: 'center', paddingVertical: space.lg },
   emptyPrompt: {
     ...type.caption,
@@ -427,6 +579,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // 7 — PLACES
+  placePillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: space.sm },
+  placePill: {
+    height: 28,
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+    backgroundColor: palette.ringSubtle,
+  },
+  placePillText: { ...type.caption, fontFamily: w.fontRegular, color: palette.textPrimary },
+
   // 8 — FOR FUTURE YOU
   futureRow: { flexDirection: 'row', alignItems: 'center', marginTop: space.sm },
   futurePrompt: {
@@ -434,6 +597,13 @@ const styles = StyleSheet.create({
     fontFamily: w.fontRegular,
     color: palette.textMuted,
     marginLeft: space.sm,
+  },
+  futureNoteText: {
+    ...type.caption,
+    fontFamily: w.fontRegular,
+    color: palette.textPrimary,
+    marginLeft: space.sm,
+    flexShrink: 1,
   },
 
   // BOTTOM BUTTON

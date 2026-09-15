@@ -54,6 +54,15 @@ away. When you fix one, tick it here AND in its source file.
       height to the People tile beside it. *(04:42)*
 - [ ] The "See today as a day card" button needs safe-area padding above the
       tab bar. *(04:43)*
+- [ ] **The sound tile only ever shows one of the two slots.** `DayEntry.sound`
+      holds independent `listen` and `watch` entries, but Today's mosaic has a
+      single "Listening to" tile. When both are filled, `listen` takes
+      priority and `watch` is invisible on Today — even though
+      `countFilledInputs` counts either one as the same input, so the progress
+      ring can read filled while a whole entry never renders anywhere on the
+      screen. Not a wiring bug: Today needs a second tile (or a combined one)
+      before both slots can be seen, which is a layout decision, not something
+      to patch in the wiring pass. *(new, wiring pass step 3b)*
 
 ---
 
