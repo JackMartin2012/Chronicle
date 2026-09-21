@@ -311,7 +311,10 @@ function SoundTileBody({ sound, press }: { sound: SoundSlots; press: TileHandler
 // SCREEN
 // ---------------------------------------------------------------------------
 
-export default function TodayScreen() {
+// `embedded`: rendered inside another screen that already owns the top of the
+// page (the Your Present tab's header + tab switcher). Drops this screen's own
+// safe-area padding and top bar (weekday/date/ring) so nothing is duplicated.
+export default function TodayScreen({ embedded = false }: { embedded?: boolean }) {
   const insets = useSafeAreaInsets();
   const dateKey = formatDateKey(new Date());
 
@@ -371,7 +374,7 @@ export default function TodayScreen() {
   const placePills = day.places.filter((p) => !p.mergedIntoId);
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
+    <SafeAreaView style={styles.root} edges={embedded ? [] : ['top']}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -382,13 +385,15 @@ export default function TodayScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* TOP BAR */}
-        <View style={styles.topBar}>
-          <View>
-            <Text style={styles.topWeekday}>{weekday}</Text>
-            <Text style={styles.topDate}>{dateLine}</Text>
+        {!embedded && (
+          <View style={styles.topBar}>
+            <View>
+              <Text style={styles.topWeekday}>{weekday}</Text>
+              <Text style={styles.topDate}>{dateLine}</Text>
+            </View>
+            <ProgressRing done={done} total={TOTAL_INPUTS} />
           </View>
-          <ProgressRing done={done} total={TOTAL_INPUTS} />
-        </View>
+        )}
 
         {/* 1 — TODAY'S CAPTURE */}
         <PressableTile

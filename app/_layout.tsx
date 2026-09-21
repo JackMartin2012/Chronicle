@@ -29,10 +29,6 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (onboardingComplete === null || !fontsLoaded) return;
-    // TODO: TEMPORARY PREVIEW — revert to the onboarding/tabs redirect below.
-    router.replace('/today-preview');
-    return;
-    // eslint-disable-next-line no-unreachable
     if (onboardingComplete) {
       router.replace('/(tabs)');
     } else {

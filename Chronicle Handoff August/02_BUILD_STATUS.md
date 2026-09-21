@@ -16,17 +16,42 @@ Single source of truth for what exists vs designed vs planned.
 > Before writing "Built", open the file. If you cannot point at the state and
 > the inputs, it is DESIGNED, not built.
 
-**Updated 25 August 2026 — all 8 editors are now BUILT.**
+**Updated September 2026 — all 8 editors are BUILT and WIRED. The wiring pass
+is COMPLETE.**
 
-**NOTHING is wired to storage.** Every editor holds its input in local component
-state and logs on Done; close the sheet and it's gone. That has not changed and
-is still the single biggest remaining chunk of work.
+- All 8 editors read from and write to real storage (`lib/dayEntry.ts`, on the
+  existing `day_entry_${dateKey}` AsyncStorage key). Each seeds itself from
+  today's record on open and saves on the top-right Done.
+- `TodayScreen.tsx` reflects live data: tiles update the moment an editor
+  closes, tapping a tile opens the right editor, and the progress ring counts
+  real filled inputs.
+- Saves are queued and reads wait for them (fixes the old "Done needed two
+  presses" race). Verified end-to-end on device, all 8 editors.
+- **Capture drives the real camera and camera roll; Story records real audio.**
+- The temp redirect in `app/_layout.tsx` is GONE — the app boots into the real
+  onboarding / tabs flow again. The 8 editor preview routes and
+  `PreviewHarness.tsx` are deleted.
 
-What DID change: two editors are no longer presentation-only. **Capture drives
-the real camera and the real camera roll. Story records real audio.** Those are
-live device features on live data — they just have nowhere to save it yet.
+**The new Today screen is now the "Today" tab of Your Present** (Sept 2026).
+`app/(tabs)/explore.tsx` still owns the header + tab switcher and renders
+`<TodayScreen embedded />` for the Today tab; **Your Days, Daily Selfie and
+Favourites are the old code, untouched** (except Your Days now reloads every
+time it's opened, so a day filled in this session appears). The old Today block
+was removed from `explore.tsx` (in git history before that commit); its state
+and modals are still in the file as dead code (hence the extra lint warnings).
+The old progress ring is hidden on the Today tab, and `TodayScreen` drops its
+own top bar when `embedded` — **so there is currently NO progress ring on the
+Today tab.**
 
-Last commit: `e700125` on `main`, pushed to GitHub.
+**Old screens read the OLD field names only.** So every save also writes
+simplified legacy fields (photo, mood, three words as a plain list, story text,
+song, people names, places, learned) — `legacyMirror()` in `lib/dayEntry.ts`.
+That is what makes a day from the new editors show in Your Days / DayCard /
+Vault. Lossy: no why-notes, place categories, watch ratings. Reads prefer the
+new nested shape, so it never feeds back. Any NEW field an editor saves needs
+adding to the mirror if the old screens should see it.
+
+Last commit before this cleanup: `e1c4536` on `main`, pushed to GitHub.
 
 ---
 
@@ -69,7 +94,9 @@ Last commit: `e700125` on `main`, pushed to GitHub.
 | **Capture** | `CaptureEditor.tsx` | **Built, both passes — real camera. See below.** |
 | **Story** | `StoryEditor.tsx` | **Built, both passes — real audio. See below.** |
 
-Eight throwaway preview routes exist (`app/*-preview.tsx`).
+The eight editor preview routes and `today-preview.tsx` are deleted. Still
+present and throwaway: `app/preview.tsx` (day card carousel) and
+`app/data-layer-check.tsx`.
 
 ---
 
@@ -135,12 +162,15 @@ The rework spec in `08_EDITOR_BUILD_SPECS.md` does **not** need running.
 
 ---
 
-## ⚠️ TEMP STATE COMMITTED — revert before launch
-- `app/_layout.tsx` boots the app straight into a preview route (currently
-  `/story-editor-preview`) instead of onboarding/tabs.
-- All `app/*-preview.tsx` routes are throwaway scaffolding.
+## TEMP STATE — what's left
+- ~~`app/_layout.tsx` preview redirect~~ — **REMOVED Sept 2026.** Boots into
+  onboarding/tabs.
+- ~~The 8 `*-editor-preview` routes~~ — **DELETED.**
+- ~~`app/today-preview.tsx`~~ and the `PREVIEW` link in `explore.tsx` —
+  **REMOVED Sept 2026.**
+- Still throwaway: `app/preview.tsx`, `app/data-layer-check.tsx`.
 - `HAS_SAMPLE_PHOTOS` in `CaptureEditor.tsx` — dev const, currently `false`.
-Fine to leave while reviewing editors. Full list in `09_CODE_NOTES.md`.
+Full list in `09_CODE_NOTES.md`.
 
 ---
 
@@ -199,13 +229,16 @@ This is now the ONLY designed-but-unbuilt screen. Every editor is built.
 ---
 
 ## WHAT'S ACTUALLY NEXT
-1. **The wiring pass** — the biggest remaining chunk, and now unblocked: every
-   editor exists and produces real values that go nowhere.
+0. ~~The wiring pass~~ — **DONE (Sept 2026).** See the top of this file.
+1. ~~Mount `TodayScreen` in the Present tab~~ — **DONE** (as the Today tab; see
+   above). Follow-ups: bring back a progress ring on the Today tab, and
+   eventually rebuild Your Days / Favourites in the new design and delete the
+   dead old-Today code from `explore.tsx`.
 2. **Apple Developer enrolment** (£79/yr, 24–48h) — pure waiting time, gates the
    dev build → Mapbox → slide 7. Start it early.
 3. **Geo API decision** — Google Places vs Mapbox. Blocks slide 7 AND real place
    search in the Places editor.
-4. **Port the keyboard fix** from `StoryEditor.tsx` to the other six editors and
-   update the pattern in `08_EDITOR_BUILD_SPECS.md` — cleaner before wiring than
-   after. See `09`.
+4. ~~Port the keyboard fix~~ — **DONE** (commit `c3529e8`, all editors track
+   keyboard height directly). `08` still shows the old `KeyboardAvoidingView`
+   pattern in its keyboard section; tidy it when next touching that file.
 5. Slide 7 LAST, after the dev build exists.

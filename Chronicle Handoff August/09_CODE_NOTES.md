@@ -139,10 +139,10 @@ away. When you fix one, tick it here AND in its source file.
 
 ## TEMP STATE — REVERT BEFORE LAUNCH (source: 02_BUILD_STATUS.md)
 
-- [ ] **`app/_layout.tsx` boots straight into a preview route** instead of
+- [x] **DONE Sept 2026 — `app/_layout.tsx` boots straight into a preview route** instead of
       onboarding/tabs. Fine while reviewing editors, must go before launch.
       *(02:67)*
-- [ ] All `app/*-preview.tsx` routes are throwaway scaffolding. *(02:69)*
+- [x] Editor preview routes + `today-preview.tsx` + the `PREVIEW` link DELETED (Sept 2026). Still throwaway: `preview.tsx`, `data-layer-check.tsx`. *(02:69)*
 - [ ] **`HAS_SAMPLE_PHOTOS` in `CaptureEditor.tsx`** — dev const filling both
       photo slots with placeholder gradients; delete when the camera is wired.
       *(new, Aug 2026 build)*
@@ -188,6 +188,16 @@ description terminates the app the moment it asks. Verify with
 ---
 
 ## CLOSED THIS SESSION
+
+- [ ] **OPEN — no progress ring on the Today tab.** The old ring is hidden there
+      (it counts old-style fields) and `TodayScreen` drops its own ring when
+      `embedded`. Wanted: show the new ring (`countFilledInputs`) in
+      `explore.tsx`'s header on the Today tab.
+- [ ] **OPEN — `fetchWeather` in `explore.tsx` still runs on mount** and writes
+      the day record directly (bypassing the `dayEntry.ts` write queue, though it
+      re-reads first and keeps the new `chronicle` field). It also triggers the
+      location permission prompt on opening the tab. Nothing displays weather
+      any more. Decide: move into the new Today, or remove.
 
 - [x] **Double-Done bug (all 8 editors)** — Done called `saveDayEntry` without
       waiting, then dismissed; Today's `reload()` ran while the write was still

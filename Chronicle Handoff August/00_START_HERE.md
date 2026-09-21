@@ -7,15 +7,20 @@ Updated: August 2026. This set REPLACES the July 2026 handoff folder
 
 ## The one-line status
 Chronicle is mid-UI-overhaul. **All 8 day-card slides are designed (7 built).
-All 8 editors are now DESIGNED, and 6 of them are BUILT and pushed.** Everything
-built is presentation-only on sample data — nothing is wired to real storage,
-camera, or photos yet.
+All 8 editors are BUILT and WIRED to real storage, camera and audio (Sept 2026),
+and the Today screen reflects live data.** One gap: the new Today screen is not
+yet mounted in the tab bar — see `02_BUILD_STATUS.md`.
 
 ## Where the last session ended
 Last commit: **`24efd4d` on `main`** (pushed to GitHub, verified no secrets).
 Jack then went away for three weeks. The project is in a clean committed state.
 
-⚠️ **TWO THINGS TO DO BEFORE ANYTHING ELSE — see 02_BUILD_STATUS.md:**
+> **Update Sept 2026:** the wiring pass is complete, the temp redirect is gone
+> and the preview routes are deleted — the two items below are HISTORY. Read
+> `02_BUILD_STATUS.md` for the real current state, notably that the new Today
+> screen is not yet mounted in the tab bar.
+
+⚠️ **(HISTORICAL) TWO THINGS TO DO BEFORE ANYTHING ELSE — see 02_BUILD_STATUS.md:**
 1. The temp redirect in `app/_layout.tsx` still boots the app straight into
    `/places-editor-preview` instead of onboarding/tabs. Must be reverted before
    launch. It is fine to leave while still reviewing editors.

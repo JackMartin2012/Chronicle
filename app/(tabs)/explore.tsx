@@ -9,7 +9,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router'; // TEMP: remove before launch
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -31,6 +30,7 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import DailySelfie from '../../components/DailySelfie';
+import TodayScreen from '../../components/today/TodayScreen';
 import DayCard, { hashUri } from '../../components/DayCard';
 
 const { width } = Dimensions.get('window');
@@ -446,7 +446,7 @@ export default function ThePresent() {
     loadFavourites(); loadCapsules(); loadKnownPeople();
   }, []);
 
-  useEffect(() => { if (activeTab === 'archive' && archivedDays.length === 0) loadArchive(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'archive') loadArchive(); }, [activeTab]);
 
   useEffect(() => {
     if (archivedDays.length > 0 && !archiveCalYear) {
@@ -980,11 +980,6 @@ export default function ThePresent() {
   return (
     <View style={styles.outerContainer}>
 
-      {/* TEMP: remove before launch */}
-      <TouchableOpacity onPress={() => router.push('/preview')}>
-        <Text style={styles.tempPreviewLink}>PREVIEW</Text>
-      </TouchableOpacity>
-
       {/* 3.1 HEADER ROW */}
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
@@ -993,7 +988,7 @@ export default function ThePresent() {
             <Text style={styles.headerDate}>{dateString}</Text>
             <Text style={styles.headerTagline}>Today&apos;s entry becomes tomorrow&apos;s flashback.</Text>
           </View>
-          <DayRing completed={ringCompleted} total={8} />
+          {activeTab !== 'today' && <DayRing completed={ringCompleted} total={8} />}
         </View>
         <View style={styles.tabSwitcher}>
           <TouchableOpacity style={[styles.tabButton, activeTab === 'today' && styles.tabButtonActive]} onPress={() => setActiveTab('today')}>
@@ -1011,305 +1006,9 @@ export default function ThePresent() {
         </View>
       </View>
 
-      {activeTab === 'today' && (
-        <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={{ height: 10 }} />
-
-          {/* 3.2 HERO CAPTURE CARD */}
-          <View style={styles.heroCard}>
-            {entry.photoUri || entry.pairSelfieUri ? (
-              <>
-                <TouchableOpacity
-                  style={StyleSheet.absoluteFillObject}
-                  activeOpacity={0.9}
-                  onPress={() => {
-                    const bigUri = pairSwapped && entry.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri;
-                    if (!bigUri) { pickPhoto('today'); return; }
-                    Alert.alert('Photo', '', [
-                      { text: 'View photo', onPress: () => setFullScreenUri(bigUri) },
-                      { text: 'Retake', onPress: () => pickPhoto(pairSwapped && entry.pairSelfieUri ? 'pair' : 'today') },
-                      { text: 'Remove', style: 'destructive', onPress: () => updateEntry(pairSwapped && entry.pairSelfieUri ? { pairSelfieUri: '' } : { photoUri: '' }) },
-                      { text: 'Cancel', style: 'cancel' },
-                    ]);
-                  }}
-                >
-                  {(pairSwapped && entry.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri) ? (
-                    <Image
-                      source={{ uri: pairSwapped && entry.pairSelfieUri ? entry.pairSelfieUri : entry.photoUri }}
-                      style={StyleSheet.absoluteFillObject}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.heroMainEmptySlot}>
-                      <Text style={{ fontSize: 32 }}>📷</Text>
-                      <Text style={styles.pairPlaceholderText}>Add today&apos;s photo</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-                {entry.pairSelfieUri || entry.photoUri ? (
-                  <TouchableOpacity
-                    style={styles.heroInset}
-                    activeOpacity={0.9}
-                    onPress={() => {
-                      const insetUri = pairSwapped ? entry.photoUri : entry.pairSelfieUri;
-                      if (insetUri) setPairSwapped(s => !s);
-                      else pickPhoto(pairSwapped ? 'today' : 'pair');
-                    }}
-                  >
-                    {(pairSwapped ? entry.photoUri : entry.pairSelfieUri) ? (
-                      <Image
-                        source={{ uri: pairSwapped ? entry.photoUri : entry.pairSelfieUri }}
-                        style={{ width: '100%', height: '100%' }}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={styles.heroInsetPlaceholder}>
-                        <Text style={{ fontSize: 20 }}>🤳</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ) : null}
-                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)']} style={styles.heroBottomGradient} pointerEvents="none" />
-                <View style={styles.heroBottomRow}>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center' }}>
-                    {entry.extraPhotos.map((uri, index) => (
-                      <TouchableOpacity key={index} style={{ marginRight: 8 }} onPress={() => {
-                        Alert.alert('Photo', '', [
-                          { text: 'View photo', onPress: () => setFullScreenUri(uri) },
-                          { text: 'Remove photo', onPress: () => updateEntry({ extraPhotos: entry.extraPhotos.filter((_, i) => i !== index) }), style: 'destructive' },
-                          { text: 'Cancel', style: 'cancel' },
-                        ]);
-                      }}>
-                        <Image source={{ uri }} style={styles.heroThumb} />
-                      </TouchableOpacity>
-                    ))}
-                    <TouchableOpacity style={styles.heroAddThumbTile} onPress={() => pickPhoto('extra')}>
-                      <Text style={styles.addExtraText}>+</Text>
-                    </TouchableOpacity>
-                  </ScrollView>
-                  <Text style={styles.heroPhotoCount}>
-                    {(entry.photoUri ? 1 : 0) + (entry.pairSelfieUri ? 1 : 0) + entry.extraPhotos.length} photo{((entry.photoUri ? 1 : 0) + (entry.pairSelfieUri ? 1 : 0) + entry.extraPhotos.length) === 1 ? '' : 's'} today
-                  </Text>
-                </View>
-              </>
-            ) : (
-              <View style={styles.heroEmptyRow}>
-                <TouchableOpacity style={styles.heroEmptyPrompt} onPress={() => pickPhoto('today')}>
-                  <Text style={{ fontSize: 28 }}>📷</Text>
-                  <Text style={styles.pairPromptText}>Today&apos;s photo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.heroEmptyPrompt} onPress={() => pickPhoto('pair')}>
-                  <Text style={{ fontSize: 28 }}>🤳</Text>
-                  <Text style={styles.pairPromptText}>Add a selfie</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-          <TouchableOpacity style={styles.storyLinkRow} onPress={openCaptionsSheet}>
-            <Text style={styles.storyLinkText}>✍️ Tell the story of these photos →</Text>
-          </TouchableOpacity>
-
-          {/* 3.3 THREE WORDS + MOOD */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>TODAY IN THREE WORDS</Text>
-            <View style={styles.wordsRow}>
-              {[0, 1, 2].map(i => (
-                <TextInput
-                  key={i}
-                  style={[styles.wordChip, !!threeWordsLocal[i]?.trim() && styles.wordChipFilled]}
-                  placeholder="word"
-                  placeholderTextColor="rgba(255,255,255,0.25)"
-                  maxLength={16}
-                  value={threeWordsLocal[i]}
-                  onChangeText={text => setThreeWordsLocal(prev => prev.map((w, j) => j === i ? text : w))}
-                  onBlur={saveThreeWords}
-                />
-              ))}
-            </View>
-            <Text style={[styles.cardLabel, { marginTop: 18 }]}>MOOD</Text>
-            <MoodSlider value={entry.mood} onChange={emoji => updateEntry({ mood: emoji })} />
-          </View>
-
-          {/* 3.4 THE JOURNAL CARD */}
-          <View style={styles.card}>
-            <Text style={styles.cardLabel}>TELL US ABOUT YOUR DAY</Text>
-            <View style={styles.dayActionsRow}>
-              <TouchableOpacity
-                style={[styles.dayActionBtn, writeOpen && styles.dayActionBtnActive]}
-                onPress={() => setWriteOpen(o => !o)}
-              >
-                <Text style={styles.dayActionText}>✍️ Write</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.dayActionBtn, isRecording && styles.dayActionBtnRecording]}
-                onPress={isRecording ? stopRecording : startRecording}
-              >
-                <Text style={styles.dayActionText}>{isRecording ? '⏹ Stop' : '🎙 Speak'}</Text>
-              </TouchableOpacity>
-            </View>
-            {isRecording && (
-              <View style={styles.recordingRow}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.recordingText}>Recording... tap Stop when done</Text>
-              </View>
-            )}
-            {(writeOpen || !!dayDescLocal) && (
-              <TextInput
-                style={styles.questionInput}
-                placeholder="Tell future you about today..."
-                placeholderTextColor="rgba(255,255,255,0.25)"
-                multiline
-                value={dayDescLocal}
-                onChangeText={setDayDescLocal}
-                onBlur={() => updateEntry({ dayDescription: dayDescLocal })}
-              />
-            )}
-            {!!entry.voiceMemoUri && !isRecording && (
-              <TouchableOpacity style={styles.voicePlayRow} onPress={() => playVoiceMemo()}>
-                <Ionicons name={isPlaying ? 'stop' : 'play'} size={16} color="#4a90d9" />
-                <Text style={styles.voicePlayText}>{isPlaying ? 'Playing...' : 'Play voice memo'}</Text>
-              </TouchableOpacity>
-            )}
-
-            <View style={styles.journalDivider} />
-
-            <Text style={styles.cardLabel}>TODAY&apos;S QUESTION</Text>
-            <Text style={styles.questionText}>{dailyQuestion}</Text>
-            <TextInput
-              style={styles.questionInput}
-              placeholder="Your answer..."
-              placeholderTextColor="rgba(255,255,255,0.25)"
-              multiline
-              value={dailyAnswerLocal}
-              onChangeText={setDailyAnswerLocal}
-              onBlur={() => updateEntry({ dailyQuestion, dailyAnswer: dailyAnswerLocal })}
-            />
-
-            <View style={styles.journalDivider} />
-
-            <View style={styles.reflectionInner}>
-              <Text style={[styles.cardLabel, { marginBottom: 6 }]}>✦ FOR FUTURE YOU</Text>
-              <Text style={styles.reflectionQuestionText}>{reflectionQuestion}</Text>
-              <TextInput
-                style={styles.questionInput}
-                placeholder="Future you will read this..."
-                placeholderTextColor="rgba(255,255,255,0.25)"
-                multiline
-                value={reflectionAnswerLocal}
-                onChangeText={setReflectionAnswerLocal}
-                onBlur={() => updateEntry({ reflectionQuestion, reflectionAnswer: reflectionAnswerLocal })}
-              />
-            </View>
-          </View>
-
-          {/* 3.5 THE DETAILS GRID */}
-          <Text style={styles.detailsSectionLabel}>THE DETAILS</Text>
-          <View style={styles.detailsGrid}>
-            <AnimatedCard
-              style={[styles.tile, entry.songName ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => openModal('song', entry.songName, entry.songRating)}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>🎵</Text>
-                <Text style={[styles.tileLabel, !!entry.songName && styles.tileLabelFilled]}>Soundtrack</Text>
-              </View>
-              {entry.songName ? <Text style={styles.tileValue} numberOfLines={1}>{entry.songName}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
-            </AnimatedCard>
-
-            <AnimatedCard
-              style={[styles.tile, entry.watched ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => setShowWatchedModal(true)}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>📺</Text>
-                <Text style={[styles.tileLabel, !!entry.watched && styles.tileLabelFilled]}>Watched</Text>
-              </View>
-              {entry.watched ? <Text style={styles.tileValue} numberOfLines={1}>{entry.watched}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
-            </AnimatedCard>
-
-            <AnimatedCard
-              style={[styles.tile, entry.cookedDish ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => setShowCookedModal(true)}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>🍳</Text>
-                <Text style={[styles.tileLabel, !!entry.cookedDish && styles.tileLabelFilled]}>Cooked</Text>
-              </View>
-              {entry.cookedDish ? <Text style={styles.tileValue} numberOfLines={1}>{entry.cookedDish}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
-            </AnimatedCard>
-
-            <AnimatedCard
-              style={[styles.tile, (entry.taggedPeople || []).length > 0 ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => setShowPeopleModal(true)}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>👥</Text>
-                <Text style={[styles.tileLabel, (entry.taggedPeople || []).length > 0 && styles.tileLabelFilled]}>People</Text>
-              </View>
-              {peopleValue ? <Text style={styles.tileValue} numberOfLines={1}>{peopleValue}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
-            </AnimatedCard>
-
-            <AnimatedCard
-              style={[styles.tile, (entry.locations || []).length > 0 ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => setShowLocationsModal(true)}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>📍</Text>
-                <Text style={[styles.tileLabel, (entry.locations || []).length > 0 && styles.tileLabelFilled]}>Places</Text>
-              </View>
-              {placesValue ? <Text style={styles.tileValue} numberOfLines={1}>{placesValue}</Text> : <Text style={styles.tileEmptyText}>Add...</Text>}
-            </AnimatedCard>
-
-            <AnimatedCard
-              style={[styles.tile, entry.weatherEmoji ? styles.tileFilled : styles.tileEmpty]}
-              onPress={() => { if (!entry.weatherEmoji) fetchWeather(); }}
-            >
-              <View style={styles.tileHeaderRow}>
-                <Text style={styles.tileEmoji}>⛅</Text>
-                <Text style={[styles.tileLabel, !!entry.weatherEmoji && styles.tileLabelFilled]}>Weather</Text>
-              </View>
-              {weatherLoading ? <ActivityIndicator size="small" color="#4a90d9" />
-                : entry.weatherEmoji ? <Text style={styles.tileValue} numberOfLines={1}>{entry.weatherEmoji} {entry.weatherTemp}°C</Text>
-                  : <Text style={styles.tileEmptyText}>Tap to load</Text>}
-            </AnimatedCard>
-          </View>
-
-          {/* 3.6 FUTURE CAPSULES — compact gold row */}
-          <AnimatedCard
-            style={[styles.capsuleRow, readyCapsules.length > 0 && styles.capsuleRowReady]}
-            onPress={() => setShowCapsulesSheet(true)}
-          >
-            <Text style={styles.capsuleRowEmoji}>✉️</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.capsuleRowTitle}>Future Capsules</Text>
-              <Text style={styles.capsuleRowSubtitle}>
-                {readyCapsules.length > 0
-                  ? `${readyCapsules.length} ready to open 🎁`
-                  : sealedCapsules.length > 0
-                    ? `${sealedCapsules.length} sealed · next opens in ${nextCapsuleDays} day${nextCapsuleDays === 1 ? '' : 's'}`
-                    : 'No capsules yet'}
-              </Text>
-            </View>
-            <Text style={styles.capsuleRowCta}>Seal one →</Text>
-          </AnimatedCard>
-
-          {/* 3.7 SAVE DAY */}
-          <TouchableOpacity onPress={saveToday} activeOpacity={0.85} style={styles.saveDayButtonWrap}>
-            <LinearGradient
-              colors={savedToday ? ['rgba(74,144,217,0.35)', 'rgba(74,144,217,0.35)'] : ['#4a90d9', 'rgba(74,144,217,0.75)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.saveDayButtonGradient}
-            >
-              <Text style={styles.saveDayButtonText}>
-                {savedToday ? '✓ Saved — view your day' : 'Save today → becomes your day card'}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <View style={{ height: 110 }} />
-        </ScrollView>
-      )}
+      {/* The rebuilt Today screen (components/today). The old Today block that
+          lived here is in git history (before this change). */}
+      {activeTab === 'today' && <TodayScreen embedded />}
 
       {activeTab === 'archive' && (
         <View style={styles.container}>
@@ -2068,7 +1767,6 @@ export default function ThePresent() {
 
 const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#0b1526' },
-  tempPreviewLink: { color: '#4a90d9', fontSize: 12, fontWeight: '600', letterSpacing: 1, paddingTop: 56, paddingHorizontal: 20, paddingBottom: 4 }, // TEMP: remove before launch
   container: { flex: 1 },
   header: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#0b1526' },
   headerTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 },

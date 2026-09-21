@@ -233,6 +233,52 @@ export const loadDayEntry = async (dateKey: string): Promise<DayEntry> => {
 // ---------------------------------------------------------------------------
 
 /**
+ * Simplified OLD-style top-level fields, written alongside every new save so
+ * the old screens (Your Days archive, DayCard, the Vault) — which read only
+ * those fields and know nothing of the nested `chronicle` shape — can still see
+ * a day filled in through the new editors. The mirror of the legacy READ
+ * fallback in normaliseDayEntry, running the other way.
+ *
+ * Lossy on purpose: no "why" notes, place categories, ratings-as-stars, voice
+ * durations. Reads prefer the nested shape, so this copy never feeds back.
+ *
+ * It must overwrite EVERY field, empties included. Reading falls back to the
+ * legacy field when the nested one is empty, so a stale legacy value would
+ * bring back something the user just cleared.
+ */
+const legacyMirror = (entry: DayEntry, stored: Record<string, unknown>): Record<string, unknown> => {
+  // old locations carried a `withWho` the new shape has no room for — keep it
+  const oldLocations = Array.isArray(stored.locations)
+    ? (stored.locations as { name?: unknown; withWho?: unknown }[])
+    : [];
+  const withWhoByName = new Map<string, unknown>();
+  oldLocations.forEach((l) => {
+    if (typeof l?.name === 'string' && l.withWho) withWhoByName.set(l.name.toLowerCase(), l.withWho);
+  });
+
+  return {
+    photoUri: entry.capture.mainPhotoUri,
+    pairSelfieUri: entry.capture.selfieUri,
+    mood: entry.threeWords.mood,
+    threeWords: entry.threeWords.words.map((w) => w.word.trim()).filter(Boolean),
+    dayDescription: entry.story.text,
+    voiceMemoUri: entry.story.voiceNoteUri,
+    songName: entry.sound.listen?.title ?? '',
+    songRating: entry.sound.listen?.rating ?? 0,
+    songMeaning: entry.sound.listen?.note ?? '',
+    watched: entry.sound.watch?.title ?? '',
+    taggedPeople: entry.people.map((p) => p.name),
+    locations: entry.places
+      .filter((p) => !p.mergedIntoId)
+      .map((p) => {
+        const withWho = withWhoByName.get(p.name.toLowerCase());
+        return withWho ? { name: p.name, withWho } : { name: p.name };
+      }),
+    learned: entry.learned,
+  };
+};
+
+/**
  * Merge a partial update into the stored record. Never overwrites the whole
  * thing:
  *   - unknown fields already in storage (legacy capsules, weather, the old
@@ -271,9 +317,10 @@ const writeDayEntry = async (dateKey: string, patch: DayEntryPatch): Promise<Day
     futureNote: { ...current.futureNote, ...patch.futureNote },
   };
 
-  // spread `stored` first so every legacy field survives; the new shape goes
-  // into its own field and cannot collide with any of them
-  const record = { ...stored, [NEW_SHAPE_FIELD]: merged };
+  // spread `stored` first so untouched legacy fields (capsules, weather, the
+  // daily answers) survive; the mirror then refreshes the ones the new editors
+  // own, and the full new shape goes into its own field
+  const record = { ...stored, ...legacyMirror(merged, stored), [NEW_SHAPE_FIELD]: merged };
   await AsyncStorage.setItem(storageKey(dateKey), JSON.stringify(record));
 
   return merged;
