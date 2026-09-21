@@ -205,8 +205,19 @@ export const normaliseDayEntry = (parsed: unknown, dateKey: string): DayEntry =>
   };
 };
 
+// Every write goes through this chain, and every read waits for it.
+//
+// Editors call saveDayEntry() and dismiss straight away without waiting, and
+// Today reloads the moment the sheet closes. Without this, that reload read
+// storage while the save was still in flight and showed the OLD value — Done
+// looked like it did nothing until the next reopen re-read a finished write.
+// It also serialises saves, since each is a read-merge-write and two
+// overlapping ones could overwrite each other's fields.
+let writeChain: Promise<unknown> = Promise.resolve();
+
 /** Load a day. A missing or corrupt record returns a safe empty one. */
 export const loadDayEntry = async (dateKey: string): Promise<DayEntry> => {
+  await writeChain;
   try {
     const raw = await AsyncStorage.getItem(storageKey(dateKey));
     if (!raw) return emptyDayEntry(dateKey);
@@ -231,10 +242,13 @@ export const loadDayEntry = async (dateKey: string): Promise<DayEntry> => {
  *
  * Returns the saved record so callers can put it straight into state.
  */
-export const saveDayEntry = async (
-  dateKey: string,
-  patch: DayEntryPatch
-): Promise<DayEntry> => {
+export const saveDayEntry = (dateKey: string, patch: DayEntryPatch): Promise<DayEntry> => {
+  const run = writeChain.then(() => writeDayEntry(dateKey, patch));
+  writeChain = run.catch(() => {}); // one failed save must not block later ones
+  return run;
+};
+
+const writeDayEntry = async (dateKey: string, patch: DayEntryPatch): Promise<DayEntry> => {
   let stored: Record<string, unknown> = {};
   try {
     const raw = await AsyncStorage.getItem(storageKey(dateKey));

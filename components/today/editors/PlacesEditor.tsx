@@ -19,12 +19,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, motion, palette, space, type } from '@/constants/chronicleTheme';
+import EditorFooterProgress from '../EditorFooterProgress';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
-const SHEET_HEIGHT = Math.round(SCREEN_H * 0.92); // taller than the other editors (78%)
 
 // ---- colours with no chronicleTheme token for their exact value ----
 const W60 = 'rgba(255,255,255,0.6)';
@@ -159,9 +159,10 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
 
   const keyboardUp = keyboardHeight > 0;
   // never taller than the space left above the keyboard
-  const sheetHeight = keyboardUp
-    ? Math.min(SHEET_HEIGHT, SCREEN_H - keyboardHeight - insets.top - space.sm)
-    : SHEET_HEIGHT;
+  // Places takes the whole screen below the status bar — it has the most
+  // content of any editor and place search is the hardest input.
+  const fullHeight = SCREEN_H - insets.top - space.sm;
+  const sheetHeight = keyboardUp ? fullHeight - keyboardHeight : fullHeight;
 
   const q = query.trim();
   const taggedPills = tagged.filter((p) => !p.mergedIntoId);
@@ -173,7 +174,10 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
     const map = new Map<string, { id: string; name: string; category: PlaceCategory }>();
     KNOWN.forEach((k) => map.set(k.name.toLowerCase(), { id: k.id, name: k.name, category: k.category }));
     taggedPills.forEach((p) => map.set(p.name.toLowerCase(), { id: p.id, name: p.name, category: p.category }));
-    return Array.from(map.values());
+    // a place already on today's list has nothing left to add
+    return Array.from(map.values()).filter(
+      (ep) => !isTaggedName(ep.name) && ep.name.toLowerCase() !== pending?.name.toLowerCase()
+    );
   })();
 
   const openPicker = (name: string, suggestionId?: string) => {
@@ -195,10 +199,16 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
     if (pending.suggestionId) setSuggestions((prev) => prev.filter((s) => s.id !== pending.suggestionId));
     cancelPicker();
   };
-  const mergeInto = (targetId: string, targetCategory: PlaceCategory) => {
+  const mergeInto = (target: { id: string; name: string; category: PlaceCategory }) => {
     if (!pending) return;
-    // record the detected place as merged into an existing one — no new visible place
-    setTagged((prev) => [...prev, { id: `m-${Date.now()}`, name: pending.name, category: targetCategory, meaningful: false, mergedIntoId: targetId }]);
+    // The existing place goes on today's list as a normal pill (its category is
+    // already known, so no picker). The place being added is kept as a hidden
+    // alias pointing at it, so the day still records what was detected.
+    setTagged((prev) => [
+      ...prev,
+      { id: target.id, name: target.name, category: target.category, meaningful: false },
+      { id: `m-${Date.now()}`, name: pending.name, category: target.category, meaningful: false, mergedIntoId: target.id },
+    ]);
     if (pending.suggestionId) setSuggestions((prev) => prev.filter((s) => s.id !== pending.suggestionId));
     cancelPicker();
   };
@@ -246,15 +256,15 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
 
           <Text style={styles.title}>Where did today take you?</Text>
 
-          {/* SCROLLING CONTENT — starts below the fixed title */}
-          <ScrollView
-            style={styles.middle}
-            contentContainerStyle={styles.middleContent}
-            keyboardDismissMode="interactive"
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {/* tagged pills */}
+          {/* FIXED CHROME — tagged pills and the search field are never inside
+              a ScrollView. A TextInput buried in scrollable content depends on
+              RN's built-in scroll-to-focused-input, which races against the
+              sheet's own keyboard-driven resize: it was landing the search
+              field partly behind the keyboard, and dragging the whole scroll
+              position (suggestion cards included) up under the status bar
+              along with it. Pinning both here removes that race — only
+              suggestions/picker/recents scroll, below. */}
+          <View style={styles.fixedChrome}>
             {taggedPills.length > 0 && (
               <View style={styles.pillsRow}>
                 {taggedPills.map((p) => (
@@ -270,42 +280,33 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
               </View>
             )}
 
-            {/* FROM TODAY'S PHOTOS */}
-            {suggestions.length > 0 && (
-              <View style={styles.suggSection}>
-                <Text style={styles.sectionLabel}>From today&apos;s photos</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                  style={styles.suggScroll}
-                  contentContainerStyle={styles.suggScrollContent}
-                >
-                  {suggestions.map((s) => (
-                    <View key={s.id} style={styles.suggCard}>
-                      <View style={styles.suggThumbWrap}>
-                        <Image source={{ uri: s.photoUri }} style={styles.suggThumb} />
-                        <View style={styles.pinBadge}>
-                          <Ionicons name="location" size={12} color={palette.textPrimary} />
-                        </View>
-                      </View>
-                      <View style={styles.suggBody}>
-                        <Text style={styles.suggName} numberOfLines={1}>{s.name}</Text>
-                        <Text style={styles.suggDetail} numberOfLines={1}>{s.detail}</Text>
-                        <TouchableOpacity onPress={() => openPicker(s.name, s.id)} hitSlop={8}>
-                          <Text style={styles.suggAdd}>+ Add</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
+            <View style={styles.searchField}>
+              <Ionicons name="search-outline" size={18} color={palette.textMuted} />
+              <TextInput
+                inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
+                style={styles.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Add a place…"
+                placeholderTextColor={palette.textMuted}
+                autoCorrect={false}
+              />
+            </View>
+          </View>
 
+          {/* SCROLLING CONTENT — starts below the fixed chrome */}
+          <ScrollView
+            style={styles.middle}
+            contentContainerStyle={styles.middleContent}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {/* PICKER — only while adding a place */}
             {pending && (
               <View style={styles.picker}>
                 <View style={styles.pickerHeader}>
+                  <Text style={styles.pickerName} numberOfLines={1}>{pending.name}</Text>
                   <TouchableOpacity onPress={cancelPicker} hitSlop={8}>
                     <Ionicons name="close" size={18} color={W50} />
                   </TouchableOpacity>
@@ -323,7 +324,7 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
                       contentContainerStyle={styles.mergeScrollContent}
                     >
                       {existingPlaces.map((ep) => (
-                        <TouchableOpacity key={ep.id} style={styles.recentPill} activeOpacity={0.85} onPress={() => mergeInto(ep.id, ep.category)}>
+                        <TouchableOpacity key={ep.id} style={styles.recentPill} activeOpacity={0.85} onPress={() => mergeInto(ep)}>
                           <Text style={styles.recentPillName}>{ep.name}</Text>
                         </TouchableOpacity>
                       ))}
@@ -379,20 +380,10 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
               </View>
             )}
 
-            {/* search field */}
-            <View style={styles.searchField}>
-              <Ionicons name="search-outline" size={18} color={palette.textMuted} />
-              <TextInput
-                inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
-                style={styles.searchInput}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Add a place…"
-                placeholderTextColor={palette.textMuted}
-                autoCorrect={false}
-              />
-            </View>
-
+            {/* BROWSE — hidden while completing an add, so the screen is one or the other */}
+            {!pending && (
+              <>
+            {/* RECENT / SEARCH RESULTS — one tap, zero effort, so above the photos */}
             {q === '' ? (
               recents.length > 0 && (
                 <View style={styles.recentSection}>
@@ -435,25 +426,52 @@ export default function PlacesEditor({ onClose }: { onClose?: () => void }) {
                 )}
               </View>
             )}
+            {/* FROM TODAY'S PHOTOS */}
+            {suggestions.length > 0 && (
+              <View style={styles.suggSection}>
+                <Text style={styles.sectionLabel}>From today&apos;s photos</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  style={styles.suggScroll}
+                  contentContainerStyle={styles.suggScrollContent}
+                >
+                  {suggestions.map((s) => (
+                    <View key={s.id} style={styles.suggCard}>
+                      <View style={styles.suggThumbWrap}>
+                        <Image source={{ uri: s.photoUri }} style={styles.suggThumb} />
+                        <View style={styles.pinBadge}>
+                          <Ionicons name="location" size={12} color={palette.textPrimary} />
+                        </View>
+                      </View>
+                      <View style={styles.suggBody}>
+                        <Text style={styles.suggName} numberOfLines={1}>{s.name}</Text>
+                        <Text style={styles.suggDetail} numberOfLines={1}>{s.detail}</Text>
+                        <TouchableOpacity onPress={() => openPicker(s.name, s.id)} hitSlop={8}>
+                          <Text style={styles.suggAdd}>+ Add</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+              </>
+            )}
           </ScrollView>
 
           {/* footer */}
           <View style={styles.footer}>
             <View style={styles.footerDivider} />
-            <Text style={styles.footerNote}>This maps your days</Text>
-            <View style={styles.progressRow}>
-              {Array.from({ length: 8 }, (_, i) => (
-                <View key={i} style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]} />
-              ))}
-              <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
-            </View>
-            <TouchableOpacity
-              activeOpacity={hasPlaces ? 0.85 : 1}
-              onPress={hasPlaces ? handleDone : undefined}
-              style={[styles.doneButton, { backgroundColor: hasPlaces ? w.accent : palette.hairline }]}
-            >
-              <Text style={[styles.doneButtonText, { color: hasPlaces ? palette.textPrimary : W30 }]}>Done</Text>
-            </TouchableOpacity>
+            <EditorFooterProgress
+              note="This maps your days"
+              completed={completed}
+              accent={w.accent}
+              fontFamily={w.fontRegular}
+              collapsed={keyboardUp}
+            />
           </View>
         </Pressable>
       </View>
@@ -480,6 +498,9 @@ const styles = StyleSheet.create({
   topDone: { fontFamily: w.fontMedium, fontSize: type.body.fontSize, color: w.accent },
   title: { marginTop: space.lg, paddingHorizontal: space.xl, textAlign: 'left', fontFamily: w.fontMedium, fontSize: 22, color: palette.textPrimary },
 
+  // tagged pills + search field — fixed, never inside the ScrollView below
+  fixedChrome: { marginTop: space.sm },
+
   // fixed gap below the title so scrolling content never butts against it
   middle: { flex: 1, marginTop: space.sm },
   middleContent: { paddingBottom: space.lg },
@@ -503,12 +524,12 @@ const styles = StyleSheet.create({
   sectionLabel: { fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted, paddingHorizontal: space.xl },
 
   // from today's photos
-  suggSection: { marginTop: space.xl },
-  suggScroll: { marginTop: space.md },
+  suggSection: { marginTop: space.lg },
+  suggScroll: { marginTop: space.sm },
   suggScrollContent: { paddingHorizontal: space.xl, gap: 12 },
-  suggCard: { width: 150, borderRadius: 14, backgroundColor: INPUT_BG, overflow: 'hidden' },
-  suggThumbWrap: { width: 150, height: 90 },
-  suggThumb: { width: 150, height: 90 },
+  suggCard: { width: 120, borderRadius: 14, backgroundColor: INPUT_BG, overflow: 'hidden' },
+  suggThumbWrap: { width: 120, height: 60 },
+  suggThumb: { width: 120, height: 60 },
   pinBadge: {
     position: 'absolute',
     bottom: 6,
@@ -520,14 +541,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  suggBody: { padding: 10 },
-  suggName: { fontFamily: w.fontMedium, fontSize: 14, color: palette.textPrimary },
+  suggBody: { paddingHorizontal: 10, paddingVertical: 8 },
+  suggName: { fontFamily: w.fontMedium, fontSize: 13, color: palette.textPrimary },
   suggDetail: { marginTop: 2, fontFamily: w.fontRegular, fontSize: 11, color: W45 },
-  suggAdd: { marginTop: space.sm, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: w.accent },
+  suggAdd: { marginTop: 4, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: w.accent },
 
   // picker
   picker: { marginTop: space.md },
-  pickerHeader: { paddingHorizontal: space.xl, flexDirection: 'row', justifyContent: 'flex-end' },
+  pickerHeader: { paddingHorizontal: space.xl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pickerName: { flex: 1, marginRight: 12, fontFamily: w.fontMedium, fontSize: type.body.fontSize, color: palette.textPrimary },
   mergeLabel: { marginTop: space.sm, paddingHorizontal: space.xl, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: W50 },
   mergeScroll: { marginTop: space.sm },
   mergeScrollContent: { paddingHorizontal: space.xl, gap: 8 },
@@ -551,7 +573,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
   },
-  searchInput: { flex: 1, marginLeft: 10, fontFamily: w.fontRegular, fontSize: type.body.fontSize, color: palette.textPrimary },
+  searchInput: { flex: 1, alignSelf: 'stretch', marginLeft: 10, paddingVertical: 0, fontFamily: w.fontRegular, fontSize: type.body.fontSize, color: palette.textPrimary },
 
   // recent
   recentSection: { marginTop: space.xl },
@@ -581,10 +603,4 @@ const styles = StyleSheet.create({
   // footer
   footer: {},
   footerDivider: { height: 1, backgroundColor: palette.hairline, marginTop: space.lg },
-  footerNote: { marginTop: 14, textAlign: 'center', fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
-  progressRow: { marginTop: space.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  progressDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 6 },
-  progressText: { marginLeft: 4, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
-  doneButton: { marginTop: space.md, marginHorizontal: space.xl, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  doneButtonText: { fontFamily: w.fontMedium, fontSize: type.body.fontSize },
 });

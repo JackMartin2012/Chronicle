@@ -7,6 +7,7 @@ import {
   Animated,
   Dimensions,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,8 +26,26 @@ import {
   space,
   type,
 } from '@/constants/chronicleTheme';
+import ThreeWordsEditor from '@/components/today/ThreeWordsEditor';
+import CaptureEditor from '@/components/today/editors/CaptureEditor';
+import FutureNoteEditor from '@/components/today/editors/FutureNoteEditor';
+import LearnedEditor from '@/components/today/editors/LearnedEditor';
+import PeopleEditor from '@/components/today/editors/PeopleEditor';
+import PlacesEditor from '@/components/today/editors/PlacesEditor';
+import SoundEditor from '@/components/today/editors/SoundEditor';
+import StoryEditor from '@/components/today/editors/StoryEditor';
 import { countFilledInputs, emptyDayEntry, formatDateKey, loadDayEntry, TOTAL_INPUTS } from '@/lib/dayEntry';
-import type { DayEntry } from '@/lib/types';
+import type { DayEntry, SoundEntry, SoundSlots } from '@/lib/types';
+
+type EditorKey =
+  | 'capture'
+  | 'threeWords'
+  | 'story'
+  | 'sound'
+  | 'people'
+  | 'places'
+  | 'learned'
+  | 'futureNote';
 
 // Present-world tokens are used throughout this presentation-only screen.
 const w = getWorld('present');
@@ -121,18 +140,26 @@ function ProgressRing({ done, total }: { done: number; total: number }) {
 // PRESSABLE TILE — spring scale on press, no-op onPress
 // ---------------------------------------------------------------------------
 
+type TileHandlers = { onPress: () => void; onPressIn: () => void; onPressOut: () => void };
+
+// `plain` tiles have NO Pressable around their content: the content gets the
+// press handlers and wires them up itself. A tile that contains its own
+// horizontal scroller needs this — a Pressable ancestor becomes the touch
+// responder first and the scroller underneath never gets to pan.
 function PressableTile({
   children,
   style,
   innerStyle,
   padded = true,
   onPress,
+  plain = false,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode | ((handlers: TileHandlers) => React.ReactNode);
   style?: object;
   innerStyle?: object;
   padded?: boolean;
   onPress?: () => void;
+  plain?: boolean;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -152,15 +179,27 @@ function PressableTile({
       bounciness: motion.springBounciness,
     }).start();
 
+  const handlers: TileHandlers = { onPress: onPress ?? (() => {}), onPressIn: pressIn, onPressOut: pressOut };
+
+  if (plain) {
+    return (
+      <Animated.View style={[style, { transform: [{ scale }] }]}>
+        <View style={[styles.tile, padded && styles.tilePadded, innerStyle]}>
+          {typeof children === 'function' ? children(handlers) : children}
+        </View>
+      </Animated.View>
+    );
+  }
+
   return (
     <Animated.View style={[style, { transform: [{ scale }] }]}>
       <Pressable
-        onPress={onPress ?? (() => {})}
+        onPress={handlers.onPress}
         onPressIn={pressIn}
         onPressOut={pressOut}
         style={[styles.tile, padded && styles.tilePadded, innerStyle]}
       >
-        {children}
+        {typeof children === 'function' ? children(handlers) : children}
       </Pressable>
     </Animated.View>
   );
@@ -182,6 +221,93 @@ function EmptyBody({ icon, prompt }: { icon: keyof typeof Ionicons.glyphMap; pro
 }
 
 // ---------------------------------------------------------------------------
+// SOUND TILE — one slot shows plain; both slots swipe (paging, like the day card)
+// ---------------------------------------------------------------------------
+
+function SoundSlide({ entry, heading }: { entry: SoundEntry; heading: string }) {
+  return (
+    <View>
+      <TileHeading>{heading}</TileHeading>
+      {entry.artworkUrl ? (
+        <Image source={{ uri: entry.artworkUrl }} style={styles.albumArt} />
+      ) : (
+        <View style={[styles.albumArt, styles.albumArtEmpty]}>
+          <Ionicons
+            name={entry.mode === 'watch' ? 'film-outline' : 'musical-notes-outline'}
+            size={28}
+            color={palette.textMuted}
+          />
+        </View>
+      )}
+      <View style={styles.trackRow}>
+        <Ionicons name="play" size={14} color={w.accent} />
+        <Text style={styles.trackName} numberOfLines={1}>
+          {entry.title}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function SoundTileBody({ sound, press }: { sound: SoundSlots; press: TileHandlers }) {
+  const slides = [
+    sound.listen && { entry: sound.listen, heading: 'Listening to' },
+    sound.watch && { entry: sound.watch, heading: 'Watching' },
+  ].filter((x): x is { entry: SoundEntry; heading: string } => !!x);
+
+  const [pageW, setPageW] = useState(0);
+  const [page, setPage] = useState(0);
+
+  if (slides.length === 0) {
+    return (
+      <Pressable {...press} style={styles.soundFill}>
+        <TileHeading>Listening to</TileHeading>
+        <EmptyBody icon="headset-outline" prompt="What did you listen to or watch?" />
+      </Pressable>
+    );
+  }
+  if (slides.length === 1) {
+    return (
+      <Pressable {...press} style={styles.soundFill}>
+        <SoundSlide {...slides[0]} />
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.soundFill} onLayout={(e) => setPageW(e.nativeEvent.layout.width)}>
+      {pageW > 0 ? (
+        <ScrollView
+          horizontal
+          pagingEnabled
+          nestedScrollEnabled
+          directionalLockEnabled
+          bounces={false}
+          style={styles.soundFill}
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / pageW))}
+        >
+          {slides.map((sl) => (
+            <Pressable key={sl.heading} {...press} style={{ width: pageW }}>
+              <SoundSlide {...sl} />
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : (
+        <Pressable {...press} style={styles.soundFill}>
+          <SoundSlide {...slides[0]} />
+        </Pressable>
+      )}
+      <View style={styles.soundDots} pointerEvents="none">
+        {slides.map((sl, i) => (
+          <View key={sl.heading} style={[styles.soundDot, i === page && styles.soundDotActive]} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // SCREEN
 // ---------------------------------------------------------------------------
 
@@ -190,20 +316,31 @@ export default function TodayScreen() {
   const dateKey = formatDateKey(new Date());
 
   const [day, setDay] = useState<DayEntry>(() => emptyDayEntry(dateKey));
+  const [activeEditor, setActiveEditor] = useState<EditorKey | null>(null);
+
+  const reload = useCallback(() => {
+    let active = true;
+    loadDayEntry(dateKey).then((loaded) => {
+      if (active) setDay(loaded);
+    });
+    return () => {
+      active = false;
+    };
+  }, [dateKey]);
 
   // Reload every time the screen regains focus — coming back from an editor
   // should always show what was just saved, not a stale mount-time snapshot.
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      loadDayEntry(dateKey).then((loaded) => {
-        if (active) setDay(loaded);
-      });
-      return () => {
-        active = false;
-      };
-    }, [dateKey])
-  );
+  useFocusEffect(useCallback(() => reload(), [reload]));
+
+  // The editor's own chevron vs Done already decide whether anything gets
+  // saved — chevron just calls onClose, Done calls saveDayEntry then onClose.
+  // Closing here never saves anything itself; it only re-reads storage, so a
+  // chevron-dismiss mid-edit shows whatever was already there (nothing lost,
+  // nothing incomplete written), while a Done-dismiss shows the fresh save.
+  const closeEditor = useCallback(() => {
+    setActiveEditor(null);
+    reload();
+  }, [reload]);
 
   const now = new Date();
   const weekday = now.toLocaleDateString('en-GB', { weekday: 'long' });
@@ -226,10 +363,6 @@ export default function TodayScreen() {
 
   // ---- YOUR DAY ----
   const hasStory = day.story.text.trim() !== '' || day.story.voiceNoteUri !== '';
-
-  // ---- SOUND — one tile covers both slots; listen wins when both are filled ----
-  const soundEntry = day.sound.listen ?? day.sound.watch;
-  const soundHeading = day.sound.listen ? 'Listening to' : 'Watching';
 
   // ---- PEOPLE ----
   const peopleLine = joinNames(day.people.map((p) => p.name));
@@ -258,7 +391,11 @@ export default function TodayScreen() {
         </View>
 
         {/* 1 — TODAY'S CAPTURE */}
-        <PressableTile innerStyle={{ height: CAPTURE_HEIGHT }} padded={false}>
+        <PressableTile
+          innerStyle={{ height: CAPTURE_HEIGHT }}
+          padded={false}
+          onPress={() => setActiveEditor('capture')}
+        >
           {hasCapture ? (
             <>
               {capturePhotos[bigSlot] ? (
@@ -290,7 +427,7 @@ export default function TodayScreen() {
         </PressableTile>
 
         {/* 2 — THREE WORDS */}
-        <PressableTile>
+        <PressableTile onPress={() => setActiveEditor('threeWords')}>
           <TileHeading>Today in three words</TileHeading>
           {hasThreeWords ? (
             <Text style={styles.threeWords}>
@@ -303,7 +440,7 @@ export default function TodayScreen() {
         </PressableTile>
 
         {/* 3 — YOUR DAY */}
-        <PressableTile>
+        <PressableTile onPress={() => setActiveEditor('story')}>
           <TileHeading>Your day</TileHeading>
           {hasStory ? (
             <>
@@ -330,28 +467,20 @@ export default function TodayScreen() {
 
         {/* 4 & 5 — LISTENING TO (OR WATCHING) / WITH PEOPLE */}
         <View style={styles.halfRow}>
-          <PressableTile style={styles.halfTile} innerStyle={styles.halfTileInner}>
-            <TileHeading>{soundEntry ? soundHeading : 'Listening to'}</TileHeading>
-            {soundEntry ? (
-              <>
-                {soundEntry.artworkUrl ? (
-                  <Image source={{ uri: soundEntry.artworkUrl }} style={styles.albumArt} />
-                ) : (
-                  <View style={styles.albumArt} />
-                )}
-                <View style={styles.trackRow}>
-                  <Ionicons name="play" size={14} color={w.accent} />
-                  <Text style={styles.trackName} numberOfLines={1}>
-                    {soundEntry.title}
-                  </Text>
-                </View>
-              </>
-            ) : (
-              <EmptyBody icon="headset-outline" prompt="What did you listen to or watch?" />
-            )}
+          <PressableTile
+            style={styles.halfTile}
+            innerStyle={styles.halfTileInner}
+            onPress={() => setActiveEditor('sound')}
+            plain
+          >
+            {(press) => <SoundTileBody sound={day.sound} press={press} />}
           </PressableTile>
 
-          <PressableTile style={styles.halfTile} innerStyle={styles.halfTileInner}>
+          <PressableTile
+            style={styles.halfTile}
+            innerStyle={styles.halfTileInner}
+            onPress={() => setActiveEditor('people')}
+          >
             <TileHeading>With people</TileHeading>
             {day.people.length > 0 ? (
               <>
@@ -380,7 +509,7 @@ export default function TodayScreen() {
 
         {/* 6 & 7 — SOMETHING YOU LEARNED / PLACES */}
         <View style={styles.halfRow}>
-          <PressableTile style={styles.halfTile}>
+          <PressableTile style={styles.halfTile} onPress={() => setActiveEditor('learned')}>
             <TileHeading>Something you learned</TileHeading>
             {day.learned.trim() !== '' ? (
               <Text style={styles.dayBody} numberOfLines={4}>
@@ -391,7 +520,7 @@ export default function TodayScreen() {
             )}
           </PressableTile>
 
-          <PressableTile style={styles.halfTile}>
+          <PressableTile style={styles.halfTile} onPress={() => setActiveEditor('places')}>
             <TileHeading>Places</TileHeading>
             {placePills.length > 0 ? (
               <View style={styles.placePillsRow}>
@@ -410,7 +539,7 @@ export default function TodayScreen() {
         </View>
 
         {/* 8 — FOR FUTURE YOU */}
-        <PressableTile>
+        <PressableTile onPress={() => setActiveEditor('futureNote')}>
           <TileHeading>For future you</TileHeading>
           {day.futureNote.note.trim() !== '' ? (
             <View style={styles.futureRow}>
@@ -432,6 +561,23 @@ export default function TodayScreen() {
           <Text style={styles.dayCardButtonText}>See today as a day card</Text>
         </Pressable>
       </ScrollView>
+
+      {/* EDITOR SHEET — nested here, not pushed as a route (rule 5: never
+          stack independent modals). Only mounted while an editor is open, so
+          each open is a fresh mount and its own seed-from-storage effect runs
+          again rather than showing stale state from the last time it opened. */}
+      {activeEditor && (
+        <Modal visible transparent animationType="slide" onRequestClose={closeEditor}>
+          {activeEditor === 'capture' && <CaptureEditor onClose={closeEditor} />}
+          {activeEditor === 'threeWords' && <ThreeWordsEditor world="present" onClose={closeEditor} />}
+          {activeEditor === 'story' && <StoryEditor onClose={closeEditor} />}
+          {activeEditor === 'sound' && <SoundEditor onClose={closeEditor} />}
+          {activeEditor === 'people' && <PeopleEditor onClose={closeEditor} />}
+          {activeEditor === 'places' && <PlacesEditor onClose={closeEditor} />}
+          {activeEditor === 'learned' && <LearnedEditor onClose={closeEditor} />}
+          {activeEditor === 'futureNote' && <FutureNoteEditor onClose={closeEditor} />}
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -542,6 +688,11 @@ const styles = StyleSheet.create({
     marginTop: space.sm,
     backgroundColor: PLACEHOLDER_BLOCK,
   },
+  soundFill: { flex: 1 },
+  albumArtEmpty: { alignItems: 'center', justifyContent: 'center' },
+  soundDots: { position: 'absolute', top: 4, right: 0, flexDirection: 'row', gap: 4 },
+  soundDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: palette.ringSubtle },
+  soundDotActive: { backgroundColor: w.accent },
   trackRow: { flexDirection: 'row', alignItems: 'center', marginTop: space.sm },
   trackName: {
     ...type.bodySmall,

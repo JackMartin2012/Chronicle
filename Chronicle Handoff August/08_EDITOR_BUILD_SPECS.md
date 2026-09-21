@@ -10,7 +10,8 @@ siblings — respecifying it from scratch each time is how they drift apart.
 
 ```
 Sheet:      top corners radius 28, background #101c33
-            fixed height 78% of screen  (PlacesEditor is the exception at 92%)
+            fixed height 78% of screen  (PlacesEditor is the exception: full screen
+            minus the top safe-area inset and 8px — SCREEN_H - insets.top - 8)
 Grabber:    36 x 4, rgba(255,255,255,0.2), radius 2, centered, marginTop 8
 Top row:    marginTop 16, paddingHorizontal 24, space-between
             left  — Ionicons "chevron-down", 24px, rgba(255,255,255,0.6)
@@ -23,11 +24,15 @@ Footer:     pinned to the bottom of the sheet, hairline divider above
             completion line, 13px, rgba(255,255,255,0.4), centered
             progress row: 8 dots (5px, 6px gaps) + "This completes N of 8 for today"
                           filled #4a90d9, empty rgba(255,255,255,0.15)
-Done btn:   marginTop 12, marginHorizontal 24, height 52, radius 16
-            background #4a90d9, white Space Grotesk SemiBold 16
-            disabled: background rgba(255,255,255,0.08), text rgba(255,255,255,0.3)
-            on tap: light haptic, console.log the payload, dismiss
-Safe area:  bottom inset + 12px below the button
+Done:       THE TOP-RIGHT "Done" IS THE ONLY SAVE-AND-DISMISS CONTROL. There is NO
+            big bottom Done button — do not build one (removed from all 8 editors,
+            Sept 2026). Top Done is always enabled; on tap: Keyboard.dismiss(),
+            light haptic if anything is filled, save to storage, dismiss.
+            The chevron-down dismisses WITHOUT saving.
+Freed space: the footer is just the hairline + progress note/dots, so the
+            content area (flex: 1) gets the height the button used to take. It
+            goes to content — never re-spend it as extra padding or margin.
+Safe area:  bottom inset + 12px below the footer (12px only while the keyboard is up)
 ```
 
 **Why the fixed height matters:** the first build let the sheet size to its
@@ -43,7 +48,8 @@ it stable across states.
                        keyboardShouldPersistTaps="handled"
 3. Wrap the sheet in KeyboardAvoidingView
    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-   so the footer lifts and Done stays visible above the keyboard.
+   so the footer lifts above the keyboard. (Fixed-height sheets now track
+   keyboard height directly instead — see `09_CODE_NOTES.md`.)
 4. Chevron-down and top-right Done both call Keyboard.dismiss() first.
 5. Multiline inputs keep Return as newline — never submit.
 ```
@@ -97,7 +103,8 @@ type Place = {
 ```
 listen: itunes.apple.com/search?term=<q>&media=music&entity=song&limit=8   -> 'song'
         itunes.apple.com/search?term=<q>&media=podcast&limit=6             -> 'podcast'
-watch:  itunes.apple.com/search?term=<q>&media=movie&limit=8               -> 'film'
+watch:  en.wikipedia.org/w/api.php generator=search, gsrsearch=<q> film     -> 'film'
+        (iTunes movie search is dead — 0 results for every title; no posters here)
         itunes.apple.com/search?term=<q>&media=tvShow&entity=tvSeason&limit=6 -> 'tv'
 ```
 300ms debounce. `Promise.all`, merge, interleave so one type doesn't dominate.
@@ -113,7 +120,7 @@ Field mapping (use whichever exists):
 
 ## PLACES EDITOR REWORK SPEC (run this if not already applied — see 02)
 
-1. **Sheet height 92%** (others stay 78%).
+1. **Sheet height: full screen below the top safe-area inset** (others stay 78%).
 2. **Scroll/header fix:** chrome (grabber, top row, title) is FIXED and does not
    scroll; content scrolls independently beneath with correct top padding.
    Content must never render behind the title. Footer stays pinned.

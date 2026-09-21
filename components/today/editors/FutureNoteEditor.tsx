@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
+import EditorFooterProgress from '../EditorFooterProgress';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
@@ -28,7 +29,6 @@ const SHEET_HEIGHT = Math.round(SCREEN_H * 0.78);
 const W60 = 'rgba(255,255,255,0.6)';
 const W50 = 'rgba(255,255,255,0.5)';
 const W35 = 'rgba(255,255,255,0.35)';
-const W30 = 'rgba(255,255,255,0.3)';
 const W20 = 'rgba(255,255,255,0.2)';
 const W10 = 'rgba(255,255,255,0.1)';
 const W04 = 'rgba(255,255,255,0.04)';
@@ -81,7 +81,9 @@ export default function FutureNoteEditor({
       if (stored.when) setWhen(stored.when);
       // a picked date is only recoverable from the resolved surface key
       if (stored.when === 'date' && stored.surfaceKey) {
-        setPickedDate(new Date(`${stored.surfaceKey}T12:00:00`));
+        const seeded = new Date(`${stored.surfaceKey}T12:00:00`);
+        setPickedDate(seeded);
+        setViewMonth({ y: seeded.getFullYear(), m: seeded.getMonth() });
       }
       setCompleted(countFilledInputs(day));
     });
@@ -97,6 +99,13 @@ export default function FutureNoteEditor({
     d.setFullYear(d.getFullYear() + 1);
     return d;
   });
+  // which month the calendar is showing — separate from the picked day, so
+  // browsing months never moves (or overflows) the selection
+  const [viewMonth, setViewMonth] = useState(() => ({
+    y: new Date().getFullYear() + 1,
+    m: new Date().getMonth(),
+  }));
+  const scrollRef = useRef<ScrollView>(null);
 
   const hasNote = note.trim().length > 0;
 
@@ -125,12 +134,30 @@ export default function FutureNoteEditor({
     ? Math.min(SHEET_HEIGHT, SCREEN_H - keyboardHeight - insets.top - space.sm)
     : SHEET_HEIGHT;
 
+  // Notes go to the FUTURE: today and earlier are not selectable.
+  const earliest = new Date();
+  earliest.setHours(12, 0, 0, 0);
+  earliest.setDate(earliest.getDate() + 1);
+  const earliestKey = formatDateKey(earliest);
+
   const stepMonth = (delta: number) =>
-    setPickedDate((prev) => {
-      const d = new Date(prev);
-      d.setMonth(d.getMonth() + delta);
-      return d;
+    setViewMonth((v) => {
+      const d = new Date(v.y, v.m + delta, 1);
+      return { y: d.getFullYear(), m: d.getMonth() };
     });
+  const canGoBack =
+    viewMonth.y > earliest.getFullYear() ||
+    (viewMonth.y === earliest.getFullYear() && viewMonth.m > earliest.getMonth());
+
+  // Monday-first grid: leading blanks, then 1..N, padded out to whole weeks
+  const leadingBlanks = (new Date(viewMonth.y, viewMonth.m, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(viewMonth.y, viewMonth.m + 1, 0).getDate();
+  const cells: (number | null)[] = [
+    ...Array.from({ length: leadingBlanks }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+  const pickedKey = formatDateKey(pickedDate);
 
   const confirmLine =
     when === 'month'
@@ -208,6 +235,7 @@ export default function FutureNoteEditor({
 
         {/* middle (scrolls) */}
         <ScrollView
+          ref={scrollRef}
           style={styles.middle}
           contentContainerStyle={styles.middleContent}
           keyboardDismissMode="interactive"
@@ -284,16 +312,61 @@ export default function FutureNoteEditor({
           </View>
 
           {when === 'date' && (
-            <View style={styles.stepper}>
-              <TouchableOpacity onPress={() => stepMonth(-1)} hitSlop={10}>
-                <Ionicons name="chevron-back" size={20} color={w.accent} />
-              </TouchableOpacity>
-              <Text style={styles.stepperText}>
-                {pickedDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
-              </Text>
-              <TouchableOpacity onPress={() => stepMonth(1)} hitSlop={10}>
-                <Ionicons name="chevron-forward" size={20} color={w.accent} />
-              </TouchableOpacity>
+            <View
+              style={styles.calendar}
+              onLayout={(e) =>
+                scrollRef.current?.scrollTo({ y: Math.max(0, e.nativeEvent.layout.y - 96), animated: true })
+              }
+            >
+              <View style={styles.calHeader}>
+                <TouchableOpacity onPress={() => stepMonth(-1)} disabled={!canGoBack} hitSlop={10}>
+                  <Ionicons name="chevron-back" size={20} color={canGoBack ? w.accent : W20} />
+                </TouchableOpacity>
+                <Text style={styles.calMonth}>
+                  {new Date(viewMonth.y, viewMonth.m, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                </Text>
+                <TouchableOpacity onPress={() => stepMonth(1)} hitSlop={10}>
+                  <Ionicons name="chevron-forward" size={20} color={w.accent} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.calWeek}>
+                {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                  <Text key={i} style={styles.calWeekday}>{d}</Text>
+                ))}
+              </View>
+
+              <View style={styles.calGrid}>
+                {cells.map((day, i) => {
+                  if (day === null) return <View key={i} style={styles.calCell} />;
+                  const key = formatDateKey(new Date(viewMonth.y, viewMonth.m, day, 12));
+                  const disabled = key < earliestKey;
+                  const selected = key === pickedKey;
+                  return (
+                    <TouchableOpacity
+                      key={i}
+                      style={styles.calCell}
+                      disabled={disabled}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setPickedDate(new Date(viewMonth.y, viewMonth.m, day, 12));
+                      }}
+                    >
+                      <View style={[styles.calDay, selected && { backgroundColor: w.accent }]}>
+                        <Text
+                          style={[
+                            styles.calDayText,
+                            { color: selected ? palette.textPrimary : disabled ? W20 : palette.textPrimary },
+                          ]}
+                        >
+                          {day}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
           )}
 
@@ -314,23 +387,13 @@ export default function FutureNoteEditor({
         {/* footer */}
         <View style={styles.footer}>
           <View style={styles.footerDivider} />
-          <Text style={styles.footerNote}>This becomes a note to future you</Text>
-          <View style={styles.progressRow}>
-            {Array.from({ length: 8 }, (_, i) => (
-              <View
-                key={i}
-                style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
-              />
-            ))}
-            <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
-          </View>
-          <TouchableOpacity
-            activeOpacity={hasNote ? 0.85 : 1}
-            onPress={hasNote ? handleDone : undefined}
-            style={[styles.doneButton, { backgroundColor: hasNote ? w.accent : palette.hairline }]}
-          >
-            <Text style={[styles.doneButtonText, { color: hasNote ? palette.textPrimary : W30 }]}>Done</Text>
-          </TouchableOpacity>
+          <EditorFooterProgress
+            note="This becomes a note to future you"
+            completed={completed}
+            accent={w.accent}
+            fontFamily={w.fontRegular}
+            collapsed={keyboardUp}
+          />
         </View>
         </Pressable>
       </View>
@@ -430,8 +493,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipText: { fontFamily: w.fontRegular, fontSize: 14 },
-  stepper: { marginTop: space.md, paddingHorizontal: space.xl, flexDirection: 'row', alignItems: 'center' },
-  stepperText: { marginHorizontal: 16, fontFamily: w.fontMedium, fontSize: type.bodySmall.fontSize, color: palette.textPrimary },
+  calendar: { marginTop: space.md, marginHorizontal: space.xl, padding: 12, borderRadius: 16, backgroundColor: '#16233d' },
+  calHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
+  calMonth: { fontFamily: w.fontMedium, fontSize: type.bodySmall.fontSize, color: palette.textPrimary },
+  calWeek: { marginTop: space.sm, flexDirection: 'row' },
+  calWeekday: { width: `${100 / 7}%`, textAlign: 'center', fontFamily: w.fontRegular, fontSize: 12, color: palette.textMuted },
+  calGrid: { marginTop: 4, flexDirection: 'row', flexWrap: 'wrap' },
+  calCell: { width: `${100 / 7}%`, height: 40, alignItems: 'center', justifyContent: 'center' },
+  calDay: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  calDayText: { fontFamily: w.fontRegular, fontSize: 14 },
   confirmLine: {
     marginTop: space.md,
     paddingHorizontal: space.xl,
@@ -453,23 +523,4 @@ const styles = StyleSheet.create({
   // footer
   footer: {},
   footerDivider: { height: 1, backgroundColor: palette.hairline, marginTop: space.lg },
-  footerNote: {
-    marginTop: 14,
-    textAlign: 'center',
-    fontFamily: w.fontRegular,
-    fontSize: type.label.fontSize,
-    color: palette.textMuted,
-  },
-  progressRow: { marginTop: space.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  progressDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 6 },
-  progressText: { marginLeft: 4, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
-  doneButton: {
-    marginTop: space.md,
-    marginHorizontal: space.xl,
-    height: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneButtonText: { fontFamily: w.fontMedium, fontSize: type.body.fontSize },
 });

@@ -63,7 +63,8 @@ Every editor is a bottom sheet, Present world, and follows:
   can skip, never a required second field — frictionless input is what makes
   people actually fill days in
 - Suggestions drawn from the user's OWN input (never guessing their feelings)
-- A completion line + an 8-dot progress row + one flat Done button
+- A completion line + an 8-dot progress row. Save-and-dismiss is the top-right
+  Done ONLY — there is no bottom Done button (removed Sept 2026)
 - Micro-interactions: settle springs, selection scale/glow, haptic on Done
 
 **Exact as-built numbers are in `08_EDITOR_BUILD_SPECS.md`. Read that before

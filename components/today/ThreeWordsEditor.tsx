@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -17,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
+import EditorFooterProgress from '@/components/today/EditorFooterProgress';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '@/components/today/KeyboardDismissBar';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 import { MOOD_PALETTE, suggestMoods } from '@/lib/moodSuggestions';
@@ -36,7 +36,6 @@ const SHEET_HEIGHT = Math.round(SCREEN_H * 0.78); // shared chrome — 78%, Plac
 
 // ---- colours with no chronicleTheme token for their exact value ----
 const W60 = 'rgba(255,255,255,0.6)';
-const W30 = 'rgba(255,255,255,0.3)';
 const W20 = 'rgba(255,255,255,0.2)';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 
@@ -99,6 +98,32 @@ export default function ThreeWordsEditor({ world = 'present', onClose = () => {}
     };
   }, []);
 
+  // The sheet is FIXED-HEIGHT and bottom-anchored, so KeyboardAvoidingView's
+  // padding behaviour translates the whole thing upward and takes the title and
+  // top row off screen. Instead the keyboard height is tracked directly: the
+  // sheet's top edge stays put, its bottom sits on the keyboard, and the words
+  // ScrollView absorbs the difference. Ported from StoryEditor.tsx — this file
+  // was missed in the first pass since it lives outside components/today/editors/.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) =>
+      setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  const keyboardUp = keyboardHeight > 0;
+  // never taller than the space left above the keyboard
+  const sheetHeight = keyboardUp
+    ? Math.min(SHEET_HEIGHT, SCREEN_H - keyboardHeight - insets.top - space.sm)
+    : SHEET_HEIGHT;
+
   const setWord = (index: number, word: string) =>
     setSlots((prev) => prev.map((s, i) => (i === index ? { ...s, word } : s)));
   const setWhy = (index: number, why: string) =>
@@ -135,15 +160,22 @@ export default function ThreeWordsEditor({ world = 'present', onClose = () => {}
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.root}
-    >
+    <View style={styles.root}>
       {/* dimmed content behind, tap to dismiss */}
       <Pressable style={styles.backdrop} onPress={onClose} />
 
       {/* THE SHEET */}
-      <View style={[styles.sheet, { backgroundColor: w.surface, paddingBottom: insets.bottom + 12 }]}>
+      <View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: w.surface,
+            height: sheetHeight,
+            marginBottom: keyboardHeight,
+            paddingBottom: keyboardUp ? 12 : insets.bottom + 12,
+          },
+        ]}
+      >
         <Pressable style={styles.sheetInner} onPress={Keyboard.dismiss} accessible={false}>
           {/* grabber */}
           <View style={styles.grabber} />
@@ -187,6 +219,8 @@ export default function ThreeWordsEditor({ world = 'present', onClose = () => {}
                   returnKeyType="done"
                   textAlign="center"
                   maxLength={18}
+                  textContentType="none"
+                  autoComplete="off"
                 />
 
                 {/* the reason is a BONUS under a written word, never a second
@@ -205,6 +239,8 @@ export default function ThreeWordsEditor({ world = 'present', onClose = () => {}
                         textAlign="center"
                         returnKeyType="done"
                         autoFocus={item.why === ''}
+                        textContentType="none"
+                        autoComplete="off"
                       />
                       <Ionicons
                         name="pencil"
@@ -304,39 +340,18 @@ export default function ThreeWordsEditor({ world = 'present', onClose = () => {}
           {/* footer */}
           <View style={styles.footer}>
             <View style={styles.footerDivider} />
-            <Text style={[styles.footerNote, { fontFamily: w.fontRegular }]}>
-              This becomes your day card
-            </Text>
-            <View style={styles.progressRow}>
-              {Array.from({ length: 8 }, (_, i) => (
-                <View
-                  key={i}
-                  style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
-                />
-              ))}
-              <Text style={[styles.progressText, { fontFamily: w.fontRegular }]}>
-                {completed} of 8 filled in today
-              </Text>
-            </View>
-            <TouchableOpacity
-              activeOpacity={hasAnything ? 0.85 : 1}
-              onPress={hasAnything ? handleDone : undefined}
-              style={[styles.doneButton, { backgroundColor: hasAnything ? w.accent : palette.hairline }]}
-            >
-              <Text
-                style={[
-                  styles.doneButtonText,
-                  { fontFamily: w.fontMedium, color: hasAnything ? palette.textPrimary : W30 },
-                ]}
-              >
-                Done
-              </Text>
-            </TouchableOpacity>
+            <EditorFooterProgress
+              note="This becomes your day card"
+              completed={completed}
+              accent={w.accent}
+              fontFamily={w.fontRegular}
+              collapsed={keyboardUp}
+            />
           </View>
         </Pressable>
       </View>
       <KeyboardDismissBar />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -346,7 +361,7 @@ const styles = StyleSheet.create({
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: BACKDROP },
 
   sheet: {
-    height: SHEET_HEIGHT,
+    // height is set per-render — it shrinks to sit above the keyboard
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
   },
@@ -509,27 +524,4 @@ const styles = StyleSheet.create({
   // ---- FOOTER — values copied from SoundEditor.tsx / LearnedEditor.tsx ----
   footer: {},
   footerDivider: { height: 1, backgroundColor: palette.hairline, marginTop: space.lg },
-  footerNote: {
-    marginTop: 14,
-    textAlign: 'center',
-    fontSize: type.label.fontSize,
-    color: palette.textMuted,
-  },
-  progressRow: {
-    marginTop: space.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 6 },
-  progressText: { marginLeft: 4, fontSize: type.label.fontSize, color: palette.textMuted },
-  doneButton: {
-    marginTop: space.md,
-    marginHorizontal: space.xl,
-    height: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneButtonText: { fontSize: type.body.fontSize },
 });

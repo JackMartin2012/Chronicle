@@ -54,7 +54,8 @@ away. When you fix one, tick it here AND in its source file.
       height to the People tile beside it. *(04:42)*
 - [ ] The "See today as a day card" button needs safe-area padding above the
       tab bar. *(04:43)*
-- [ ] **The sound tile only ever shows one of the two slots.** `DayEntry.sound`
+- [x] **FIXED Sept 2026 — the sound tile now swipes between Listen and Watch when both exist** (paging scroller + two dots in `TodayScreen.tsx`). Original note follows.
+- ~~**The sound tile only ever shows one of the two slots.** `DayEntry.sound`
       holds independent `listen` and `watch` entries, but Today's mosaic has a
       single "Listening to" tile. When both are filled, `listen` takes
       priority and `watch` is invisible on Today — even though
@@ -62,7 +63,7 @@ away. When you fix one, tick it here AND in its source file.
       ring can read filled while a whole entry never renders anywhere on the
       screen. Not a wiring bug: Today needs a second tile (or a combined one)
       before both slots can be seen, which is a layout decision, not something
-      to patch in the wiring pass. *(new, wiring pass step 3b)*
+      to patch in the wiring pass. *(new, wiring pass step 3b)*~~
 
 ---
 
@@ -84,6 +85,14 @@ away. When you fix one, tick it here AND in its source file.
       `marginBottom: keyboardHeight` so it rests on the keyboard, and let the
       content area absorb the difference. **Port that approach to the other six
       and update the pattern in `08_EDITOR_BUILD_SPECS.md`.** *(new, Aug 2026)*
+
+### Sound
+- [ ] **KNOWN LIMITATION — film entries have no poster.** Film search uses
+      Wikipedia (iTunes movie search returns nothing any more), and Wikipedia
+      doesn't carry poster artwork, so films show a placeholder icon in the
+      results, the editor hero and the Today tile. Deliberately left as-is: a
+      TMDB key would fix it, but that's a standing API-key commitment already
+      ruled out, and this is a cosmetic gap. **Nothing to build.** *(Sept 2026)*
 
 ### People (source: 04_TODAY_AND_EDITORS.md)
 - [ ] Tagged and Recent rows look too similar on device — a "Tagged" label above
@@ -179,6 +188,29 @@ description terminates the app the moment it asks. Verify with
 ---
 
 ## CLOSED THIS SESSION
+
+- [x] **Double-Done bug (all 8 editors)** — Done called `saveDayEntry` without
+      waiting, then dismissed; Today's `reload()` ran while the write was still
+      in flight and read the OLD value. Fixed once in `lib/dayEntry.ts`: all
+      writes go through one promise chain and `loadDayEntry` awaits it. Don't
+      re-patch editors; any new reader/writer must use these two functions.
+- [x] **Sound Watch had no films** — iTunes Search now returns ZERO movies for
+      every title (music + TV still work). Film search moved to Wikipedia's free
+      keyless API (`SoundEditor.tsx`, `parseWikiFilms`): good titles/year/
+      director, but almost never a poster (non-free). TMDB has posters but needs
+      an API key — revisit if posters matter.
+
+- [x] **Bottom Done button removed from all 8 editors** (Sept 2026). Top-right
+      Done is the sole save-and-dismiss control; `08` shared chrome updated.
+      Places sheet is now full height below the safe-area inset.
+- [x] **Sound editor reopened blank** — seeding worked, but the hero's
+      `heroAnim` opacity starts at 0 and only `selectResult` animated it to 1, so
+      a seeded entry rendered invisible. Seeding now sets it to 1. Any editor
+      that fades content in via an Animated.Value must set it on seed too.
+- [x] **Three Words: iOS AutoFill pill** covering mood suggestions —
+      `textContentType="none"` + `autoComplete="off"` on the word and why inputs.
+- [x] **Places**: Recent above "From today's photos"; photo cards shrunk; add-
+      picker pinned to the top of the scroll; search placeholder alignment fix.
 
 - [x] **Places editor rework verified as applied** — 02 and 00 both flagged this
       as unconfirmed. Checked the committed file: 92% sheet height, eight

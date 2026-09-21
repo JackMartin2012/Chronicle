@@ -23,6 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
+import EditorFooterProgress from '../EditorFooterProgress';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 import { captureFileName, persistFile } from '@/lib/media';
 
@@ -46,13 +47,16 @@ const BACKDROP = 'rgba(0,0,0,0.55)';
 // above the controls even in a 90% sheet.
 const MAX_FRAME_WIDTH = SCREEN_W - 24 * 2;
 
+// room for the close button / label row above the camera preview
+const CAMERA_TOP_ROW = 52;
+
 // everything in the middle that isn't the frame: top/bottom padding plus the
 // button row. Subtracted from the measured height to cap the frame's WIDTH, so
 // the frame never has to be told a height.
 const CONTROLS_BLOCK = 100;
 
 // first-paint estimate, corrected by onLayout on the very next frame
-const ESTIMATED_MIDDLE = SHEET_HEIGHT - 100 - 186; // chrome ≈ 100, footer ≈ 186
+const ESTIMATED_MIDDLE = SHEET_HEIGHT - 100 - 122; // chrome ≈ 100, footer ≈ 122
 
 // The two frames must read as separate objects — a photo with something sitting
 // ON it, not one continuous shape. Same tone for both was the reason they
@@ -519,23 +523,13 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
           {/* footer */}
           <View style={styles.footer}>
             <View style={styles.footerDivider} />
-            <Text style={styles.footerNote}>This becomes your day card cover</Text>
-            <View style={styles.progressRow}>
-              {Array.from({ length: 8 }, (_, i) => (
-                <View
-                  key={i}
-                  style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
-                />
-              ))}
-              <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
-            </View>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={handleDone}
-              style={[styles.doneButton, { backgroundColor: w.accent }]}
-            >
-              <Text style={[styles.doneButtonText, { color: palette.textPrimary }]}>Done</Text>
-            </TouchableOpacity>
+            <EditorFooterProgress
+              note="This becomes your day card cover"
+              completed={completed}
+              accent={w.accent}
+              fontFamily={w.fontRegular}
+              collapsed={keyboardUp}
+            />
           </View>
         </Pressable>
       </View>
@@ -551,6 +545,12 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
       >
         <View style={styles.cameraRoot}>
           {cameraSlot && (
+            // The live preview is boxed to 3:4 — the shape of the file
+            // takePictureAsync saves. Full-screen, the preview layer fills the
+            // whole (much taller) screen and crops the sides, so the saved photo
+            // showed more than the viewfinder did. Same box for the review image
+            // below, so viewfinder, review and saved file are one shape.
+            <View style={[styles.cameraPreview, { marginTop: insets.top + CAMERA_TOP_ROW }]}>
             <CameraView
               ref={cameraRef}
               style={StyleSheet.absoluteFill}
@@ -561,6 +561,7 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
               // shoot() must NOT also flip — see the note there.
               mirror={cameraSlot === 'selfie'}
             />
+            </View>
           )}
 
           {pending ? (
@@ -570,7 +571,7 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
             <View style={StyleSheet.absoluteFill}>
               <Image
                 source={{ uri: pending }}
-                style={StyleSheet.absoluteFill}
+                style={[styles.cameraPreview, { marginTop: insets.top + CAMERA_TOP_ROW }]}
                 resizeMode="cover"
               />
 
@@ -782,6 +783,8 @@ const styles = StyleSheet.create({
 
   // THE CAMERA
   cameraRoot: { flex: 1, backgroundColor: '#000000' },
+  // 3:4 = the file's shape; width-driven so the height can never disagree
+  cameraPreview: { width: '100%', aspectRatio: 3 / 4, overflow: 'hidden' },
   cameraTopRow: {
     position: 'absolute',
     top: 0,
@@ -892,23 +895,4 @@ const styles = StyleSheet.create({
   // FOOTER
   footer: {},
   footerDivider: { height: 1, backgroundColor: palette.hairline, marginTop: space.lg },
-  footerNote: {
-    marginTop: 14,
-    textAlign: 'center',
-    fontFamily: w.fontRegular,
-    fontSize: type.label.fontSize,
-    color: palette.textMuted,
-  },
-  progressRow: { marginTop: space.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  progressDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 6 },
-  progressText: { marginLeft: 4, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
-  doneButton: {
-    marginTop: space.md,
-    marginHorizontal: space.xl,
-    height: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneButtonText: { fontFamily: w.fontMedium, fontSize: type.body.fontSize },
 });

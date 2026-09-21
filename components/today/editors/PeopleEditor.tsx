@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, motion, palette, space, type } from '@/constants/chronicleTheme';
+import EditorFooterProgress from '../EditorFooterProgress';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
@@ -27,7 +28,6 @@ const SHEET_HEIGHT = Math.round(SCREEN_H * 0.78);
 
 // ---- colours with no chronicleTheme token for their exact value ----
 const W60 = 'rgba(255,255,255,0.6)';
-const W30 = 'rgba(255,255,255,0.3)';
 const W20 = 'rgba(255,255,255,0.2)';
 const INPUT_BG = '#16233d';
 const BACKDROP = 'rgba(0,0,0,0.55)';
@@ -208,15 +208,13 @@ export default function PeopleEditor({ onClose }: { onClose?: () => void }) {
           {/* title */}
           <Text style={styles.title}>Who were you with?</Text>
 
-          {/* middle */}
-          <ScrollView
-            style={styles.middle}
-            contentContainerStyle={styles.middleContent}
-            keyboardDismissMode="interactive"
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {/* tagged row */}
+          {/* middle — tagged row and search field are FIXED here, never inside
+              a ScrollView. A TextInput buried in scrollable content depends on
+              RN's built-in scroll-to-focused-input, which races against the
+              sheet's own keyboard-driven resize and was landing the search
+              field partly behind the keyboard. Pinning it removes that race:
+              only the recents/results list below it scrolls. */}
+          <View style={styles.middle}>
             {tagged.length > 0 && (
               <View style={styles.taggedRow}>
                 {tagged.map((p) => (
@@ -233,7 +231,6 @@ export default function PeopleEditor({ onClose }: { onClose?: () => void }) {
               </View>
             )}
 
-            {/* search field */}
             <View style={styles.searchField}>
               <Ionicons name="search-outline" size={18} color={palette.textMuted} />
               <TextInput
@@ -247,68 +244,69 @@ export default function PeopleEditor({ onClose }: { onClose?: () => void }) {
               />
             </View>
 
-            {q === '' ? (
-              recents.length > 0 && (
-                <View style={styles.recentSection}>
-                  <Text style={styles.sectionLabel}>Recent</Text>
-                  <View style={styles.recentRow}>
-                    {recents.map((p) => (
-                      <TouchableOpacity key={p.id} style={styles.recentItem} onPress={() => tag(p)} activeOpacity={0.8}>
-                        <Avatar person={p} size={48} />
-                        <Text style={styles.recentName} numberOfLines={1}>{p.name}</Text>
-                      </TouchableOpacity>
-                    ))}
+            <ScrollView
+              style={styles.resultsScroll}
+              contentContainerStyle={styles.middleContent}
+              keyboardDismissMode="interactive"
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {q === '' ? (
+                recents.length > 0 && (
+                  <View style={styles.recentSection}>
+                    <Text style={styles.sectionLabel}>Recent</Text>
+                    <View style={styles.recentRow}>
+                      {recents.map((p) => (
+                        <TouchableOpacity key={p.id} style={styles.recentItem} onPress={() => tag(p)} activeOpacity={0.8}>
+                          <Avatar person={p} size={48} />
+                          <Text style={styles.recentName} numberOfLines={1}>{p.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   </View>
+                )
+              ) : (
+                <View style={styles.resultsList}>
+                  {matches.map((p, i) => (
+                    <AnimatedCard
+                      key={p.id}
+                      onPress={() => tagAndClear(p)}
+                      style={[styles.resultRow, (i < matches.length - 1 || showAddNew) && styles.resultDivider]}
+                    >
+                      <View style={styles.resultInner}>
+                        <Avatar person={p} size={40} />
+                        <Text style={styles.resultName}>{p.name}</Text>
+                      </View>
+                    </AnimatedCard>
+                  ))}
+                  {showAddNew && (
+                    <AnimatedCard onPress={addNew} style={styles.resultRow}>
+                      <View style={styles.resultInner}>
+                        <View style={styles.addCircle}>
+                          <Ionicons name="add" size={20} color={w.accent} />
+                        </View>
+                        <View style={styles.addTextWrap}>
+                          <Text style={styles.resultName}>Add &quot;{q}&quot; as someone new</Text>
+                          <Text style={styles.addSub}>You can add their photo later</Text>
+                        </View>
+                      </View>
+                    </AnimatedCard>
+                  )}
                 </View>
-              )
-            ) : (
-              <View style={styles.resultsList}>
-                {matches.map((p, i) => (
-                  <AnimatedCard
-                    key={p.id}
-                    onPress={() => tagAndClear(p)}
-                    style={[styles.resultRow, (i < matches.length - 1 || showAddNew) && styles.resultDivider]}
-                  >
-                    <View style={styles.resultInner}>
-                      <Avatar person={p} size={40} />
-                      <Text style={styles.resultName}>{p.name}</Text>
-                    </View>
-                  </AnimatedCard>
-                ))}
-                {showAddNew && (
-                  <AnimatedCard onPress={addNew} style={styles.resultRow}>
-                    <View style={styles.resultInner}>
-                      <View style={styles.addCircle}>
-                        <Ionicons name="add" size={20} color={w.accent} />
-                      </View>
-                      <View style={styles.addTextWrap}>
-                        <Text style={styles.resultName}>Add &quot;{q}&quot; as someone new</Text>
-                        <Text style={styles.addSub}>You can add their photo later</Text>
-                      </View>
-                    </View>
-                  </AnimatedCard>
-                )}
-              </View>
-            )}
-          </ScrollView>
+              )}
+            </ScrollView>
+          </View>
 
           {/* footer */}
           <View style={styles.footer}>
             <View style={styles.footerDivider} />
-            <Text style={styles.footerNote}>This builds your people</Text>
-            <View style={styles.progressRow}>
-              {Array.from({ length: 8 }, (_, i) => (
-                <View key={i} style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]} />
-              ))}
-              <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
-            </View>
-            <TouchableOpacity
-              activeOpacity={tagged.length > 0 ? 0.85 : 1}
-              onPress={tagged.length > 0 ? handleDone : undefined}
-              style={[styles.doneButton, { backgroundColor: tagged.length > 0 ? w.accent : palette.hairline }]}
-            >
-              <Text style={[styles.doneButtonText, { color: tagged.length > 0 ? palette.textPrimary : W30 }]}>Done</Text>
-            </TouchableOpacity>
+            <EditorFooterProgress
+              note="This builds your people"
+              completed={completed}
+              accent={w.accent}
+              fontFamily={w.fontRegular}
+              collapsed={keyboardUp}
+            />
           </View>
         </Pressable>
       </View>
@@ -336,10 +334,11 @@ const styles = StyleSheet.create({
   title: { marginTop: space.lg, paddingHorizontal: space.xl, textAlign: 'left', fontFamily: w.fontMedium, fontSize: 22, color: palette.textPrimary },
 
   middle: { flex: 1 },
+  resultsScroll: { flex: 1 },
   middleContent: { paddingBottom: space.lg },
 
   // tagged row
-  taggedRow: { marginTop: space.lg, paddingHorizontal: space.xl, flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  taggedRow: { marginTop: space.md, paddingHorizontal: space.xl, flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   taggedItem: { alignItems: 'center', width: 64 },
   avatarWrap: { width: 56, height: 56 },
   removeBadge: {
@@ -359,7 +358,7 @@ const styles = StyleSheet.create({
 
   // search
   searchField: {
-    marginTop: space.lg,
+    marginTop: space.md,
     marginHorizontal: space.xl,
     height: 48,
     borderRadius: 14,
@@ -371,11 +370,11 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, marginLeft: 10, fontFamily: w.fontRegular, fontSize: type.body.fontSize, color: palette.textPrimary },
 
   // recent
-  recentSection: { marginTop: space.xl, paddingHorizontal: space.xl },
+  recentSection: { marginTop: space.base, paddingHorizontal: space.xl },
   sectionLabel: { fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
-  recentRow: { marginTop: space.md, flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  recentItem: { alignItems: 'center', width: 56 },
-  recentName: { marginTop: 6, fontFamily: w.fontRegular, fontSize: 11, color: palette.textSecondary, textAlign: 'center' },
+  recentRow: { marginTop: space.sm, flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  recentItem: { alignItems: 'center', width: 64 },
+  recentName: { marginTop: 6, width: 64, fontFamily: w.fontRegular, fontSize: 12, lineHeight: 16, color: palette.textSecondary, textAlign: 'center' },
 
   // results
   resultsList: { marginTop: space.sm },
@@ -390,10 +389,4 @@ const styles = StyleSheet.create({
   // footer
   footer: {},
   footerDivider: { height: 1, backgroundColor: palette.hairline, marginTop: space.lg },
-  footerNote: { marginTop: 14, textAlign: 'center', fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
-  progressRow: { marginTop: space.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  progressDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 6 },
-  progressText: { marginLeft: 4, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
-  doneButton: { marginTop: space.md, marginHorizontal: space.xl, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  doneButtonText: { fontFamily: w.fontMedium, fontSize: type.body.fontSize },
 });

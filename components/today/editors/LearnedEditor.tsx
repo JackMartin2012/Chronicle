@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
+import EditorFooterProgress from '../EditorFooterProgress';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
@@ -26,7 +27,6 @@ const SHEET_HEIGHT = Math.round(SCREEN_H * 0.78);
 // ---- colours with no chronicleTheme token for their exact value ----
 const W60 = 'rgba(255,255,255,0.6)';
 const W35 = 'rgba(255,255,255,0.35)';
-const W30 = 'rgba(255,255,255,0.3)';
 const W20 = 'rgba(255,255,255,0.2)';
 const W06 = 'rgba(255,255,255,0.06)';
 const BACKDROP = 'rgba(0,0,0,0.55)';
@@ -170,23 +170,13 @@ export default function LearnedEditor({ onClose }: { onClose?: () => void }) {
         {/* footer */}
         <View style={styles.footer}>
           <View style={styles.footerDivider} />
-          <Text style={styles.footerNote}>This joins your things learned</Text>
-          <View style={styles.progressRow}>
-            {Array.from({ length: 8 }, (_, i) => (
-              <View
-                key={i}
-                style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
-              />
-            ))}
-            <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
-          </View>
-          <TouchableOpacity
-            activeOpacity={hasText ? 0.85 : 1}
-            onPress={hasText ? handleDone : undefined}
-            style={[styles.doneButton, { backgroundColor: hasText ? w.accent : palette.hairline }]}
-          >
-            <Text style={[styles.doneButtonText, { color: hasText ? palette.textPrimary : W30 }]}>Done</Text>
-          </TouchableOpacity>
+          <EditorFooterProgress
+            note="This joins your things learned"
+            completed={completed}
+            accent={w.accent}
+            fontFamily={w.fontRegular}
+            collapsed={keyboardUp}
+          />
         </View>
         </Pressable>
       </View>
@@ -246,23 +236,4 @@ const styles = StyleSheet.create({
 
   footer: {},
   footerDivider: { height: 1, backgroundColor: palette.hairline, marginTop: space.lg },
-  footerNote: {
-    marginTop: 14,
-    textAlign: 'center',
-    fontFamily: w.fontRegular,
-    fontSize: type.label.fontSize,
-    color: palette.textMuted,
-  },
-  progressRow: { marginTop: space.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  progressDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 6 },
-  progressText: { marginLeft: 4, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
-  doneButton: {
-    marginTop: space.md,
-    marginHorizontal: space.xl,
-    height: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneButtonText: { fontFamily: w.fontMedium, fontSize: type.body.fontSize },
 });

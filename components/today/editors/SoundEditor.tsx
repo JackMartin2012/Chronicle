@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, motion, palette, space, type } from '@/constants/chronicleTheme';
+import EditorFooterProgress from '../EditorFooterProgress';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
@@ -34,6 +35,11 @@ const INPUT_BG = '#16233d';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 
 // same rgba-from-hex helper SlideSound uses for its glow
+// Everything in the hero except the artwork: its vertical padding (2x12) and
+// margin (8), a two-line title, subtitle, Change, rating label and pill row,
+// plus slack. Generous on purpose — too small a number hides the rating row.
+const HERO_FIXED = 250;
+
 const withAlpha = (hex: string, alpha: number) => {
   const h = hex.replace('#', '');
   const r = parseInt(h.slice(0, 2), 16);
@@ -82,13 +88,56 @@ const NOTE_PLACEHOLDER: Record<MediaType, string> = {
 
 // each mode fires two iTunes requests in parallel, merged into one list
 const ITUNES = 'https://itunes.apple.com/search';
-const REQUESTS: Record<SoundMode, { mediaType: MediaType; url: (q: string) => string }[]> = {
+type SearchRequest = {
+  mediaType: MediaType;
+  url: (q: string) => string;
+  // sources that aren't iTunes-shaped supply their own response parser
+  parse?: (json: any) => SoundEntry[];
+};
+
+// Films: Apple's iTunes Search returns ZERO movies for any title now (music and
+// TV still work), so film search uses Wikipedia's free, keyless API instead.
+// It matches titles well and gives year + director, but posters are non-free
+// and almost never come back, so film entries usually have no artwork.
+const WIKI = 'https://en.wikipedia.org/w/api.php';
+const NOT_A_FILM = /soundtrack|series|franchise|characters|novel|disambiguation|filmography|album|television|topics referred/i;
+
+const parseWikiFilms = (json: any): SoundEntry[] => {
+  const pages: any[] = Object.values(json?.query?.pages ?? {});
+  pages.sort((a, b) => a.index - b.index);
+  return pages
+    .filter((p) => typeof p.description === 'string' && /\bfilm(?: by .+)?$/i.test(p.description) && !NOT_A_FILM.test(p.description))
+    .slice(0, 8)
+    .map((p): SoundEntry => {
+      // "2010 film by Christopher Nolan" → "2010 · Christopher Nolan"
+      const m = /^(\d{4})\b.*?\bfilm\b(?: by (.+))?$/i.exec(p.description);
+      const subtitle = m ? [m[1], m[2]].filter(Boolean).join(' · ') : p.description;
+      return {
+        mode: 'watch',
+        mediaType: 'film',
+        // "Parasite (2019 film)" → "Parasite"; the year is in the subtitle
+        title: String(p.title).replace(/\s*\((?:\d{4} )?film\)$/i, ''),
+        subtitle,
+        artworkUrl: p.thumbnail?.source ?? '',
+        rating: 0,
+        note: '',
+        externalId: String(p.pageid),
+      };
+    });
+};
+
+const REQUESTS: Record<SoundMode, SearchRequest[]> = {
   listen: [
     { mediaType: 'song', url: (q) => `${ITUNES}?term=${q}&media=music&entity=song&limit=8` },
     { mediaType: 'podcast', url: (q) => `${ITUNES}?term=${q}&media=podcast&limit=6` },
   ],
   watch: [
-    { mediaType: 'film', url: (q) => `${ITUNES}?term=${q}&media=movie&limit=8` },
+    {
+      mediaType: 'film',
+      url: (q) =>
+        `${WIKI}?action=query&format=json&generator=search&gsrsearch=${q}%20film&gsrlimit=15&prop=pageimages%7Cdescription&piprop=thumbnail&pithumbsize=300&pilimit=15&origin=*`,
+      parse: parseWikiFilms,
+    },
     { mediaType: 'tv', url: (q) => `${ITUNES}?term=${q}&media=tvShow&entity=tvSeason&limit=6` },
   ],
 };
@@ -166,6 +215,10 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
     watch: null,
   });
   const [completed, setCompleted] = useState(0);
+  const [heroH, setHeroH] = useState(0);
+  // The hero is invisible at 0. selectResult animates it in; a seeded entry
+  // never goes through selectResult, so seeding must set it to 1 itself.
+  const heroAnim = useRef(new Animated.Value(0)).current; // 0 → 1: hero scale-in + fade
 
   // Seed from today's record so reopening shows both slots as you left them,
   // and lands on whichever side you actually filled.
@@ -173,6 +226,7 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
     let active = true;
     loadDayEntry(formatDateKey(new Date())).then((day) => {
       if (!active) return;
+      if (day.sound.listen || day.sound.watch) heroAnim.setValue(1);
       setEntries({ listen: day.sound.listen, watch: day.sound.watch });
       if (!day.sound.listen && day.sound.watch) {
         setMode('watch');
@@ -183,7 +237,7 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [heroAnim]);
 
   const entry = entries[mode]; // the current mode's slot
   const anyFilled = !!entries.listen || !!entries.watch;
@@ -215,7 +269,6 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
     : SHEET_HEIGHT;
 
   const titleOpacity = useRef(new Animated.Value(1)).current;
-  const heroAnim = useRef(new Animated.Value(0)).current; // 0 → 1: hero scale-in + fade
   const pillScales = useRef(Array.from({ length: 10 }, () => new Animated.Value(1))).current;
   const firstTitleRun = useRef(true);
 
@@ -249,9 +302,9 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
             .then((res) => res.json())
             .then((json) => ({
               ok: true,
-              items: (json.results || [])
-                .map((r: any) => mapResult(r, req.mediaType))
-                .filter((x: SoundEntry) => x.title && x.artworkUrl),
+              items: (req.parse ? req.parse(json) : (json.results || []).map((r: any) => mapResult(r, req.mediaType)))
+                // films may legitimately have no poster; everything else needs artwork
+                .filter((x: SoundEntry) => x.title && (x.artworkUrl || x.mediaType === 'film')),
             }))
             .catch(() => ({ ok: false, items: [] as SoundEntry[] }))
         )
@@ -314,8 +367,16 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
     dismiss();
   };
 
-  const artworkStyle =
-    entry?.mediaType === 'film' ? { width: 170, height: 255 } : { width: 170, height: 170 };
+  // The rating row must never need a scroll. Artwork is the only elastic part of
+  // the hero, so it takes whatever height is left after everything else (title,
+  // subtitle, Change, rating label + row) and no more. Measured only while the
+  // keyboard is down, so typing a note doesn't shrink the artwork under you.
+  const isFilm = entry?.mediaType === 'film';
+  const maxArtH = isFilm ? 255 : 170;
+  const artH = heroH > 0 ? Math.max(96, Math.min(maxArtH, heroH - HERO_FIXED)) : 140;
+  const artworkStyle = isFilm
+    ? { width: Math.round((artH * 2) / 3), height: artH }
+    : { width: artH, height: artH };
 
   return (
     <View style={styles.root}>
@@ -417,7 +478,11 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
                       <View style={[styles.thumb, { backgroundColor: INPUT_BG }]}>
                         {r.artworkUrl ? (
                           <Animated.Image source={{ uri: r.artworkUrl }} style={styles.thumbImg} />
-                        ) : null}
+                        ) : (
+                          <View style={styles.noArt}>
+                            <Ionicons name="film-outline" size={20} color={palette.textMuted} />
+                          </View>
+                        )}
                       </View>
                       <View style={styles.resultText}>
                         <Text style={styles.resultTitle} numberOfLines={1}>
@@ -439,6 +504,9 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
         {/* HERO STATE */}
         {entry && (
           <Animated.View
+            onLayout={(e) => {
+              if (!keyboardUp) setHeroH(e.nativeEvent.layout.height);
+            }}
             style={[
               styles.heroWrap,
               {
@@ -474,7 +542,11 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
                 <View style={[styles.artwork, artworkStyle, { shadowColor: w.accent }]}>
                   {entry.artworkUrl ? (
                     <Animated.Image source={{ uri: entry.artworkUrl }} style={styles.artworkImg} />
-                  ) : null}
+                  ) : (
+                    <View style={styles.noArt}>
+                      <Ionicons name="film-outline" size={40} color={palette.textMuted} />
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -543,27 +615,13 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
         {/* FOOTER */}
         <View style={styles.footer}>
           <View style={styles.footerDivider} />
-          <Text style={styles.footerNote}>
-            {bothFilled ? 'Both join your sound history' : 'This joins your sound history'}
-          </Text>
-          {/* the progress row the shared chrome specifies — this editor was
-              the only one of the eight missing it */}
-          <View style={styles.progressRow}>
-            {Array.from({ length: 8 }, (_, i) => (
-              <View
-                key={i}
-                style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
-              />
-            ))}
-            <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
-          </View>
-          <TouchableOpacity
-            activeOpacity={anyFilled ? 0.85 : 1}
-            onPress={anyFilled ? handleDone : undefined}
-            style={[styles.doneButton, { backgroundColor: anyFilled ? w.accent : palette.hairline }]}
-          >
-            <Text style={[styles.doneButtonText, { color: anyFilled ? palette.textPrimary : W30 }]}>Done</Text>
-          </TouchableOpacity>
+          <EditorFooterProgress
+            note={bothFilled ? 'Both join your sound history' : 'This joins your sound history'}
+            completed={completed}
+            accent={w.accent}
+            fontFamily={w.fontRegular}
+            collapsed={keyboardUp}
+          />
         </View>
         </Pressable>
       </View>
@@ -666,6 +724,7 @@ const styles = StyleSheet.create({
   resultInner: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   thumb: { width: 44, height: 44, borderRadius: 8, overflow: 'hidden' },
   thumbImg: { width: 44, height: 44 },
+  noArt: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   resultText: { flex: 1, marginLeft: 14 },
   resultTitle: { fontFamily: w.fontMedium, fontSize: type.bodySmall.fontSize, color: palette.textPrimary },
   resultSubtitle: { fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: W50, marginTop: 2 },
@@ -675,10 +734,10 @@ const styles = StyleSheet.create({
   heroWrap: { flex: 1 },
   heroScroll: { flex: 1 },
   artworkWrap: {
-    marginTop: space.lg,
+    marginTop: space.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: space.xl,
+    paddingVertical: space.md,
   },
   artwork: {
     borderRadius: 16,
@@ -752,23 +811,4 @@ const styles = StyleSheet.create({
   // footer
   footer: {},
   footerDivider: { height: 1, backgroundColor: palette.hairline, marginTop: space.lg },
-  progressRow: { marginTop: space.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  progressDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 6 },
-  progressText: { marginLeft: 4, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
-  footerNote: {
-    marginTop: 14,
-    textAlign: 'center',
-    fontFamily: w.fontRegular,
-    fontSize: type.label.fontSize,
-    color: palette.textMuted,
-  },
-  doneButton: {
-    marginTop: space.md, // 12
-    marginHorizontal: space.xl,
-    height: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneButtonText: { fontFamily: w.fontMedium, fontSize: type.body.fontSize },
 });

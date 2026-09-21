@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
+import EditorFooterProgress from '../EditorFooterProgress';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 import { deleteFileIfPresent, documentPath, persistFile, voiceNoteFileName } from '@/lib/media';
@@ -30,7 +31,6 @@ const SHEET_HEIGHT = Math.round(SCREEN_H * 0.78);
 // ---- colours with no chronicleTheme token for their exact value ----
 const W60 = 'rgba(255,255,255,0.6)';
 const W40 = 'rgba(255,255,255,0.4)';
-const W30 = 'rgba(255,255,255,0.3)';
 const W25 = 'rgba(255,255,255,0.25)';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 
@@ -171,16 +171,7 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
   // trade for an always-visible stop. The footer still collapses either way.
   const hideVoiceRow = keyboardUp && !isRecording;
 
-  const reveal = useRef(new Animated.Value(1)).current;
   const voiceReveal = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.timing(reveal, {
-      toValue: keyboardUp ? 0 : 1,
-      duration: REVEAL_MS,
-      useNativeDriver: false, // animating height, which the native driver can't
-    }).start();
-  }, [keyboardUp, reveal]);
 
   useEffect(() => {
     Animated.timing(voiceReveal, {
@@ -190,9 +181,8 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
     }).start();
   }, [hideVoiceRow, voiceReveal]);
 
-  // Natural heights, measured so the collapse has somewhere to animate from.
+  // Natural height, measured so the collapse has somewhere to animate from.
   const [voiceRowHeight, setVoiceRowHeight] = useState(0);
-  const [footerExtraHeight, setFooterExtraHeight] = useState(0);
 
   // Only accept a measurement while the wrapper is EXPANDED. Once collapsed it
   // is 0-high with overflow hidden, and a re-fire there would overwrite the
@@ -558,40 +548,14 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
           <View style={styles.footer}>
             <View style={styles.footerDivider} />
 
-            {/* completion line + dots — nothing to read while writing */}
-            <Animated.View
-              style={[
-                styles.collapsible,
-                {
-                  opacity: reveal,
-                  height: collapseTo(reveal, footerExtraHeight, keyboardUp),
-                },
-              ]}
-              pointerEvents={keyboardUp ? 'none' : 'auto'}
-            >
-              <View onLayout={measureWhenOpen(setFooterExtraHeight, keyboardUp)}>
-                <Text style={styles.footerNote}>This becomes your day card</Text>
-                <View style={styles.progressRow}>
-                  {Array.from({ length: 8 }, (_, i) => (
-                    <View
-                      key={i}
-                      style={[styles.progressDot, { backgroundColor: i < completed ? w.accent : palette.ringSubtle }]}
-                    />
-                  ))}
-                  <Text style={styles.progressText}>{completed} of 8 filled in today</Text>
-                </View>
-              </View>
-            </Animated.View>
+            <EditorFooterProgress
+              note="This becomes your day card"
+              completed={completed}
+              accent={w.accent}
+              fontFamily={w.fontRegular}
+              collapsed={keyboardUp}
+            />
 
-            <TouchableOpacity
-              activeOpacity={hasEntry ? 0.85 : 1}
-              onPress={hasEntry ? handleDone : undefined}
-              style={[styles.doneButton, { backgroundColor: hasEntry ? w.accent : palette.hairline }]}
-            >
-              <Text style={[styles.doneButtonText, { color: hasEntry ? palette.textPrimary : W30 }]}>
-                Done
-              </Text>
-            </TouchableOpacity>
           </View>
         </Pressable>
       </View>
@@ -762,23 +726,4 @@ const styles = StyleSheet.create({
   // FOOTER
   footer: {},
   footerDivider: { height: 1, backgroundColor: palette.hairline, marginTop: space.lg },
-  footerNote: {
-    marginTop: 14,
-    textAlign: 'center',
-    fontFamily: w.fontRegular,
-    fontSize: type.label.fontSize,
-    color: palette.textMuted,
-  },
-  progressRow: { marginTop: space.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  progressDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 6 },
-  progressText: { marginLeft: 4, fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: palette.textMuted },
-  doneButton: {
-    marginTop: space.md,
-    marginHorizontal: space.xl,
-    height: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneButtonText: { fontFamily: w.fontMedium, fontSize: type.body.fontSize },
 });
