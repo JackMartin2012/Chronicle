@@ -267,3 +267,35 @@ description terminates the app the moment it asks. Verify with
       filters `events` to the day's year and the old fetch capped at 5, so
       broadening `events` would have crowded same-year entries out of the old
       screen. Old caches backfill `archive` once on next load.
+
+---
+
+## NOTABLE DAYS (idea, Sept 2026 — NOT scoped, NOT built)
+
+Maps onto the Life Timeline / Big Moments concept in
+`Chronicle_Master_Document.docx` section 4: "a separate curated timeline for the
+big events and trips of your life... the greatest hits... distinct from the daily
+flashback feed." This toggle is the missing interaction model for getting content
+INTO that timeline.
+
+**Mechanic:** a toggle at the bottom of the TODAY SCREEN (whole-day, not inside
+one editor). Flipping it on creates a record in a separate NOTABLE EVENTS
+collection, not just a flag on the day — it is a curated list, not a filtered view
+of the timeline.
+
+**Each notable-event record holds:**
+- a link/reference back to the source day (dateKey)
+- a TITLE, typed by the user at the point of toggling (e.g. "Ella's wedding") — a
+  new field, distinct from the diary text, since a title makes a better list label
+  than the first line of a journal entry
+- NO separate body text — the day's existing story / three words / etc remain the
+  content, read via the link
+
+**Where it lives:** under the future YOU TAB — a scrollable list of titled cards.
+Tapping one opens a preview/summary of that day's entry; a button from the preview
+jumps to the full day (the day card carousel).
+
+**Distinct from** the Newspaper lead-story / world-events concept logged above —
+that is about the wider world, this is about the user's own significant days.
+
+Revisit once the You tab and the current carousel wiring are further along.
