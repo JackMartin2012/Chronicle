@@ -130,6 +130,9 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
     selfie: null,
   });
   const [completed, setCompleted] = useState(0);
+  // what was in storage when the editor opened, so Done can tell a NEW capture
+  // from reopening and pressing Done on an untouched one (which must not restamp)
+  const seeded = useRef<{ main: string | null; selfie: string | null }>({ main: null, selfie: null });
 
   // Seed from today's record so reopening shows the photos you saved. These
   // are already the permanent copies, so persistFile short-circuits if they're
@@ -138,10 +141,11 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
     let active = true;
     loadDayEntry(formatDateKey(new Date())).then((day) => {
       if (!active) return;
-      setPhotos({
+      seeded.current = {
         main: day.capture.mainPhotoUri || null,
         selfie: day.capture.selfieUri || null,
-      });
+      };
+      setPhotos({ ...seeded.current });
       setSelfieIsBig(day.capture.selfieIsBig);
       setCompleted(countFilledInputs(day));
     });
@@ -349,11 +353,17 @@ export default function CaptureEditor({ onClose }: { onClose?: () => void }) {
       ? persistFile(photos.selfie, captureFileName('selfie', dateKey))
       : null;
 
+    // stamp only when the photos actually changed; an untouched reopen leaves
+    // the stored time alone (the merge keeps it). Clearing both drops it.
+    const changed = photos.main !== seeded.current.main || photos.selfie !== seeded.current.selfie;
+    const hasPhoto = !!(mainPhotoUri || selfieUri);
+
     saveDayEntry(dateKey, {
       capture: {
         mainPhotoUri: mainPhotoUri ?? '',
         selfieUri: selfieUri ?? '',
         selfieIsBig,
+        ...(!hasPhoto ? { capturedAt: undefined } : changed ? { capturedAt: Date.now() } : {}),
       },
     });
     dismiss();

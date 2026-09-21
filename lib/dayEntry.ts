@@ -181,6 +181,7 @@ export const normaliseDayEntry = (parsed: unknown, dateKey: string): DayEntry =>
       mainPhotoUri: str(capture.mainPhotoUri) || str(legacy.photoUri),
       selfieUri: str(capture.selfieUri) || str(legacy.pairSelfieUri),
       selfieIsBig: bool(capture.selfieIsBig),
+      capturedAt: num(capture.capturedAt) || undefined,
     },
     threeWords: {
       words: readWords(threeWords.words, legacy.threeWords),

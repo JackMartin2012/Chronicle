@@ -18,6 +18,12 @@ export type Capture = {
   selfieUri: string;
   /** Which of the pair fills the big frame. false = the main photo. */
   selfieIsBig: boolean;
+  /**
+   * ms since epoch, stamped when a new capture is saved. Undefined on every
+   * capture made before this field existed — deliberately NOT backfilled, so
+   * old captures show no "Captured HH:MM" line.
+   */
+  capturedAt?: number;
 };
 
 // ---------------------------------------------------------------------------

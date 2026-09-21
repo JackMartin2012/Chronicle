@@ -227,3 +227,27 @@ description terminates the app the moment it asks. Verify with
       category chips, separate `meaningful` toggle, and merge-into-existing are
       all present. The `08_EDITOR_BUILD_SPECS.md` rework spec does NOT need
       running. *(was 02:50, 00:22)*
+
+---
+
+## DAY CARD DATA WIRING (decisions locked Sept 2026)
+
+- [ ] **Future upgrade — `fetchHistoricWeather`.** The day card reads the LEGACY
+      top-level `weatherTemp` / `weatherEmoji` / `weatherDescription` from the
+      raw `day_entry_` record for now (`readLegacyWeather` in
+      `lib/dayCardData.ts`). Historic weather lookup is deliberately OUT of scope
+      for the wiring pass. Note `weatherTemp` defaults to 0 on unset records, so
+      presence is judged by emoji/description, not the temperature.
+- [ ] **Future field needed — Newspaper reflection.** The slide's reflection
+      block is HIDDEN, not mapped to `futureNote`: a note to future-you is not a
+      reaction to the day's news. If the slide keeps a reflection concept it needs
+      its own field (e.g. a reaction attached to a saved headline). The slide is
+      fed by the Wikipedia archive entries alone; the lead-story + reaction half
+      stays hidden until a headline-save feature exists.
+- [x] **`capturedAt`** — DONE Sept 2026. `Capture.capturedAt` in `lib/types.ts`,
+      stamped by `CaptureEditor` on Done only when the photos changed (reopening
+      untouched keeps the old stamp). Never backfilled; old captures show no
+      "Captured HH:MM" line.
+- [ ] **Hidden slides vs "N of 8"** — DECIDED: count visible slides only ("3 of
+      5"), no fixed 8. To apply when the carousel is wired (drop `TOTAL_SLIDES`
+      and the explicit `pageNumber`s in `DayCardCarousel.tsx`).
