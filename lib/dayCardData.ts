@@ -69,7 +69,7 @@ export type DayCardData = {
   cover: {
     weather?: LegacyWeather;
     mood?: string;
-    /** From the live camera roll query only; undefined when access is denied. */
+    /** Live camera roll query only. Undefined when access is denied OR there are none ("0" is noise). */
     photoCount?: number;
     people: Person[];
   };
@@ -149,7 +149,7 @@ export const buildDayCardData = (
     cover: {
       weather: extras.weather ?? undefined,
       mood: entry.threeWords.mood || undefined,
-      photoCount: roll && roll.status === 'granted' ? roll.photoCount : undefined,
+      photoCount: roll && roll.status === 'granted' ? roll.photoCount || undefined : undefined,
       people: entry.people,
     },
 

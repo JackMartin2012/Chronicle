@@ -56,7 +56,7 @@ export default function DayCardCarousel({ world, dateKey }: Props) {
       <SlideCover
         world={world}
         date={data.date}
-        weatherTemp={data.cover.weather?.temp}
+        weather={data.cover.weather}
         mood={data.cover.mood}
         photoCount={data.cover.photoCount}
         people={data.cover.people.length > 0 ? data.cover.people : undefined}
