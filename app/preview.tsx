@@ -1,15 +1,11 @@
-import DayCardCarousel, { SampleDay } from '@/components/daycard/DayCardCarousel';
+import { useLocalSearchParams } from 'expo-router';
 
-// Throwaway screen for visually checking the day card carousel. Not part of the app flow.
-const SAMPLE_DAY: SampleDay = {
-  date: new Date(2025, 6, 24), // Thursday 24 July 2025
-  weatherTemp: 21,
-  mood: '😌',
-  photoCount: 12,
-  people: [{ name: 'Alex' }, { name: 'Sam' }, { name: 'Mum' }],
-  captureTime: '18:04',
-};
+import DayCardCarousel from '@/components/daycard/DayCardCarousel';
+import { todayKey } from '@/lib/dayEntry';
 
+// Throwaway screen for checking the day card carousel against a real stored
+// day. Not part of the app flow. Open /preview for today, or /preview?dateKey=2026-07-24.
 export default function Preview() {
-  return <DayCardCarousel world="present" day={SAMPLE_DAY} />;
+  const { dateKey } = useLocalSearchParams<{ dateKey?: string }>();
+  return <DayCardCarousel world="present" dateKey={dateKey || todayKey()} />;
 }

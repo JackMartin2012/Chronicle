@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getWorld, palette, sizes, space, type, World } from '@/constants/chronicleTheme';
+import { useDayCardData } from '@/lib/dayCardExtras';
 
 import SlideCameraRoll from './SlideCameraRoll';
 import SlideCapture from './SlideCapture';
@@ -24,78 +25,75 @@ import SlideThreeWords from './SlideThreeWords';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-// The finished day card is eight slides; only the first two are built so far,
-// but the dots + "N of 8" reflect the full set.
-const TOTAL_SLIDES = 8;
-
 const HIT = { top: 8, bottom: 8, left: 8, right: 8 };
-
-// Inline sample-day shape (presentation only — no storage/navigation wiring).
-export type SampleDay = {
-  date: Date;
-  weatherTemp?: number;
-  mood?: string;
-  photoCount?: number;
-  people?: { name: string; photoUri?: string }[];
-  captureTime?: string;
-};
 
 type Props = {
   world: World;
-  day: SampleDay;
+  /** 'YYYY-MM-DD'. The carousel loads its own data once, on open. */
+  dateKey: string;
 };
 
-export default function DayCardCarousel({ world, day }: Props) {
+// "18:04" from a capturedAt timestamp; undefined for old captures (no backfill).
+const clockTime = (ms?: number) =>
+  ms ? new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : undefined;
+
+export default function DayCardCarousel({ world, dateKey }: Props) {
   const w = getWorld(world);
+  const data = useDayCardData(dateKey, world);
   const [page, setPage] = useState(0);
   const [listH, setListH] = useState(0);
 
-  // Each entry: the slide body, the subtitle the shared top bar shows for it, and
-  // its 1-based pageNumber (drives the dots + "N of 8"). pageNumber is explicit so
-  // the newspaper stays pinned to 8 even though slide 7 isn't built yet.
-  const slides = [
-    { pageNumber: 1, subtitle: '', node: (
+  // Only slides the day has content for are built (a null slice = hidden), and
+  // the dots + "N of M" count what's actually there. The cover always exists.
+  // TODO: the map slide goes here, before the newspaper, when it's built.
+  //
+  // Slides below the cover still render their own sample content until each is
+  // wired to its slice of `data` (one at a time); only the show/hide decision
+  // is real for them.
+  const slides: { subtitle: string; node: React.ReactNode }[] = [];
+  if (data) {
+    slides.push({ subtitle: '', node: (
       <SlideCover
         world={world}
-        date={day.date}
-        weatherTemp={day.weatherTemp}
-        mood={day.mood}
-        photoCount={day.photoCount}
-        people={day.people}
+        date={data.date}
+        weatherTemp={data.cover.weather?.temp}
+        mood={data.cover.mood}
+        photoCount={data.cover.photoCount}
+        people={data.cover.people.length > 0 ? data.cover.people : undefined}
       />
-    ) },
-    { pageNumber: 2, subtitle: "Today's capture", node: (
-      <SlideCapture world={world} captureTime={day.captureTime} />
-    ) },
-    { pageNumber: 3, subtitle: 'Your camera roll', node: (
+    ) });
+    if (data.capture) slides.push({ subtitle: "Today's capture", node: (
+      <SlideCapture world={world} captureTime={clockTime(data.capture.capturedAt)} />
+    ) });
+    if (data.cameraRoll) slides.push({ subtitle: 'Your camera roll', node: (
       <SlideCameraRoll world={world} />
-    ) },
-    { pageNumber: 4, subtitle: '', node: (
+    ) });
+    if (data.threeWords) slides.push({ subtitle: '', node: (
       <SlideThreeWords world={world} />
-    ) },
-    { pageNumber: 5, subtitle: 'Your day', node: (
+    ) });
+    if (data.story) slides.push({ subtitle: 'Your day', node: (
       <SlideStory world={world} />
-    ) },
-    { pageNumber: 6, subtitle: 'Sound & screen', node: (
+    ) });
+    if (data.sound) slides.push({ subtitle: 'Sound & screen', node: (
       <SlideSound world={world} />
-    ) },
-    // TODO: the map slide (pageNumber 7) goes here, before the newspaper.
-    { pageNumber: 8, subtitle: 'Beyond today', node: (
+    ) });
+    if (data.newspaper) slides.push({ subtitle: 'Beyond today', node: (
       <SlideNewspaper world={world} />
-    ) },
-  ];
+    ) });
+  }
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const next = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
     if (next !== page) setPage(next);
   };
 
-  const weekday = day.date.toLocaleDateString('en-GB', { weekday: 'long' });
-  const month = day.date.toLocaleDateString('en-GB', { month: 'long' });
-  const headerDate = `${weekday} ${day.date.getDate()} ${month}`;
+  const headerDay = data?.date ?? new Date(`${dateKey}T12:00:00`);
+  const weekday = headerDay.toLocaleDateString('en-GB', { weekday: 'long' });
+  const month = headerDay.toLocaleDateString('en-GB', { month: 'long' });
+  const headerDate = `${weekday} ${headerDay.getDate()} ${month}`;
   const subtitle = slides[page]?.subtitle ?? '';
-  // displayed page number for the active slide (not the raw array index)
-  const currentPage = slides[page]?.pageNumber ?? page + 1;
+  const total = slides.length;
+  const currentPage = Math.min(page, Math.max(total - 1, 0)) + 1;
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: w.bg }]} edges={['top', 'bottom']}>
@@ -136,7 +134,7 @@ export default function DayCardCarousel({ world, day }: Props) {
       {/* SHARED PAGE DOTS */}
       <View style={styles.dotsBlock}>
         <View style={styles.dotsRow}>
-          {Array.from({ length: TOTAL_SLIDES }).map((_, i) =>
+          {Array.from({ length: total }).map((_, i) =>
             i === currentPage - 1 ? (
               <View key={i} style={[styles.dotActive, { backgroundColor: w.accent }]} />
             ) : (
@@ -145,7 +143,7 @@ export default function DayCardCarousel({ world, day }: Props) {
           )}
         </View>
         <Text style={[styles.dotsCaption, { fontFamily: w.fontRegular }]}>
-          {currentPage} of {TOTAL_SLIDES}
+          {currentPage} of {total}
         </Text>
       </View>
     </SafeAreaView>

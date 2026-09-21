@@ -9,7 +9,11 @@ export type Headline = { title: string; domain: string; url?: string };
 
 export type NewsCache = {
   fetchedAt: number;
-  wikipedia: { events: WikiEvent[]; birth: WikiEvent | null } | null;
+  // `archive` = curated events from ANY year for this calendar date (used by the
+  // new day card's Newspaper slide). Separate from `events` on purpose: the old
+  // DayCard shows `events` and relies on them being same-year. Absent on caches
+  // written before it existed.
+  wikipedia: { events: WikiEvent[]; birth: WikiEvent | null; archive?: WikiEvent[] } | null;
   football: any[] | null;
   weather: { max: number; min: number; emoji: string } | null;
   headlines?: Headline[] | null;
@@ -50,7 +54,19 @@ export const fetchWikipedia = async (dateKey: string, year: string) => {
     }
     const b = (data.births || []).find((x: any) => x.year === yearNum);
     const birth: WikiEvent | null = b ? { year: b.year, text: b.text } : null;
-    return { events, birth };
+
+    // any-year archive: curated entries first, other years only (same-year ones
+    // are already in `events`), capped
+    const archive: WikiEvent[] = [];
+    const seenArchive = new Set<string>();
+    for (const e of pool) {
+      if (e.year === yearNum || typeof e.year !== 'number' || !e.text) continue;
+      if (seenArchive.has(e.text)) continue;
+      seenArchive.add(e.text);
+      archive.push({ year: e.year, text: e.text });
+      if (archive.length >= 6) break;
+    }
+    return { events, birth, archive };
   } catch {
     return null;
   }
@@ -152,6 +168,11 @@ export const loadNewsForDay = async (
         if (settings.football && !merged.football) {
           const fb = await fetchFootball(dateKey);
           if (fb) { merged = { ...merged, football: fb }; changed = true; }
+        }
+        // caches written before `archive` existed: backfill it once
+        if (settings.wiki && merged.wikipedia && merged.wikipedia.archive === undefined) {
+          const wiki = await fetchWikipedia(dateKey, year);
+          if (wiki) { merged = { ...merged, wikipedia: wiki }; changed = true; }
         }
         if (settings.news && merged.headlines === undefined) {
           const hl = await fetchHeadlines(dateKey);

@@ -251,3 +251,19 @@ description terminates the app the moment it asks. Verify with
 - [ ] **Hidden slides vs "N of 8"** — DECIDED: count visible slides only ("3 of
       5"), no fixed 8. To apply when the carousel is wired (drop `TOTAL_SLIDES`
       and the explicit `pageNumber`s in `DayCardCarousel.tsx`).
+
+- [ ] **Personally significant world events — this IS the Newspaper lead story.**
+      Jack asked about logging a historical/world event as significant within a
+      day's entry ("I remember where I was when X happened"). Not a new feature:
+      it is the Newspaper slide's LEAD STORY mechanic already described in
+      `03_DAY_CARD_CAROUSEL.md` — "user saves a headline that mattered + writes a
+      reaction." Unbuilt because the headline source (GDELT/NewsAPI) was never
+      chosen. It belongs on the day's own card, NOT the You tab, since it's tied
+      to a specific date. Revisit once the archive-only Newspaper slide is proven;
+      building the lead story is the next step after that, contingent on the same
+      news-API decision logged as open in `07_INFRASTRUCTURE.md`.
+- [x] **`fetchWikipedia` any-year archive** — added Sept 2026 as a SEPARATE
+      `wikipedia.archive` list, NOT by broadening `events`. `DayCard.tsx:586`
+      filters `events` to the day's year and the old fetch capped at 5, so
+      broadening `events` would have crowded same-year entries out of the old
+      screen. Old caches backfill `archive` once on next load.
