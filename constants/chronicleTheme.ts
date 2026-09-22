@@ -240,7 +240,11 @@ export const blendWeatherGlow = (accentHex: string, tint: string): string => {
   const r = Math.round(parseFloat(tr) * alpha + ar * (1 - alpha));
   const g = Math.round(parseFloat(tg) * alpha + ag * (1 - alpha));
   const b = Math.round(parseFloat(tb) * alpha + ab * (1 - alpha));
-  return `rgb(${r}, ${g}, ${b})`;
+  // hex, not `rgb(...)` — the red isolation test only proved shadowColor takes
+  // a hex string; the rgb(...) format was the one unverified variable between
+  // that working test and the failing real case, so it's ruled in, not assumed.
+  const toHex = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 };
 
 export const theme = {
