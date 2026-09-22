@@ -69,7 +69,7 @@ export default function DayCardCarousel({ world, dateKey }: Props) {
       <SlideCameraRoll world={world} />
     ) });
     if (data.threeWords) slides.push({ subtitle: '', node: (
-      <SlideThreeWords world={world} />
+      <SlideThreeWords world={world} words={data.threeWords.words} mood={data.threeWords.mood || undefined} />
     ) });
     if (data.story) slides.push({ subtitle: 'Your day', node: (
       <SlideStory world={world} />

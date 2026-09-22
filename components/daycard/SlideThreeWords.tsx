@@ -2,30 +2,32 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { dim, getWorld, motion, palette, space, type } from '@/constants/chronicleTheme';
+import type { ThreeWord } from '@/lib/types';
 
-type WordItem = { word: string; reason?: string };
-
-// TODO: real three-words entry; sample data for now.
-const WORDS: WordItem[] = [
-  { word: 'Warm', reason: "Everyone came back for Mum's birthday, first time in three years." },
-  { word: 'Unhurried' },
-  { word: 'Reunion', reason: 'Old faces around one table again — nobody checked the time.' },
-];
-const MOOD = '😌';
+// One Animated.Value per slot, regardless of how many words this day actually
+// has (0-3) — real days never have all three filled with a reason, unlike the
+// old fixed 3-item sample.
+const MAX_WORDS = 3;
 
 type Props = {
   world: 'past' | 'present';
+  /** 0-3 entries — DayCardData.threeWords is only non-null when at least one word is filled. */
+  words: ThreeWord[];
+  /** Emoji; omitted when unset. */
+  mood?: string;
 };
 
-// Slide 4 — "Three words". Pure typography: three monumental words, each with an
-// optional reason revealed on tap (the other two dim while one is open).
-// Chrome comes from DayCardCarousel.
-export default function SlideThreeWords({ world }: Props) {
+// Slide 4 — "Three words". Pure typography: up to three monumental words, each
+// with an optional reason revealed on tap (the other words dim while one is
+// open). Chrome comes from DayCardCarousel.
+export default function SlideThreeWords({ world, words, mood }: Props) {
   const w = getWorld(world);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
-  // one opacity value per word — dims the non-expanded words to dim.inactive
-  const opacities = useRef(WORDS.map(() => new Animated.Value(dim.full))).current;
+  // fixed-size regardless of `words.length` so hook order never changes
+  const opacities = useRef(
+    Array.from({ length: MAX_WORDS }, () => new Animated.Value(dim.full))
+  ).current;
 
   useEffect(() => {
     opacities.forEach((op, i) => {
@@ -42,8 +44,8 @@ export default function SlideThreeWords({ world }: Props) {
 
   return (
     <View style={styles.root}>
-      {WORDS.map((item, i) => {
-        const hasReason = !!item.reason;
+      {words.map((item, i) => {
+        const hasReason = !!item.why.trim();
         const isExpanded = expandedIndex === i;
         return (
           <Animated.View key={i} style={[styles.entry, { opacity: opacities[i] }]}>
@@ -52,16 +54,16 @@ export default function SlideThreeWords({ world }: Props) {
               {hasReason && <View style={[styles.dot, { backgroundColor: w.accent }]} />}
             </Pressable>
 
-            {isExpanded && item.reason ? (
+            {isExpanded && hasReason ? (
               <Text style={[styles.reason, { fontFamily: w.fontRegular }]}>
-                “{item.reason}”
+                “{item.why}”
               </Text>
             ) : null}
           </Animated.View>
         );
       })}
 
-      <Text style={styles.mood}>{MOOD}</Text>
+      {mood ? <Text style={styles.mood}>{mood}</Text> : null}
     </View>
   );
 }
