@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
-import { getWorld, palette, sizes, space, type, weatherFromTemp, weatherGlow } from '@/constants/chronicleTheme';
+import { blendWeatherGlow, getWorld, palette, sizes, space, type, weatherFromTemp, weatherGlow } from '@/constants/chronicleTheme';
 import type { LegacyWeather } from '@/lib/dayCardData';
 
 type Person = { name: string; photoUri?: string };
@@ -34,12 +34,14 @@ export default function SlideCover({ world, date, weather, mood, photoCount, peo
   const dateLine = `${date.getDate()} ${month}`;
   const year = `${date.getFullYear()}`;
 
-  // Weather tints the globe's glow by COLOUR TEMPERATURE only. It sits behind the
-  // accent glow as a second layer, so the two blend rather than the weather
-  // replacing the world colour. 'mild' is fully transparent = accent alone.
+  // Weather tints the globe's glow by COLOUR TEMPERATURE only, blended into the
+  // world accent as ONE colour (not a second shadow layer — two stacked
+  // translucent shadows multiply down to invisible; confirmed on device).
+  // 'mild' is fully transparent, so this resolves back to the accent alone.
   const glowTint = weather
     ? weatherGlow[weatherFromTemp(weather.temp, weather.description.toLowerCase())]
     : weatherGlow.mild;
+  const glowColor = blendWeatherGlow(w.accent, glowTint);
 
   const hasPeople = !!people && people.length > 0;
 
@@ -95,8 +97,7 @@ export default function SlideCover({ world, date, weather, mood, photoCount, peo
 
       {/* GLOBE */}
       <View style={styles.globeContainer}>
-        <View style={[styles.glowWrap, { shadowColor: w.accent }]}>
-          <View style={[styles.weatherTint, { backgroundColor: glowTint, shadowColor: glowTint }]} />
+        <View style={[styles.glowWrap, { shadowColor: glowColor }]}>
           <Image source={require('@/assets/images/globe.png')} resizeMode="contain" style={styles.globe} />
           <View style={styles.pinContainer}>
             <View style={[styles.pinRing, { borderColor: w.accent }]} />
@@ -164,16 +165,6 @@ const styles = StyleSheet.create({
     shadowRadius: 40,
     shadowOffset: { width: 0, height: 0 },
     elevation: 0,
-  },
-  // sits directly behind the globe (same size, so only its shadow shows)
-  weatherTint: {
-    position: 'absolute',
-    width: sizes.globeDiameter,
-    height: sizes.globeDiameter,
-    borderRadius: sizes.globeDiameter / 2,
-    shadowOpacity: 1,
-    shadowRadius: 50,
-    shadowOffset: { width: 0, height: 0 },
   },
   globe: {
     width: sizes.globeDiameter,

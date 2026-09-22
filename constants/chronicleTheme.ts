@@ -218,6 +218,31 @@ export const weatherFromTemp = (
   return 'mild';
 };
 
+/**
+ * Alpha-composites a `weatherGlow` tint OVER the world accent into ONE colour,
+ * for use as a single shadow's `shadowColor`. Two separate glow layers (an
+ * accent shadow on top of a translucent tint shadow underneath) multiply their
+ * alphas down to something invisible — confirmed on device, not theoretical —
+ * so the two must merge into one colour before they ever hit a shadow prop.
+ * 'mild' (fully transparent) resolves back to the accent unchanged.
+ */
+export const blendWeatherGlow = (accentHex: string, tint: string): string => {
+  const hex = accentHex.replace('#', '');
+  const ar = parseInt(hex.slice(0, 2), 16);
+  const ag = parseInt(hex.slice(2, 4), 16);
+  const ab = parseInt(hex.slice(4, 6), 16);
+
+  const m = tint.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+  if (!m) return accentHex;
+  const [, tr, tg, tb, ta] = m;
+  const alpha = ta !== undefined ? parseFloat(ta) : 1;
+
+  const r = Math.round(parseFloat(tr) * alpha + ar * (1 - alpha));
+  const g = Math.round(parseFloat(tg) * alpha + ag * (1 - alpha));
+  const b = Math.round(parseFloat(tb) * alpha + ab * (1 - alpha));
+  return `rgb(${r}, ${g}, ${b})`;
+};
+
 export const theme = {
   palette,
   fonts,
