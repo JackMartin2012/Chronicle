@@ -82,7 +82,7 @@ which slides read real data vs. still show sample content.
 |---|---|---|---|
 | — | Carousel shell | `components/daycard/DayCardCarousel.tsx` | pager + chrome + dots — **wired Sept 2026**: builds `DayCardData` via `useDayCardData`, drops slides with a null data slice, "N of M" not fixed 8 |
 | 1 | Cover | `SlideCover.tsx` | Globe (real NASA image) — **DONE Sept 2026**, real data + weather glow (colour mechanism works, flagged for a design pass before release, see `09`) |
-| 2 | Capture | `SlideCapture.tsx` | BeReal pair, tap-swap, hold-to-peek — presence wired, body still sample |
+| 2 | Capture | `SlideCapture.tsx` | BeReal pair, tap-swap, hold-to-peek — **DONE — real photos wired, both-photo and solo-photo cases tested on device Sept 2026.** |
 | 3 | Camera roll | `SlideCameraRoll.tsx` | Polaroid + thumb strip — presence wired, body still sample |
 | 4 | Three words | `SlideThreeWords.tsx` | Monumental typography — presence wired, body still sample |
 | 5 | Story | `SlideStory.tsx` | Dark ruled journal page — presence wired, body still sample |

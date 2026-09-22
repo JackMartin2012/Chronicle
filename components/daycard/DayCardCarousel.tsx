@@ -63,7 +63,13 @@ export default function DayCardCarousel({ world, dateKey }: Props) {
       />
     ) });
     if (data.capture) slides.push({ subtitle: "Today's capture", node: (
-      <SlideCapture world={world} captureTime={clockTime(data.capture.capturedAt)} />
+      <SlideCapture
+        world={world}
+        captureTime={clockTime(data.capture.capturedAt)}
+        mainPhotoUri={data.capture.mainPhotoUri}
+        selfieUri={data.capture.selfieUri}
+        selfieIsBig={data.capture.selfieIsBig}
+      />
     ) });
     if (data.cameraRoll) slides.push({ subtitle: 'Your camera roll', node: (
       <SlideCameraRoll world={world} />

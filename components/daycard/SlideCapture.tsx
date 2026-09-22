@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
 
@@ -10,26 +10,53 @@ const PHOTO_HEIGHT = 560;
 type Props = {
   world: 'past' | 'present';
   captureTime?: string;
+  mainPhotoUri: string;
+  selfieUri: string;
+  /** Which of the pair filled the big frame when this was saved — seeds the local swap state. */
+  selfieIsBig: boolean;
 };
 
-// Slide 2 — BeReal layout. All plain coloured Views (no Image that can fail to
-// load and collapse). Two gestures:
+// Slide 2 — BeReal layout. Two gestures, only when BOTH photos exist:
 //   • tap the selfie inset  → swap which block fills the frame  (inner Pressable)
 //   • press-and-hold the photo → peek: hide the inset while held (outer Pressable)
+// With only one photo, it renders full-bleed alone — nothing to swap or peek at.
 // Chrome comes from DayCardCarousel.
-export default function SlideCapture({ world, captureTime }: Props) {
+export default function SlideCapture({ world, captureTime, mainPhotoUri, selfieUri, selfieIsBig: selfieIsBigProp }: Props) {
   const w = getWorld(world);
 
-  // which source occupies the big frame vs the corner inset
-  const [selfieIsBig, setSelfieIsBig] = useState(false);
+  const hasBoth = !!mainPhotoUri && !!selfieUri;
+
+  // which source occupies the big frame vs the corner inset — seeded from the
+  // saved value on mount, then a local override for the rest of the session
+  // (tap-swap doesn't write back to storage from here).
+  const [selfieIsBig, setSelfieIsBig] = useState(selfieIsBigProp);
+  useEffect(() => {
+    setSelfieIsBig(selfieIsBigProp);
+  }, [selfieIsBigProp]);
+
   // press-and-hold the background to peek — hides the inset while held
   const [peeking, setPeeking] = useState(false);
 
-  // TODO: real photo sources; solid colour blocks + test labels for now.
-  const back = { label: 'BACK', color: w.surface };
-  const selfie = { label: 'SELFIE', color: palette.ringSubtle }; // lighter tone
-  const big = selfieIsBig ? selfie : back;
-  const inset = selfieIsBig ? back : selfie;
+  if (!hasBoth) {
+    // exactly one of the two exists (the upstream gate guarantees at least
+    // one) — full-bleed, no swap/peek chrome since there's nothing to swap to
+    const soloUri = mainPhotoUri || selfieUri;
+    return (
+      <View style={styles.root}>
+        <View style={styles.group}>
+          <View style={styles.photo}>
+            <Image source={{ uri: soloUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          </View>
+          <Text style={[styles.caption, { fontFamily: w.fontRegular }]}>
+            Captured {captureTime}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  const big = selfieIsBig ? selfieUri : mainPhotoUri;
+  const inset = selfieIsBig ? mainPhotoUri : selfieUri;
 
   return (
     <View style={styles.root}>
@@ -38,20 +65,16 @@ export default function SlideCapture({ world, captureTime }: Props) {
         <Pressable
           onPressIn={() => setPeeking(true)}
           onPressOut={() => setPeeking(false)}
-          style={[styles.photo, { backgroundColor: big.color }]}
+          style={styles.photo}
         >
-          <View style={styles.centerFill} pointerEvents="none">
-            <Text style={[styles.blockLabel, { fontFamily: w.fontRegular }]}>{big.label}</Text>
-          </View>
+          <Image source={{ uri: big }} style={StyleSheet.absoluteFill} resizeMode="cover" />
 
           {/* SELFIE INSET — tap to swap; hidden (opacity 0) while peeking */}
           <Pressable
             onPress={() => setSelfieIsBig((v) => !v)}
-            style={[styles.selfie, { backgroundColor: inset.color, opacity: peeking ? 0 : 1 }]}
+            style={[styles.selfie, { opacity: peeking ? 0 : 1 }]}
           >
-            <View style={styles.centerFill} pointerEvents="none">
-              <Text style={[styles.blockLabel, { fontFamily: w.fontRegular }]}>{inset.label}</Text>
-            </View>
+            <Image source={{ uri: inset }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           </Pressable>
         </Pressable>
 
@@ -92,13 +115,6 @@ const styles = StyleSheet.create({
     borderColor: '#0a0a0a', // near-black, per spec
     overflow: 'hidden',
   },
-
-  centerFill: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  blockLabel: { ...type.caption, color: palette.textMuted },
 
   // quiet caption directly beneath the photo, left-aligned
   caption: {

@@ -224,7 +224,7 @@ not a fixed 8 — decided and applied Sept 2026. `TOTAL_SLIDES` and the explicit
 |---|---|---|
 | — | Carousel shell | Wired — builds only present slides from `DayCardData`, gathers live extras once on open, "N of M" counter |
 | 1 | Cover | **DONE** — real weather (legacy fields), mood, live photo count, real people, weather-reactive globe glow. Glow mechanism works (right colour every time) but is flagged for a further visual design pass before release — see `09_CODE_NOTES.md` |
-| 2 | Capture | Presence/absence wired (shows only when a main photo or selfie exists); body still sample content |
+| 2 | Capture | **DONE Sept 2026** — real `mainPhotoUri`/`selfieUri`/`selfieIsBig` wired; both-photo (BeReal pair, tap-swap, hold-to-peek) and solo-photo (full-bleed, no swap/peek chrome) cases tested on device |
 | 3 | Camera roll | Presence/absence wired (shows only when the live camera-roll query finds items); body still sample content |
 | 4 | Three words | Presence/absence wired; body still sample content |
 | 5 | Story | Presence/absence wired (shows if text, voice note, or learned is set); body still sample content |
