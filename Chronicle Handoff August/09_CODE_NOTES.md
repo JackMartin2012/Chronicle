@@ -331,3 +331,16 @@ colour treatment which is done (see the glow shape/colour fixes logged above).
 
 Deserves its own design pass — possibly its own Stitch round — once the
 carousel's core data wiring is finished. Not scoped, not started.
+
+---
+
+## STATUS — Cover weather glow (Sept 2026): functional, not launch-ready
+
+The weather-reactive glow mechanism is proven end to end — the right colour
+for each weather kind reaches the ring every time, confirmed via on-screen hex
+readout across several rounds of fixes (shape, colour format, target
+colours). But the VISUAL RESULT isn't yet satisfying and needs a proper
+design pass before release, likely including the weather-particle idea
+(rain/snow/sun animation, logged above) rather than glow tuning alone.
+
+Not blocking further carousel wiring — flag before launch.

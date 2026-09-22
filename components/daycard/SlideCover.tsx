@@ -93,28 +93,15 @@ export default function SlideCover({ world, date, weather, mood, photoCount, peo
 
       {/* GLOBE */}
       <View style={styles.globeContainer}>
-        {/* TEMP debug — value computed by blendWeatherGlow vs. the value actually
-            landing on this View's shadowColor prop, read from the exact object
-            React is about to apply below. Remove both once confirmed on device. */}
-        {(() => {
-          const glowStyle = { shadowColor: glowColor };
-          return (
-            <>
-              <Text style={styles.debugGlow}>
-                {`computed: ${glowColor}\nat-prop: ${glowStyle.shadowColor}`}
-              </Text>
-              <View style={[styles.glowOuter, glowStyle]}>
-                <View style={[styles.glowWrap, glowStyle]}>
-                  <Image source={require('@/assets/images/globe.png')} resizeMode="contain" style={styles.globe} />
-                  <View style={styles.pinContainer}>
-                    <View style={[styles.pinRing, { borderColor: w.accent }]} />
-                    <View style={[styles.pinDot, { backgroundColor: w.accent }]} />
-                  </View>
-                </View>
-              </View>
-            </>
-          );
-        })()}
+        <View style={[styles.glowOuter, { shadowColor: glowColor }]}>
+          <View style={[styles.glowWrap, { shadowColor: glowColor }]}>
+            <Image source={require('@/assets/images/globe.png')} resizeMode="contain" style={styles.globe} />
+            <View style={styles.pinContainer}>
+              <View style={[styles.pinRing, { borderColor: w.accent }]} />
+              <View style={[styles.pinDot, { backgroundColor: w.accent }]} />
+            </View>
+          </View>
+        </View>
       </View>
 
       {/* PEOPLE */}
@@ -169,7 +156,6 @@ const styles = StyleSheet.create({
   },
 
   globeContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  debugGlow: { position: 'absolute', top: 4, alignSelf: 'center', color: '#ff0', fontSize: 11, zIndex: 9 },
   // TWO stacked shadows, same colour, cast from the same globe silhouette —
   // an inner defined ring (small radius, high opacity, reads as an outline on
   // the sphere) plus an outer wider bloom (bigger radius, lower opacity) for
