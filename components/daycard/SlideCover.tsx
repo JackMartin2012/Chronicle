@@ -97,6 +97,8 @@ export default function SlideCover({ world, date, weather, mood, photoCount, peo
 
       {/* GLOBE */}
       <View style={styles.globeContainer}>
+        {/* TEMP debug — literal render-time value, remove after confirming on device */}
+        <Text style={styles.debugGlow}>{glowColor}</Text>
         <View style={[styles.glowWrap, { shadowColor: glowColor }]}>
           <Image source={require('@/assets/images/globe.png')} resizeMode="contain" style={styles.globe} />
           <View style={styles.pinContainer}>
@@ -158,11 +160,17 @@ const styles = StyleSheet.create({
   },
 
   globeContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  debugGlow: { position: 'absolute', top: 4, alignSelf: 'center', color: '#ff0', fontSize: 11, zIndex: 9 },
+  // A tight, defined ring hugging the globe's silhouette (per the Stitch mock) —
+  // NOT an ambient bloom. Small radius + high opacity so it reads as an outline
+  // on the sphere, not a diffuse spread into the background. A wide/soft glow
+  // is too thin per-pixel for any hue to register regardless of shadowColor —
+  // confirmed on device (see 09_CODE_NOTES.md).
   glowWrap: {
     width: sizes.globeDiameter,
     height: sizes.globeDiameter,
-    shadowOpacity: 0.55,
-    shadowRadius: 40,
+    shadowOpacity: 0.9,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
     elevation: 0,
   },

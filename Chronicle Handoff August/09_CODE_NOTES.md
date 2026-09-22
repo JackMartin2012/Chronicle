@@ -299,3 +299,23 @@ jumps to the full day (the day card carousel).
 that is about the wider world, this is about the user's own significant days.
 
 Revisit once the You tab and the current carousel wiring are further along.
+
+---
+
+## COVER GLOBE GLOW — shape was the real bug, not colour (Sept 2026)
+
+Traced across several rounds: the weather hue never showed on device even
+after `blendWeatherGlow` composited a correct, distinctly-different colour per
+condition (confirmed by direct calculation, not just code reading). Root cause
+found by comparing to the ORIGINAL STITCH MOCK, not by further colour math:
+
+- **Mock:** a tight, defined ring of light hugging the globe's silhouette —
+  small blur, high opacity, reads as an outline on the sphere.
+- **What was built:** a wide, soft, diffuse glow spread well beyond the globe —
+  large blur radius (40), low opacity (0.55), no defined edge.
+
+A spread that diffuse is too thin per-pixel for any hue to register, regardless
+of what `shadowColor` is set to — the earlier "identical across all five
+weather states" symptom was a SHAPE problem, not a colour problem. `SlideCover`
+now uses `shadowOpacity: 0.9` / `shadowRadius: 10`. Re-verify the weather hue
+against this new shape before trusting it further.
