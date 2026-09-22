@@ -2,6 +2,14 @@
 
 Single source of truth for what exists vs designed vs planned.
 
+> ## ⚠️ BEFORE TESTING ANY CAROUSEL SLIDE
+> Verify how the carousel is currently reached — check whether
+> `app/(tabs)/index.tsx` or wherever "On This Day"/"Your Days" opens a day now
+> points at the new `DayCardCarousel`, or still opens the old `DayCard.tsx` via
+> the temp `/preview` + `dateKey` redirect pattern. Do not assume either way —
+> this has changed across sessions before. State clearly in your response
+> which one is currently true before giving device-testing instructions.
+
 > ## ⚠️ THIS FILE DESCRIBES CODE, NOT DESIGNS
 > An entry here means **the code does this**, verified by opening the file — not
 > that a Stitch mock was approved, not that a prompt was written, not that it
