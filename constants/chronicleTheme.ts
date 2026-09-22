@@ -206,6 +206,18 @@ export const weatherGlow: Record<WeatherKind, string> = {
   mild: 'rgba(255,255,255,0.00)',
 };
 
+/**
+ * Explicit, saturated target colours for hot/cold/snow — these must read as a
+ * named colour on sight, not a softened tint of the accent. A soft alpha-blend
+ * toward the accent (the original approach) produced washed-out neutral greys
+ * instead — confirmed on device across two rounds of glow fixes.
+ */
+const weatherTarget: Partial<Record<WeatherKind, string>> = {
+  hot: '#ff8c42',
+  cold: '#4fc3f7',
+  snow: '#f0f4ff',
+};
+
 export const weatherFromTemp = (
   tempC?: number,
   condition?: string
@@ -246,6 +258,17 @@ export const blendWeatherGlow = (accentHex: string, tint: string): string => {
   const toHex = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 };
+
+/**
+ * The glow colour for the globe's shadow, given the world accent and the
+ * day's weather kind. hot/cold/snow use an explicit saturated target colour —
+ * they must read as that colour on sight (see `weatherTarget`). rain keeps
+ * the original soft alpha-blend (spec calls it "dim/desaturated", not a hue
+ * swap); mild alpha-blends too, but its tint is fully transparent so it
+ * resolves back to the accent unchanged.
+ */
+export const weatherGlowColor = (accentHex: string, kind: WeatherKind): string =>
+  weatherTarget[kind] ?? blendWeatherGlow(accentHex, weatherGlow[kind]);
 
 export const theme = {
   palette,

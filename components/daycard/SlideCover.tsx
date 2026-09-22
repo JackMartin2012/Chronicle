@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
-import { blendWeatherGlow, getWorld, palette, sizes, space, type, weatherFromTemp, weatherGlow } from '@/constants/chronicleTheme';
+import { getWorld, palette, sizes, space, type, weatherFromTemp, weatherGlowColor } from '@/constants/chronicleTheme';
 import type { LegacyWeather } from '@/lib/dayCardData';
 
 type Person = { name: string; photoUri?: string };
@@ -34,14 +34,10 @@ export default function SlideCover({ world, date, weather, mood, photoCount, peo
   const dateLine = `${date.getDate()} ${month}`;
   const year = `${date.getFullYear()}`;
 
-  // Weather tints the globe's glow by COLOUR TEMPERATURE only, blended into the
-  // world accent as ONE colour (not a second shadow layer — two stacked
-  // translucent shadows multiply down to invisible; confirmed on device).
-  // 'mild' is fully transparent, so this resolves back to the accent alone.
-  const glowTint = weather
-    ? weatherGlow[weatherFromTemp(weather.temp, weather.description.toLowerCase())]
-    : weatherGlow.mild;
-  const glowColor = blendWeatherGlow(w.accent, glowTint);
+  // Weather tints the globe's glow by COLOUR TEMPERATURE. hot/cold/snow use an
+  // explicit saturated colour (see weatherGlowColor) so they read as that
+  // colour on sight; mild resolves back to the plain world accent.
+  const glowColor = weatherGlowColor(w.accent, weather ? weatherFromTemp(weather.temp, weather.description.toLowerCase()) : 'mild');
 
   const hasPeople = !!people && people.length > 0;
 
@@ -97,15 +93,26 @@ export default function SlideCover({ world, date, weather, mood, photoCount, peo
 
       {/* GLOBE */}
       <View style={styles.globeContainer}>
-        {/* TEMP debug — literal render-time value, remove after confirming on device */}
-        <Text style={styles.debugGlow}>{glowColor}</Text>
-        <View style={[styles.glowWrap, { shadowColor: glowColor }]}>
-          <Image source={require('@/assets/images/globe.png')} resizeMode="contain" style={styles.globe} />
-          <View style={styles.pinContainer}>
-            <View style={[styles.pinRing, { borderColor: w.accent }]} />
-            <View style={[styles.pinDot, { backgroundColor: w.accent }]} />
-          </View>
-        </View>
+        {/* TEMP debug — value computed by blendWeatherGlow vs. the value actually
+            landing on this View's shadowColor prop, read from the exact object
+            React is about to apply below. Remove both once confirmed on device. */}
+        {(() => {
+          const glowStyle = { shadowColor: glowColor };
+          return (
+            <>
+              <Text style={styles.debugGlow}>
+                {`computed: ${glowColor}\nat-prop: ${glowStyle.shadowColor}`}
+              </Text>
+              <View style={[styles.glowWrap, glowStyle]}>
+                <Image source={require('@/assets/images/globe.png')} resizeMode="contain" style={styles.globe} />
+                <View style={styles.pinContainer}>
+                  <View style={[styles.pinRing, { borderColor: w.accent }]} />
+                  <View style={[styles.pinDot, { backgroundColor: w.accent }]} />
+                </View>
+              </View>
+            </>
+          );
+        })()}
       </View>
 
       {/* PEOPLE */}
