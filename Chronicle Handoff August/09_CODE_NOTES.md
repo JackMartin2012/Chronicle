@@ -319,3 +319,15 @@ of what `shadowColor` is set to — the earlier "identical across all five
 weather states" symptom was a SHAPE problem, not a colour problem. `SlideCover`
 now uses `shadowOpacity: 0.9` / `shadowRadius: 10`. Re-verify the weather hue
 against this new shape before trusting it further.
+
+---
+
+## WEATHER PARTICLE EFFECTS ON COVER (idea, Sept 2026 — NOT scoped, NOT built)
+
+A designed EXTENSION of the weather-reactive glow, not a tuning change to it:
+falling rain, drifting snow, sun rays over the globe, depending on the day's
+weather. This is a new animated element (particles), distinct from the glow's
+colour treatment which is done (see the glow shape/colour fixes logged above).
+
+Deserves its own design pass — possibly its own Stitch round — once the
+carousel's core data wiring is finished. Not scoped, not started.

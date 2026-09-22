@@ -103,11 +103,13 @@ export default function SlideCover({ world, date, weather, mood, photoCount, peo
               <Text style={styles.debugGlow}>
                 {`computed: ${glowColor}\nat-prop: ${glowStyle.shadowColor}`}
               </Text>
-              <View style={[styles.glowWrap, glowStyle]}>
-                <Image source={require('@/assets/images/globe.png')} resizeMode="contain" style={styles.globe} />
-                <View style={styles.pinContainer}>
-                  <View style={[styles.pinRing, { borderColor: w.accent }]} />
-                  <View style={[styles.pinDot, { backgroundColor: w.accent }]} />
+              <View style={[styles.glowOuter, glowStyle]}>
+                <View style={[styles.glowWrap, glowStyle]}>
+                  <Image source={require('@/assets/images/globe.png')} resizeMode="contain" style={styles.globe} />
+                  <View style={styles.pinContainer}>
+                    <View style={[styles.pinRing, { borderColor: w.accent }]} />
+                    <View style={[styles.pinDot, { backgroundColor: w.accent }]} />
+                  </View>
                 </View>
               </View>
             </>
@@ -168,11 +170,23 @@ const styles = StyleSheet.create({
 
   globeContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   debugGlow: { position: 'absolute', top: 4, alignSelf: 'center', color: '#ff0', fontSize: 11, zIndex: 9 },
-  // A tight, defined ring hugging the globe's silhouette (per the Stitch mock) —
-  // NOT an ambient bloom. Small radius + high opacity so it reads as an outline
-  // on the sphere, not a diffuse spread into the background. A wide/soft glow
-  // is too thin per-pixel for any hue to register regardless of shadowColor —
-  // confirmed on device (see 09_CODE_NOTES.md).
+  // TWO stacked shadows, same colour, cast from the same globe silhouette —
+  // an inner defined ring (small radius, high opacity, reads as an outline on
+  // the sphere) plus an outer wider bloom (bigger radius, lower opacity) for
+  // atmosphere/presence, fading gradually rather than stopping abruptly. A
+  // single small-radius shadow alone read as a thin hard-edged line; a single
+  // large-radius one was too diffuse for the hue to register at all —
+  // confirmed on device (see 09_CODE_NOTES.md). Same colour on both layers,
+  // so they ADD rather than the earlier bug of two DIFFERENT translucent
+  // colours multiplying down to invisible.
+  glowOuter: {
+    width: sizes.globeDiameter,
+    height: sizes.globeDiameter,
+    shadowOpacity: 0.5,
+    shadowRadius: 34,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+  },
   glowWrap: {
     width: sizes.globeDiameter,
     height: sizes.globeDiameter,
