@@ -2,8 +2,13 @@
 
 A swipeable full-screen carousel that opens when you tap a saved day. Up to 8
 slides. Shared chrome (top bar: chevron-down left, share right, centred date +
-per-slide subtitle; bottom: 8 page dots + "N of 8") persists across slides via
+per-slide subtitle; bottom: page dots + "N of M") persists across slides via
 the carousel shell; each slide renders only its body.
+
+> ## ⚠️ UPDATED SEPT 2026 — DATA WIRING PASS STARTED, SEPARATE FROM THE
+> ## EDITORS/TODAY WIRING PASS. See "DATA WIRING (Sept 2026)" below for what's
+> ## actually real vs sample content — the "Built?" table below predates it and
+> ## means "the slide component exists and renders", not "wired to real data".
 
 ## The 8/8 ring vs the 8 slides — NOT the same eight
 - **The ring counts INPUTS** (things the user fills in).
@@ -185,3 +190,68 @@ stays Space Grotesk. Verify the slide matches.
 The Capture EDITOR uses the same BeReal pair as this slide, and the same
 tap-the-inset-to-swap gesture. Build them to feel like the same object in two
 places — the editor is where you make the pair, the slide is where you see it.
+
+---
+
+## DATA WIRING (Sept 2026) — separate effort from the Today/editors wiring pass
+
+The editors/Today wiring pass (see `02_BUILD_STATUS.md`) is a DIFFERENT piece of
+work from wiring the carousel to real data. This section is the carousel's own
+wiring pass, started Sept 2026, not finished.
+
+**The shape:** `DayCardData` in `lib/dayCardData.ts` — one object per day, built
+from a stored `DayEntry` plus "live extras" gathered once when the carousel
+opens (never re-queried per slide): a read-only camera-roll query (same
+on-device, no-permission-prompt pattern used elsewhere), and the legacy
+top-level weather fields. `buildDayCardData()` is the pure function that maps
+entry + extras → shape. `useDayCardData(dateKey, world)` in
+`lib/dayCardExtras.ts` is the hook the carousel calls; it does the gathering
+(`loadDayCardData`) and loads once per (dateKey, world), not on every render.
+
+**Hide rule (locked):** each slide's slice of `DayCardData` is `null` when the
+day has nothing for that slide, and the carousel drops that slide entirely — no
+empty states. This is the density-adaptive approach from `05_ROADMAP_UNBUILT.md`
+proved out on Today's own card before it needs to handle a sparse old day. The
+Cover slide is the one exception — it's generated, so it always renders.
+
+**Counter:** the dots and "N of M" now count only the slides actually present,
+not a fixed 8 — decided and applied Sept 2026. `TOTAL_SLIDES` and the explicit
+`pageNumber`s described earlier in this file are GONE from
+`DayCardCarousel.tsx`.
+
+**Per-slide status (real data vs. sample content):**
+| # | Slide | Status |
+|---|---|---|
+| — | Carousel shell | Wired — builds only present slides from `DayCardData`, gathers live extras once on open, "N of M" counter |
+| 1 | Cover | **DONE** — real weather (legacy fields), mood, live photo count, real people, weather-reactive globe glow. Glow mechanism works (right colour every time) but is flagged for a further visual design pass before release — see `09_CODE_NOTES.md` |
+| 2 | Capture | Presence/absence wired (shows only when a main photo or selfie exists); body still sample content |
+| 3 | Camera roll | Presence/absence wired (shows only when the live camera-roll query finds items); body still sample content |
+| 4 | Three words | Presence/absence wired; body still sample content |
+| 5 | Story | Presence/absence wired (shows if text, voice note, or learned is set); body still sample content |
+| 6 | Sound | Presence/absence wired (shows if listen or watch is set); body still sample content |
+| 7 | Map | Not built, unchanged |
+| 8 | Newspaper | Presence/absence wired — fed by the Wikipedia **any-year archive** (new, see `newsFeed.ts` below), max 2 entries; lead story stays hidden (see below) |
+
+**Newspaper's reflection block is HIDDEN, not mapped to `futureNote`** — a note
+to future-you isn't a reaction to the day's news, and mapping them would be
+misleading. Logged as a future field needed if the slide keeps a reflection
+concept. Same slide's lead-story mechanic ("user saves a headline that
+mattered + writes a reaction") is unbuilt for the same reason as before — no
+headline source chosen — see `09_CODE_NOTES.md`.
+
+**`newsFeed.ts` change:** `fetchWikipedia` now also returns a separate
+`wikipedia.archive` list — events from ANY year for the calendar date, not just
+the day's own year. This is ADDITIVE: the existing `events`/`birth` (same-year
+only, used by the old `DayCard.tsx`) are untouched. Old 30-day caches backfill
+`archive` once on next load.
+
+**`constants/chronicleTheme.ts` gained `blendWeatherGlow`, `weatherTarget`, and
+`weatherGlowColor`** for the Cover slide's weather-reactive glow. `weatherGlow`/
+`weatherFromTemp` (pre-existing) still back rain/mild; hot/cold/snow now use
+explicit saturated target colours rather than a soft blend toward the accent —
+a soft blend produced washed-out greys. See `09_CODE_NOTES.md` for the full
+trace (shape bug, colour-format bug, then blend-vs-target bug) and the
+launch-blocking design-polish flag.
+
+**Not started this pass:** slides 2–6 and 8's actual bodies (still the original
+sample content), slide 7 (map, unchanged blocker).

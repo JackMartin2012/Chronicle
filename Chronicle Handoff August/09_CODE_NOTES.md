@@ -248,9 +248,9 @@ description terminates the app the moment it asks. Verify with
       stamped by `CaptureEditor` on Done only when the photos changed (reopening
       untouched keeps the old stamp). Never backfilled; old captures show no
       "Captured HH:MM" line.
-- [ ] **Hidden slides vs "N of 8"** — DECIDED: count visible slides only ("3 of
-      5"), no fixed 8. To apply when the carousel is wired (drop `TOTAL_SLIDES`
-      and the explicit `pageNumber`s in `DayCardCarousel.tsx`).
+- [x] **Hidden slides vs "N of 8"** — DECIDED and APPLIED Sept 2026: counts
+      visible slides only ("3 of 5"), no fixed 8. `TOTAL_SLIDES` and the
+      explicit `pageNumber`s are gone from `DayCardCarousel.tsx`.
 
 - [ ] **Personally significant world events — this IS the Newspaper lead story.**
       Jack asked about logging a historical/world event as significant within a

@@ -50,18 +50,44 @@ Likely lives in or alongside the "You" tab.
 
 ---
 
-## THE "YOU" THIRD TAB (approved in principle)
+## THE "YOU" THIRD TAB (approved in principle; contents REVISED Sept 2026)
 Restructure navigation to: **Your Past · You · Your Present** — you standing
 between what was and what is. Pairs naturally with the swipe-between-worlds idea.
 
-**Rationale:** People and Places living inside Your Past is arbitrary — Alex isn't
-a past thing, nor is your flat. Anything about YOU rather than a moment has no home
-today: library, favourites, reminders, things-learned bank, selfie timeline, note
-vault. The You tab collects things that ALREADY exist elsewhere — the moment it
-grows its own separate content it competes with the core.
+**DECISION (Sept 2026): People and Places MOVE to the You tab. They do not stay
+in Your Past.**
+
+**The You tab's contents:**
+- **People**
+- **Places**
+- **Favourites**
+- **Daily Selfie**
+- **Stories** (new — see the STORIES section below)
+
+**Rationale for moving People and Places:** a person or a place isn't tied to a
+time period, so it doesn't belong exclusively to Past or Present. Alex isn't a past
+thing, nor is your flat. Putting them in You keeps **Past and Present simple and
+repeatable — a stream of days** — while **You collects everything that's about the
+person rather than the moment.** The same test decides anything else that's
+proposed for this tab: is it about a moment, or about you?
+
+Other things about YOU rather than a moment that also have no home today: library,
+reminders, things-learned bank, the note vault, and (via the dashboard) the
+note-vault and capsule prompts.
+
+**Caution, now with an exception:** the original rule was that the You tab only
+collects things that ALREADY exist elsewhere — "the moment it grows its own
+separate content it competes with the core." Stories is deliberately NEW content,
+so it breaks that rule. That needs an explicit answer in Stories' design pass (see
+below) rather than being waved through.
 
 **Build as a plain screen first.** The apartment concept (below) is a skin applied
 to the same structure later.
+
+**Migration note:** People and Places currently live in `app/(tabs)/index.tsx`
+(Your Past). Moving them is a real change to that file and to the tab structure
+(`app/(tabs)/_layout.tsx` has two tabs today), not just a doc edit — plan it as its
+own piece of work.
 
 ---
 
@@ -131,6 +157,45 @@ Timeline concept finally having a home.
 Key insight: weekly/monthly reviews are how you PREVENT a sparse past going
 forward — a barely-documented week still gets a summary written at the time, so in
 five years it isn't empty. The review loop is the sparse-past fix applied forwards.
+
+**Added Sept 2026:** the fix for days that ALREADY happened — and can't be
+reviewed at the time — is **Stories** (below): a written memory as content, where
+Eras supply only context.
+
+---
+
+## STORIES (new idea, Sept 2026) — the sparse-past fix, concretely
+
+**The problem (documented above):** old days have no present-style data. There's no
+song logged, no real-time capture, no three words — because those things didn't
+exist yet when the day happened. Eight slides built for a rich day become eight
+empty states.
+
+**The fix:** a dedicated **Stories** feature where the user writes down a memory
+they still hold about a past day — an **anecdote, not a live log.** It is content
+the user CAN still supply for an old day, unlike a song or a live photo. Nobody
+remembers what they listened to on 14 July 2016, but they may well remember the
+story of that afternoon.
+
+**Stories vs Eras — they complement each other, they don't compete:**
+- **Eras give old days CONTEXT** — a period label, a stage of life ("first flat",
+  "the Greece summer"). Thin days inherit it for free.
+- **Stories give them CONTENT** — an actual written memory attached to the day.
+Context frames an empty day; a story fills it. A day can have both.
+
+**Where it lives:** the **You tab** (alongside People, Places, Favourites, Daily
+Selfie).
+
+**Status: NOT speced, NOT built.** This is a roadmap addition and needs its own
+design pass before any building. Open questions for that pass:
+- How a story attaches to a date (or a range of dates), and how it appears on that
+  day's card and in the month view.
+- Whether it's written in the Story editor's ruled-notebook style or is its own
+  object (the "one dominant physical object" rule applies).
+- How it squares with the You-tab rule that the tab only collects existing things
+  (Stories is new content — see the caution above).
+- How it relates to the density-adaptive day card (a thin day with a story is no
+  longer thin).
 
 ---
 

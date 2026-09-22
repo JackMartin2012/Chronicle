@@ -65,16 +65,28 @@ Last commit before this cleanup: `e1c4536` on `main`, pushed to GitHub.
 | Mapbox config (env-var approach) | `app.config.js` |
 
 ### Day card carousel
+This table is the SLIDE COMPONENTS — "exists and renders" only. A separate data
+WIRING pass started Sept 2026 (its own effort from the Today/editors wiring
+pass below) — see `03_DAY_CARD_CAROUSEL.md` § "DATA WIRING (Sept 2026)" for
+which slides read real data vs. still show sample content.
+
 | # | Slide | File | Object |
 |---|---|---|---|
-| — | Carousel shell | `components/daycard/DayCardCarousel.tsx` | pager + chrome + dots |
-| 1 | Cover | `SlideCover.tsx` | Globe (real NASA image) |
-| 2 | Capture | `SlideCapture.tsx` | BeReal pair, tap-swap, hold-to-peek |
-| 3 | Camera roll | `SlideCameraRoll.tsx` | Polaroid + thumb strip |
-| 4 | Three words | `SlideThreeWords.tsx` | Monumental typography |
-| 5 | Story | `SlideStory.tsx` | Dark ruled journal page |
-| 6 | Sound | `SlideSound.tsx` | Album art + ambient glow |
-| 8 | Newspaper | `SlideNewspaper.tsx` | Newspaper page |
+| — | Carousel shell | `components/daycard/DayCardCarousel.tsx` | pager + chrome + dots — **wired Sept 2026**: builds `DayCardData` via `useDayCardData`, drops slides with a null data slice, "N of M" not fixed 8 |
+| 1 | Cover | `SlideCover.tsx` | Globe (real NASA image) — **DONE Sept 2026**, real data + weather glow (colour mechanism works, flagged for a design pass before release, see `09`) |
+| 2 | Capture | `SlideCapture.tsx` | BeReal pair, tap-swap, hold-to-peek — presence wired, body still sample |
+| 3 | Camera roll | `SlideCameraRoll.tsx` | Polaroid + thumb strip — presence wired, body still sample |
+| 4 | Three words | `SlideThreeWords.tsx` | Monumental typography — presence wired, body still sample |
+| 5 | Story | `SlideStory.tsx` | Dark ruled journal page — presence wired, body still sample |
+| 6 | Sound | `SlideSound.tsx` | Album art + ambient glow — presence wired, body still sample |
+| 8 | Newspaper | `SlideNewspaper.tsx` | Newspaper page — presence wired, fed by Wikipedia any-year archive; lead story still hidden |
+
+**New in `lib/`:** `dayCardData.ts` (the `DayCardData` shape + `buildDayCardData`)
+and `dayCardExtras.ts` (`useDayCardData`, the live camera-roll/weather/archive
+query, gathered once per carousel open). `newsFeed.ts` gained a separate
+any-year `wikipedia.archive` list (additive — the old same-year `events` used
+by `DayCard.tsx` is untouched). `constants/chronicleTheme.ts` gained
+`blendWeatherGlow` / `weatherTarget` / `weatherGlowColor` for the Cover glow.
 
 ### Today screen
 `components/today/TodayScreen.tsx` — calm dark mosaic of tiles.
@@ -230,6 +242,11 @@ This is now the ONLY designed-but-unbuilt screen. Every editor is built.
 
 ## WHAT'S ACTUALLY NEXT
 0. ~~The wiring pass~~ — **DONE (Sept 2026).** See the top of this file.
+0a. **Day card carousel data wiring — IN PROGRESS (Sept 2026), separate from
+    0 above.** Shell + Cover slide done; slides 2–6 and 8 have real
+    presence/absence but sample bodies. See `03_DAY_CARD_CAROUSEL.md` §
+    "DATA WIRING (Sept 2026)" and continue slide-by-slide from Capture (slide
+    2) — order in that doc.
 1. ~~Mount `TodayScreen` in the Present tab~~ — **DONE** (as the Today tab; see
    above). Follow-ups: bring back a progress ring on the Today tab, and
    eventually rebuild Your Days / Favourites in the new design and delete the
