@@ -573,7 +573,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
   },
-  searchInput: { flex: 1, alignSelf: 'stretch', marginLeft: 10, paddingVertical: 0, fontFamily: w.fontRegular, fontSize: type.body.fontSize, color: palette.textPrimary },
+  // NO vertical padding here. On iOS a single-line TextInput applies padding to the
+  // typed text and cursor but NOT to the placeholder, so any asymmetric padding
+  // splits them apart. Stretching to the 48pt field lets UITextField centre the
+  // placeholder, text and cursor together, all on the same line box.
+  searchInput: {
+    flex: 1,
+    alignSelf: 'stretch',
+    marginLeft: 10,
+    padding: 0,
+    fontFamily: w.fontRegular,
+    fontSize: type.body.fontSize,
+    color: palette.textPrimary,
+  },
 
   // recent
   recentSection: { marginTop: space.xl },

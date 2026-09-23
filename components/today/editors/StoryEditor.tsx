@@ -18,7 +18,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { fonts, getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
+import {
+  getWorld,
+  palette,
+  radius,
+  space,
+  STORY_ENTRY_FONT,
+  STORY_ENTRY_FONT_SIZE,
+  STORY_RULE_OPACITY,
+  STORY_RULE_SPACING,
+  type,
+} from '@/constants/chronicleTheme';
 import EditorFooterProgress from '../EditorFooterProgress';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
@@ -38,14 +48,12 @@ const BACKDROP = 'rgba(0,0,0,0.55)';
 // ---- the page ----
 // Matched to SlideStory.tsx so the editor and the day card are visibly the same
 // object: same rule spacing, same faint white rules, same muted-red margin rule.
-// The entry's lineHeight equals RULE_SPACING so the writing sits ON the rules.
-const RULE_SPACING = 28;
-const ENTRY_FONT_SIZE = 18;
+// The entry's lineHeight equals STORY_RULE_SPACING so the writing sits ON the rules.
 
-// The text's top padding MUST be a multiple of RULE_SPACING. The rules are drawn
-// at (i+1) * RULE_SPACING, so any other value puts every line half a rule out of
+// The text's top padding MUST be a multiple of STORY_RULE_SPACING. The rules are drawn
+// at (i+1) * STORY_RULE_SPACING, so any other value puts every line half a rule out of
 // register and the first rule cuts through the opening line.
-const PAGE_TOP_PADDING = RULE_SPACING;
+const PAGE_TOP_PADDING = STORY_RULE_SPACING;
 
 const REVEAL_MS = 200;
 
@@ -216,7 +224,7 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
   // Rules must cover the taller of the page and the text, so a short entry
   // still gets a fully ruled page and a long one keeps them going as it scrolls.
   const [contentHeight, setContentHeight] = useState(0);
-  const ruleCount = Math.ceil(Math.max(pageHeight, contentHeight) / RULE_SPACING);
+  const ruleCount = Math.ceil(Math.max(pageHeight, contentHeight) / STORY_RULE_SPACING);
 
   const hasEntry = entry.trim().length > 0;
 
@@ -450,7 +458,7 @@ export default function StoryEditor({ onClose }: { onClose?: () => void }) {
                   {Array.from({ length: ruleCount }).map((_, i) => (
                     <View
                       key={i}
-                      style={[styles.rule, { top: (i + 1) * RULE_SPACING }]}
+                      style={[styles.rule, { top: (i + 1) * STORY_RULE_SPACING }]}
                       pointerEvents="none"
                     />
                   ))}
@@ -620,15 +628,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     overflow: 'hidden',
   },
-  // horizontal rules — white at 8%. SlideStory still uses 4%, which reads as
-  // nearly invisible on device; see the divergence note in 09_CODE_NOTES.
+  // horizontal rules — shared with SlideStory (STORY_RULE_OPACITY)
   rule: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: 1,
     backgroundColor: palette.textPrimary,
-    opacity: 0.08,
+    opacity: STORY_RULE_OPACITY,
   },
   // vertical margin rule — muted red at 20%
   marginRule: {
@@ -653,12 +660,12 @@ const styles = StyleSheet.create({
   },
 
   // DIEGETIC EXCEPTION #4 — serif, because this is your own writing, not UI.
-  // Nothing else on this screen may use it. lineHeight matches RULE_SPACING so
+  // Nothing else on this screen may use it. lineHeight matches STORY_RULE_SPACING so
   // the writing sits on the rules rather than drifting off them.
   entry: {
-    fontFamily: fonts.mastheadBody, // Fraunces_400Regular
-    fontSize: ENTRY_FONT_SIZE,
-    lineHeight: RULE_SPACING,
+    fontFamily: STORY_ENTRY_FONT('present'),
+    fontSize: STORY_ENTRY_FONT_SIZE,
+    lineHeight: STORY_RULE_SPACING,
     color: palette.textPrimary,
     opacity: 0.88,
     padding: 0, // no input box — you are writing on paper

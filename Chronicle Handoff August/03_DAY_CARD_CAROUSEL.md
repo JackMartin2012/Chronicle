@@ -227,7 +227,7 @@ not a fixed 8 — decided and applied Sept 2026. `TOTAL_SLIDES` and the explicit
 | 2 | Capture | **DONE Sept 2026** — real `mainPhotoUri`/`selfieUri`/`selfieIsBig` wired; both-photo (BeReal pair, tap-swap, hold-to-peek) and solo-photo (full-bleed, no swap/peek chrome) cases tested on device |
 | 3 | Camera roll | Presence/absence wired (shows only when the live camera-roll query finds items); body still sample content |
 | 4 | Three words | Presence/absence wired; body still sample content |
-| 5 | Story | Presence/absence wired (shows if text, voice note, or learned is set); body still sample content |
+| 5 | Story | **DONE — real journal text, voice note, learned answer, and person-name highlighting wired; editor and slide now share journal page styling via chronicleTheme.ts constants; tested on device Sept 2026.** Slide shows if text, voice note, or learned is set; the learned section hides when empty. |
 | 6 | Sound | Presence/absence wired (shows if listen or watch is set); body still sample content |
 | 7 | Map | Not built, unchanged |
 | 8 | Newspaper | Presence/absence wired — fed by the Wikipedia **any-year archive** (new, see `newsFeed.ts` below), max 2 entries; lead story stays hidden (see below) |

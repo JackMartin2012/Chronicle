@@ -191,6 +191,17 @@ export const worlds = {
 export const getWorld = (world: World) => worlds[world];
 
 // ---------------------------------------------------------------------------
+// STORY PAGE — shared by SlideStory (view) and StoryEditor (edit) so the
+// notebook page looks identical in both. The slide's values are the approved
+// design; do not tune one file without the other.
+// ---------------------------------------------------------------------------
+export const STORY_RULE_SPACING = 36; // pt between ruled lines; entry lineHeight matches
+export const STORY_ENTRY_FONT_SIZE = type.body.fontSize; // 16
+export const STORY_RULE_OPACITY = 0.04; // white rules
+// world-dependent family (Space Grotesk in Present, Fraunces in Past), so a function
+export const STORY_ENTRY_FONT = (world: World) => worlds[world].fontRegular;
+
+// ---------------------------------------------------------------------------
 // WEATHER-REACTIVE GLOW (slide 1)
 // ---------------------------------------------------------------------------
 // Returns a tint that BLENDS with the world accent — it must never replace

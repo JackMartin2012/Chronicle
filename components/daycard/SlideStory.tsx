@@ -2,12 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
+import {
+  getWorld,
+  palette,
+  radius,
+  space,
+  STORY_ENTRY_FONT,
+  STORY_ENTRY_FONT_SIZE,
+  STORY_RULE_OPACITY,
+  STORY_RULE_SPACING,
+  type,
+} from '@/constants/chronicleTheme';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const PANEL_HEIGHT = Math.round(SCREEN_H * 0.55); // fixed journal panel
-const RULE_SPACING = 36; // faint horizontal rules ~36pt apart; the entry sits on them
-const RULE_COUNT = Math.ceil(PANEL_HEIGHT / RULE_SPACING); // rules fill only the panel
+const RULE_COUNT = Math.ceil(PANEL_HEIGHT / STORY_RULE_SPACING); // rules fill only the panel
 
 // derive an rgba from a world accent token so we can use it at partial opacity
 // without fading a whole element (keeps us off hardcoded colours)
@@ -21,17 +30,19 @@ const withAlpha = (hex: string, alpha: number) => {
 
 type Props = {
   world: 'past' | 'present';
+  date: Date;
+  text: string;
+  voiceNoteUri: string;
+  /** seconds */
+  voiceNoteDuration: number;
+  learned: string;
+  people: { name: string; photoUri?: string }[];
 };
 
-// TODO: real day entry; sample data for now.
-const DATE = 'Thursday 24 July';
-const PEOPLE = [{ name: 'Alex' }, { name: 'Sam' }];
-const ENTRY = `Spent most of the afternoon in the garden with Alex and Sam. Mum made the cake she always makes. It rained at six and nobody moved.
-
-The best of it was everyone singing at once. The one regret — leaving the camera inside for the good bit.`;
-const VOICE = { exists: true, duration: '0:42' };
-const LEARNED =
-  'Rain smells like that because of petrichor — oil the plants release when the ground gets wet.';
+const formatDuration = (secs: number) => {
+  const total = Math.max(0, Math.round(secs));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+};
 
 // grey waveform bar heights (24 bars) — the only non-text element on the page
 const WAVE = [5, 9, 14, 7, 11, 17, 8, 6, 12, 16, 10, 7, 13, 18, 9, 5, 11, 15, 8, 12, 6, 14, 9, 7];
@@ -39,15 +50,26 @@ const WAVE = [5, 9, 14, 7, 11, 17, 8, 6, 12, 16, 10, 7, 13, 18, 9, 5, 11, 15, 8,
 // Slide 5 — "Your day". The slide itself does not scroll. A fixed-height ruled
 // journal panel (its entry scrolls internally if long; voice note pinned at the
 // bottom), then an always-visible "Something I learned" note. Chrome from carousel.
-export default function SlideStory({ world }: Props) {
+export default function SlideStory({
+  world,
+  date,
+  text,
+  voiceNoteUri,
+  voiceNoteDuration,
+  learned,
+  people,
+}: Props) {
   const w = getWorld(world);
-  const names = PEOPLE.map((p) => p.name);
+  const dateLabel = `${date.toLocaleDateString('en-GB', { weekday: 'long' })} ${date.getDate()} ${date.toLocaleDateString('en-GB', { month: 'long' })}`;
+  const names = people.map((p) => p.name.trim()).filter((n) => n.length > 0);
 
   // render the entry with linked names inline (accent Text, no-op onPress for now)
   const renderEntry = () => {
+    // no names -> no regex (an empty alternation would match everywhere)
+    if (names.length === 0) return text;
     const escaped = names.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     const re = new RegExp(`\\b(${escaped.join('|')})\\b`, 'g');
-    return ENTRY.split(re).map((part, i) =>
+    return text.split(re).map((part, i) =>
       names.includes(part) ? (
         <Text key={i} style={{ color: w.accent }} onPress={() => {}}>
           {part}
@@ -64,7 +86,7 @@ export default function SlideStory({ world }: Props) {
       <View style={[styles.panel, { backgroundColor: w.surface }]}>
         {/* faint horizontal rules */}
         {Array.from({ length: RULE_COUNT }).map((_, i) => (
-          <View key={i} style={[styles.rule, { top: (i + 1) * RULE_SPACING }]} pointerEvents="none" />
+          <View key={i} style={[styles.rule, { top: (i + 1) * STORY_RULE_SPACING }]} pointerEvents="none" />
         ))}
         {/* muted-red vertical margin rule near the left */}
         <View style={styles.marginRule} pointerEvents="none" />
@@ -73,12 +95,12 @@ export default function SlideStory({ world }: Props) {
         <View style={styles.inner}>
           {/* scrollable entry — scrolls internally only if it overflows the panel */}
           <ScrollView style={styles.entryScroll} showsVerticalScrollIndicator={false}>
-            <Text style={[styles.letterhead, { fontFamily: w.fontRegular }]}>{DATE}</Text>
-            <Text style={[styles.entry, { fontFamily: w.fontRegular }]}>{renderEntry()}</Text>
+            <Text style={[styles.letterhead, { fontFamily: w.fontRegular }]}>{dateLabel}</Text>
+            <Text style={[styles.entry, { fontFamily: STORY_ENTRY_FONT(world) }]}>{renderEntry()}</Text>
           </ScrollView>
 
           {/* voice note pinned at the bottom of the panel, below the text */}
-          {VOICE.exists && (
+          {!!voiceNoteUri && (
             <View style={styles.voiceRow}>
               <Ionicons name="play" size={16} color={w.accent} />
               <View style={styles.wave}>
@@ -86,25 +108,27 @@ export default function SlideStory({ world }: Props) {
                   <View key={i} style={[styles.waveBar, { height: h }]} />
                 ))}
               </View>
-              <Text style={[styles.voiceTime, { fontFamily: w.fontRegular }]}>{VOICE.duration}</Text>
+              <Text style={[styles.voiceTime, { fontFamily: w.fontRegular }]}>{formatDuration(voiceNoteDuration)}</Text>
             </View>
           )}
         </View>
       </View>
 
-      {/* SOMETHING I LEARNED — always visible below the panel */}
-      <View style={styles.learnedSection}>
-        <View style={styles.learnedLabelRow}>
-          <Ionicons name="bulb-outline" size={18} color={w.accent} />
-          <Text style={[styles.learnedLabel, { fontFamily: w.fontRegular }]}>Something I learned</Text>
-        </View>
+      {/* SOMETHING I LEARNED — below the panel; hidden entirely when nothing was learned */}
+      {learned.trim().length > 0 && (
+        <View style={styles.learnedSection}>
+          <View style={styles.learnedLabelRow}>
+            <Ionicons name="bulb-outline" size={18} color={w.accent} />
+            <Text style={[styles.learnedLabel, { fontFamily: w.fontRegular }]}>Something I learned</Text>
+          </View>
 
-        <View style={[styles.note, { backgroundColor: w.surface, borderColor: withAlpha(w.accent, 0.2) }]}>
-          <Text style={[styles.noteText, { fontFamily: w.fontRegular }]}>{LEARNED}</Text>
-        </View>
+          <View style={[styles.note, { backgroundColor: w.surface, borderColor: withAlpha(w.accent, 0.2) }]}>
+            <Text style={[styles.noteText, { fontFamily: w.fontRegular }]}>{learned}</Text>
+          </View>
 
-        <Text style={[styles.savedNote, { fontFamily: w.fontRegular }]}>Saved to your things learned</Text>
-      </View>
+          <Text style={[styles.savedNote, { fontFamily: w.fontRegular }]}>Saved to your things learned</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -119,14 +143,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // faint horizontal rules — white at 4% (token colour + opacity, not a hex)
+  // faint horizontal rules — shared STORY_RULE_OPACITY
   rule: {
     position: 'absolute',
     left: 0,
     right: 0,
     height: 1,
     backgroundColor: palette.textPrimary,
-    opacity: 0.04,
+    opacity: STORY_RULE_OPACITY,
   },
   // vertical margin rule — muted red at 20% (danger token + opacity)
   marginRule: {
@@ -150,10 +174,10 @@ const styles = StyleSheet.create({
 
   letterhead: { ...type.caption, color: palette.textMuted, marginBottom: space.md },
 
-  // continuous writing, sitting on the rules (lineHeight matches RULE_SPACING)
+  // continuous writing, sitting on the rules (lineHeight matches STORY_RULE_SPACING)
   entry: {
-    ...type.body,
-    lineHeight: RULE_SPACING,
+    fontSize: STORY_ENTRY_FONT_SIZE,
+    lineHeight: STORY_RULE_SPACING,
     color: palette.textPrimary,
     opacity: 0.88,
   },

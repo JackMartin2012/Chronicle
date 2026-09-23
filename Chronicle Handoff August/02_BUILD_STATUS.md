@@ -85,7 +85,7 @@ which slides read real data vs. still show sample content.
 | 2 | Capture | `SlideCapture.tsx` | BeReal pair, tap-swap, hold-to-peek — **DONE — real photos wired, both-photo and solo-photo cases tested on device Sept 2026.** |
 | 3 | Camera roll | `SlideCameraRoll.tsx` | Polaroid + thumb strip — presence wired, body still sample |
 | 4 | Three words | `SlideThreeWords.tsx` | Monumental typography — presence wired, body still sample |
-| 5 | Story | `SlideStory.tsx` | Dark ruled journal page — presence wired, body still sample |
+| 5 | Story | `SlideStory.tsx` | Dark ruled journal page — **DONE — real journal text, voice note, learned answer, and person-name highlighting wired; editor and slide now share journal page styling via chronicleTheme.ts constants; tested on device Sept 2026.** |
 | 6 | Sound | `SlideSound.tsx` | Album art + ambient glow — presence wired, body still sample |
 | 8 | Newspaper | `SlideNewspaper.tsx` | Newspaper page — presence wired, fed by Wikipedia any-year archive; lead story still hidden |
 
@@ -208,15 +208,19 @@ This is now the ONLY designed-but-unbuilt screen. Every editor is built.
   editor is now **Listen / Watch**, where Listen covers songs + podcasts and Watch
   covers films + TV. The slide needs a small update to display all four media
   types. Not a blocker — do it in the wiring pass.
-- **`SlideStory.tsx`** body text should use Fraunces serif to match the Story
+- ~~**`SlideStory.tsx`** body text should use Fraunces serif to match the Story
   editor (diegetic exception #4). **Checked Aug 2026: it does NOT** — line 77
   passes `w.fontRegular`, which is Space Grotesk in the Present world. The same
-  day currently renders in a different font in the editor and on the card.
-- **`SlideStory.tsx` page treatment has diverged from `StoryEditor.tsx`** — the
+  day currently renders in a different font in the editor and on the card.~~
+  **RESOLVED Sept 2026** — editor and slide now both use `STORY_ENTRY_FONT(world)`
+  from `chronicleTheme.ts` (Space Grotesk in Present).
+- ~~**`SlideStory.tsx` page treatment has diverged from `StoryEditor.tsx`** — the
   editor was tuned on device (28pt rules vs 36, 18px vs 16, rules at 8% vs 4%)
   and the slide was deliberately left alone. The page is meant to be ONE object
   in both places. Neither value is shared; both files declare their own. See
-  `09_CODE_NOTES.md`.
+  `09_CODE_NOTES.md`.~~ **RESOLVED Sept 2026** — the slide's values (36pt rules,
+  16px, 4%) won; both files import `STORY_RULE_SPACING`, `STORY_ENTRY_FONT_SIZE`,
+  `STORY_RULE_OPACITY`, `STORY_ENTRY_FONT` from `chronicleTheme.ts`.
 
 ---
 

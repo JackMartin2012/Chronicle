@@ -26,12 +26,14 @@ away. When you fix one, tick it here AND in its source file.
       Sound editor is now Listen/Watch (Listen = songs + podcasts, Watch =
       films + TV), so the slide needs to display all four media types. Not a
       blocker — do it in the wiring pass. *(02:84)*
-- [ ] **`SlideStory.tsx`** — body text should use Fraunces serif to match the
+- [x] **RESOLVED Sept 2026 (see below)** — ~~**`SlideStory.tsx`** — body text should use Fraunces serif to match the
       Story editor (diegetic exception #4). **Checked Aug 2026: it does NOT.**
       Line 77 passes `w.fontRegular`, which is Space Grotesk in the Present
       world, so the same day currently renders in a different font in the
-      editor and on the card. *(02:88)*
-- [ ] **`SlideStory.tsx` page treatment has diverged from `StoryEditor.tsx`** —
+      editor and on the card.~~ *(02:88)* Editor and slide now share
+      `STORY_ENTRY_FONT(world)` from `chronicleTheme.ts`.
+- [x] **RESOLVED Sept 2026** — the slide's values won; both files import the
+      `STORY_*` constants from `chronicleTheme.ts`. ~~**`SlideStory.tsx` page treatment has diverged from `StoryEditor.tsx`** —
       the editor was tuned on device and the slide was left alone deliberately
       (unreviewed edit). The page is meant to be ONE object in both places, so
       the slide should be brought up to match once the editor is signed off:
@@ -43,7 +45,7 @@ away. When you fix one, tick it here AND in its source file.
       | entry font | Space Grotesk | Fraunces |
       Neither value is shared — both files declare their own module const and
       inline style, so they must be changed in two places. Consider lifting
-      them into `chronicleTheme.ts` at that point. *(new, Aug 2026 build)*
+      them into `chronicleTheme.ts` at that point.~~ *(new, Aug 2026 build)*
 
 ---
 
@@ -344,3 +346,8 @@ design pass before release, likely including the weather-particle idea
 (rain/snow/sun animation, logged above) rather than glow tuning alone.
 
 Not blocking further carousel wiring — flag before launch.
+
+
+## Search inputs
+
+Fixed Sept 2026 — placeholder/cursor vertical misalignment in SoundEditor, PlacesEditor, and PeopleEditor search inputs, verified on device. Person-name tap in SlideStory.tsx is still a no-op — parked for when person profiles are built.
