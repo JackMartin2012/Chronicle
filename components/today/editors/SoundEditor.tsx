@@ -24,7 +24,7 @@ import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
-const SHEET_HEIGHT = Math.round(SCREEN_H * 0.78); // fixed sheet height — stable across search/hero states
+const SHEET_RATIO = 0.9; // resting sheet height as a share of the screen — stable across search/hero states
 
 // ---- colours with no chronicleTheme token for their exact value ----
 const W60 = 'rgba(255,255,255,0.6)';
@@ -37,8 +37,12 @@ const BACKDROP = 'rgba(0,0,0,0.55)';
 // same rgba-from-hex helper SlideSound uses for its glow
 // Everything in the hero except the artwork: its vertical padding (2x12) and
 // margin (8), a two-line title, subtitle, Change, rating label and pill row,
-// plus slack. Generous on purpose — too small a number hides the rating row.
-const HERO_FIXED = 250;
+// the note label + box + bottom padding (~154), plus slack. Generous on
+// purpose — too small a number pushes the note off the bottom of the sheet.
+const HERO_FIXED = 404;
+
+const NOTE_BOX_H = 88; // the note input's fixed height
+const NOTE_LEAD = 96; // how far above the note box to scroll to (keeps its label + some air in view)
 
 const withAlpha = (hex: string, alpha: number) => {
   const h = hex.replace('#', '');
@@ -215,6 +219,10 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
     watch: null,
   });
   const [completed, setCompleted] = useState(0);
+  // TODO: placeholder for the Favourites feature. This star is decorative — local
+  // state only, per slot, NOT saved and NOT part of SoundEntry. Wire it to the
+  // Favourites tab when that feature is built.
+  const [starred, setStarred] = useState<Record<SoundMode, boolean>>({ listen: false, watch: false });
   const [heroH, setHeroH] = useState(0);
   // The hero is invisible at 0. selectResult animates it in; a seeded entry
   // never goes through selectResult, so seeding must set it to 1 itself.
@@ -263,10 +271,57 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
   }, []);
 
   const keyboardUp = keyboardHeight > 0;
-  // never taller than the space left above the keyboard
+
+  // Bring the note field into view. The scroll is driven by keyboardDidShow, which
+  // fires only after the keyboard animation has finished and the sheet has laid
+  // out at its final size — so there is no delay to guess. If the keyboard is
+  // ALREADY up when the note is focused (it stays up after picking a search
+  // result), nothing more will fire, so onFocus scrolls straight away.
+  const heroScrollRef = useRef<ScrollView>(null);
+  const noteY = useRef(0); // top of the note box inside the scroll content
+  const heroContentH = useRef(0);
+  const heroViewH = useRef(0);
+  const noteFocusedRef = useRef(false);
+  const keyboardShownRef = useRef(false);
+
+  const scrollToNote = () => {
+    const max = Math.max(0, heroContentH.current - heroViewH.current);
+    // aim for the label + a little air above the box; but never let the box's
+    // bottom edge fall below the visible area on a short viewport
+    const wanted = Math.min(noteY.current - NOTE_LEAD, max);
+    const boxBottomVisible = noteY.current + NOTE_BOX_H - heroViewH.current;
+    const y = Math.min(Math.max(0, wanted, boxBottomVisible), max);
+    heroScrollRef.current?.scrollTo({ y, animated: true });
+  };
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', () => {
+      keyboardShownRef.current = true;
+      if (noteFocusedRef.current) scrollToNote();
+    });
+    const hidden = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardShownRef.current = false;
+    });
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, []);
+
+  const onNoteFocus = () => {
+    noteFocusedRef.current = true;
+    if (keyboardShownRef.current) scrollToNote();
+  };
+  const onNoteBlur = () => {
+    noteFocusedRef.current = false;
+  };
+
+  // Resting height: a share of the screen, but never so tall that the top edge
+  // reaches the status bar / notch (grabber, Done row, title and toggle stay clear).
+  const restHeight = Math.min(Math.round(SCREEN_H * SHEET_RATIO), SCREEN_H - insets.top - space.base);
+  // with the keyboard up, never taller than the space left above it
   const sheetHeight = keyboardUp
-    ? Math.min(SHEET_HEIGHT, SCREEN_H - keyboardHeight - insets.top - space.sm)
-    : SHEET_HEIGHT;
+    ? Math.min(restHeight, SCREEN_H - keyboardHeight - insets.top - space.sm)
+    : restHeight;
 
   const titleOpacity = useRef(new Animated.Value(1)).current;
   const pillScales = useRef(Array.from({ length: 10 }, () => new Animated.Value(1))).current;
@@ -342,6 +397,7 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
 
   const changeSelection = () => {
     setEntries((prev) => ({ ...prev, [mode]: null })); // keeps the previous query → search re-runs
+    setStarred((prev) => ({ ...prev, [mode]: false })); // a new pick starts un-starred
   };
 
   const tapRating = (n: number) => {
@@ -516,7 +572,15 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
             ]}
           >
             <ScrollView
+              ref={heroScrollRef}
+              onLayout={(e) => {
+                heroViewH.current = e.nativeEvent.layout.height;
+              }}
+              onContentSizeChange={(_, h) => {
+                heroContentH.current = h;
+              }}
               style={styles.heroScroll}
+              contentContainerStyle={styles.heroContent}
               keyboardDismissMode="interactive"
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
@@ -556,9 +620,18 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
               <Text style={styles.heroSubtitle} numberOfLines={1}>
                 {entry.subtitle}
               </Text>
-              <TouchableOpacity onPress={changeSelection} hitSlop={10} style={styles.changeWrap}>
-                <Text style={styles.changeLink}>Change</Text>
-              </TouchableOpacity>
+              <View style={styles.changeRow}>
+                <TouchableOpacity onPress={changeSelection} hitSlop={10}>
+                  <Text style={styles.changeLink}>Change</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setStarred((prev) => ({ ...prev, [mode]: !prev[mode] }))}
+                  hitSlop={10}
+                  style={styles.starBtn}
+                >
+                  <Ionicons name={starred[mode] ? 'star' : 'star-outline'} size={18} color={w.accent} />
+                </TouchableOpacity>
+              </View>
 
               {/* rating */}
               <Text style={styles.fieldLabel}>How would you rate it?</Text>
@@ -588,7 +661,12 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
 
               {/* note */}
               <Text style={[styles.fieldLabel, styles.reactionLabel]}>Add a note</Text>
-              <View style={styles.reactionBox}>
+              <View
+                style={styles.reactionBox}
+                onLayout={(e) => {
+                  noteY.current = e.nativeEvent.layout.y;
+                }}
+              >
                 <TextInput
                   inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
                   style={styles.reactionInput}
@@ -601,6 +679,8 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
                   }
                   placeholder={NOTE_PLACEHOLDER[entry.mediaType]}
                   placeholderTextColor={palette.textMuted}
+                  onFocus={onNoteFocus}
+                  onBlur={onNoteBlur}
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
@@ -739,6 +819,7 @@ const styles = StyleSheet.create({
   // hero
   heroWrap: { flex: 1 },
   heroScroll: { flex: 1 },
+  heroContent: { paddingBottom: space.lg }, // room below the note so it can scroll clear of the keyboard
   artworkWrap: {
     marginTop: space.sm,
     alignItems: 'center',
@@ -770,7 +851,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: W60,
   },
-  changeWrap: { marginTop: space.sm, alignSelf: 'center' },
+  changeRow: { marginTop: space.sm, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  starBtn: { marginLeft: space.base },
   changeLink: { fontFamily: w.fontRegular, fontSize: type.label.fontSize, color: w.accent },
 
   // rating
@@ -798,17 +880,19 @@ const styles = StyleSheet.create({
 
   // reaction
   reactionLabel: { marginTop: space.lg },
+  // The INPUT is the whole box: it has a real height and carries the padding, so
+  // a tap anywhere inside the box lands on the TextInput (a flex:1 input in a
+  // box with only min/max height collapsed to one line, leaving the rest dead).
   reactionBox: {
     marginTop: space.sm,
     marginHorizontal: space.xl,
     backgroundColor: INPUT_BG,
     borderRadius: 14,
-    padding: 14,
-    minHeight: 88,
-    maxHeight: 88,
+    overflow: 'hidden',
   },
   reactionInput: {
-    flex: 1,
+    height: NOTE_BOX_H,
+    padding: 14,
     fontFamily: w.fontRegular,
     fontSize: type.body.fontSize,
     color: palette.textPrimary,

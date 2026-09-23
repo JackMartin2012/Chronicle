@@ -22,10 +22,10 @@ away. When you fix one, tick it here AND in its source file.
 
 ## DAY CARD — SLIDES OUT OF DATE (source: 02_BUILD_STATUS.md)
 
-- [ ] **`SlideSound.tsx`** — still tap-swaps between *music* and *film*. The
+- [x] **RESOLVED Sept 2026** — the slide now renders real `SoundSlots` data. ~~**`SlideSound.tsx`** — still tap-swaps between *music* and *film*. The
       Sound editor is now Listen/Watch (Listen = songs + podcasts, Watch =
       films + TV), so the slide needs to display all four media types. Not a
-      blocker — do it in the wiring pass. *(02:84)*
+      blocker — do it in the wiring pass.~~ *(02:84)*
 - [x] **RESOLVED Sept 2026 (see below)** — ~~**`SlideStory.tsx`** — body text should use Fraunces serif to match the
       Story editor (diegetic exception #4). **Checked Aug 2026: it does NOT.**
       Line 77 passes `w.fontRegular`, which is Space Grotesk in the Present
@@ -95,6 +95,7 @@ away. When you fix one, tick it here AND in its source file.
       results, the editor hero and the Today tile. Deliberately left as-is: a
       TMDB key would fix it, but that's a standing API-key commitment already
       ruled out, and this is a cosmetic gap. **Nothing to build.** *(Sept 2026)*
+- [x] Fixed Sept 2026 — 'Add a note' box had a hit-area bug (only top ~20pt of the 88pt box was tappable) and an unreliable keyboard scroll (fixed-delay race condition, replaced with keyboardDidShow listener). Sheet height also increased so the note field is visible at rest. A decorative favourites star was added next to 'Change' — local-state only, not persisted, intended for a future link to the Favourites tab.
 
 ### People (source: 04_TODAY_AND_EDITORS.md)
 - [ ] Tagged and Recent rows look too similar on device — a "Tagged" label above

@@ -86,7 +86,7 @@ which slides read real data vs. still show sample content.
 | 3 | Camera roll | `SlideCameraRoll.tsx` | Polaroid + thumb strip — presence wired, body still sample |
 | 4 | Three words | `SlideThreeWords.tsx` | Monumental typography — presence wired, body still sample |
 | 5 | Story | `SlideStory.tsx` | Dark ruled journal page — **DONE — real journal text, voice note, learned answer, and person-name highlighting wired; editor and slide now share journal page styling via chronicleTheme.ts constants; tested on device Sept 2026.** |
-| 6 | Sound | `SlideSound.tsx` | Album art + ambient glow — presence wired, body still sample |
+| 6 | Sound | `SlideSound.tsx` | Album art + ambient glow — **DONE — real listen/watch data wired, single-slot and both-filled cases tested on device, portrait posters for film/TV, swap behaviour confirmed, Sept 2026.** |
 | 8 | Newspaper | `SlideNewspaper.tsx` | Newspaper page — presence wired, fed by Wikipedia any-year archive; lead story still hidden |
 
 **New in `lib/`:** `dayCardData.ts` (the `DayCardData` shape + `buildDayCardData`)
@@ -204,10 +204,11 @@ This is now the ONLY designed-but-unbuilt screen. Every editor is built.
 ---
 
 ## NEEDS UPDATING because of decisions made last session
-- **`SlideSound.tsx`** currently tap-swaps between *music* and *film*. The Sound
+- ~~**`SlideSound.tsx`** currently tap-swaps between *music* and *film*. The Sound
   editor is now **Listen / Watch**, where Listen covers songs + podcasts and Watch
   covers films + TV. The slide needs a small update to display all four media
-  types. Not a blocker — do it in the wiring pass.
+  types. Not a blocker — do it in the wiring pass.~~ **RESOLVED Sept 2026** — the
+  slide now renders real `SoundSlots` (listen/watch, all four media types).
 - ~~**`SlideStory.tsx`** body text should use Fraunces serif to match the Story
   editor (diegetic exception #4). **Checked Aug 2026: it does NOT** — line 77
   passes `w.fontRegular`, which is Space Grotesk in the Present world. The same

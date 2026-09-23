@@ -1,12 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useRef, useState } from 'react';
-import { Animated, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getWorld, motion, palette, radius, space, type } from '@/constants/chronicleTheme';
+import type { MediaType, SoundEntry, SoundMode, SoundSlots } from '@/lib/types';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const ARTWORK = Math.round(SCREEN_W * 0.62);
+const SWAP_THUMB = 56;
+
+// Album art is square; film/TV posters are portrait (~2:3). Same height either
+// way, so the slide's vertical layout doesn't change — only the width narrows.
+const artworkBox = (mode: SoundMode) => ({
+  width: mode === 'watch' ? Math.round((ARTWORK * 2) / 3) : ARTWORK,
+  height: ARTWORK,
+});
+const swapThumbBox = (mode: SoundMode) => ({
+  width: mode === 'watch' ? Math.round((SWAP_THUMB * 2) / 3) : SWAP_THUMB,
+  height: SWAP_THUMB,
+});
 
 // derive an rgba from a hex token/glowColor so we can use it at partial opacity
 const withAlpha = (hex: string, alpha: number) => {
@@ -19,45 +32,37 @@ const withAlpha = (hex: string, alpha: number) => {
 
 type Props = {
   world: 'past' | 'present';
+  sound: SoundSlots;
 };
 
-// TODO: derive glowColor from real artwork via react-native-image-colors when
-// images are wired; artwork/poster are solid world.surface blocks for now.
-const MUSIC = {
-  title: 'Glittering Horizon',
-  artist: 'Neon Atmosphere',
-  rating: 8,
-  reaction: 'Reminds me of driving back from Cornwall last summer.',
-  glowColor: '#e0a05a',
-  store: 'Apple Music',
-};
-const FILM = {
-  title: 'The Solitary Hour',
-  meta: 'Series 1 · Episode 4 · 48 min',
-  rating: 7,
-  reaction: 'Watched it half asleep and still thought about it all week.',
-  glowColor: '#5a7ae0',
-  store: 'Apple TV',
-};
+// same labels the Sound editor's result rows use
+const TYPE_LABEL: Record<MediaType, string> = { song: 'Song', podcast: 'Podcast', film: 'Film', tv: 'TV' };
 
-// Slide 6 — "Sound & screen". Music or film as the centrepiece; the other sits
-// as a small swap row at the bottom. Tapping the swap row trades them with a
-// short fade. Progress + transport belong to music only. Chrome from carousel.
-export default function SlideSound({ world }: Props) {
+// "Artist · Song" — subtitle first when there is one
+const subLine = (e: SoundEntry) => (e.subtitle ? `${e.subtitle} · ${TYPE_LABEL[e.mediaType]}` : TYPE_LABEL[e.mediaType]);
+
+// TODO: derive the glow from real artwork via react-native-image-colors when that
+// decision is made; until then the glow is the world accent.
+
+// Slide 6 — "Sound & screen". One shared layout for song / podcast / film / TV.
+// If both listen and watch are filled, one is the centrepiece and the other sits
+// as a small swap row at the bottom (tap to trade, short fade). If only one is
+// filled, it is shown alone with no swap row. Progress + transport are decorative
+// and shown for listen entries only. Rating is read-only. Chrome from carousel.
+export default function SlideSound({ world, sound }: Props) {
   const w = getWorld(world);
-  const [showFilm, setShowFilm] = useState(false);
   const fade = useRef(new Animated.Value(1)).current;
 
-  const active = showFilm ? FILM : MUSIC;
-  const other = showFilm ? MUSIC : FILM;
-  const activeSub = showFilm ? FILM.meta : MUSIC.artist;
-  const otherSub = showFilm ? MUSIC.artist : FILM.meta;
+  const bothFilled = !!sound.listen && !!sound.watch;
+  // start on listen when it exists, otherwise on watch
+  const [activeMode, setActiveMode] = useState<SoundMode>(sound.listen ? 'listen' : 'watch');
 
-  // ratings are editable, tracked per item
-  const [ratings, setRatings] = useState({ music: MUSIC.rating, film: FILM.rating });
-  const activeRating = showFilm ? ratings.film : ratings.music;
-  const setActiveRating = (n: number) =>
-    setRatings((r) => (showFilm ? { ...r, film: n } : { ...r, music: n }));
+  const active: SoundEntry | null = sound[activeMode] ?? sound.listen ?? sound.watch;
+  const other: SoundEntry | null = bothFilled ? sound[activeMode === 'listen' ? 'watch' : 'listen'] : null;
+  if (!active) return null; // the carousel only builds this slide when a slot is filled
+
+  const isListen = active.mode === 'listen';
+  const hasNote = active.note.trim().length > 0;
 
   const swap = () => {
     Animated.timing(fade, {
@@ -65,7 +70,7 @@ export default function SlideSound({ world }: Props) {
       duration: motion.fadeMs / 2,
       useNativeDriver: true,
     }).start(() => {
-      setShowFilm((v) => !v);
+      setActiveMode((m) => (m === 'listen' ? 'watch' : 'listen'));
       Animated.timing(fade, {
         toValue: 1,
         duration: motion.fadeMs / 2,
@@ -77,14 +82,14 @@ export default function SlideSound({ world }: Props) {
   return (
     <View style={[styles.root, { backgroundColor: w.bg }]}>
       <Animated.View style={[styles.fadeWrap, { opacity: fade }]}>
-        {/* AMBIENT GLOW — radial-ish, from the active item's glowColor */}
+        {/* AMBIENT GLOW — radial-ish, from the world accent */}
         <LinearGradient
           pointerEvents="none"
           style={StyleSheet.absoluteFill}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           locations={[0, 0.42, 1]}
-          colors={[w.bg, withAlpha(active.glowColor, 0.3), w.bg]}
+          colors={[w.bg, withAlpha(w.accent, 0.3), w.bg]}
         />
         <LinearGradient
           pointerEvents="none"
@@ -98,16 +103,24 @@ export default function SlideSound({ world }: Props) {
         <View style={styles.content}>
           {/* CENTREPIECE */}
           <View style={styles.centre}>
-            {/* artwork / poster placeholder */}
+            {/* artwork, or the same icon-in-a-box the editor falls back to */}
             <View
-              style={[styles.artwork, { backgroundColor: w.surface, shadowColor: active.glowColor }]}
-            />
+              style={[styles.artwork, artworkBox(active.mode), { backgroundColor: w.surface, shadowColor: w.accent }]}
+            >
+              {active.artworkUrl ? (
+                <Image source={{ uri: active.artworkUrl }} style={styles.artworkImg} />
+              ) : (
+                <View style={styles.noArt}>
+                  <Ionicons name="film-outline" size={40} color={palette.textMuted} />
+                </View>
+              )}
+            </View>
 
             <Text style={[styles.title, { fontFamily: w.fontBold }]}>{active.title}</Text>
-            <Text style={[styles.sub, { fontFamily: w.fontRegular }]}>{activeSub}</Text>
+            <Text style={[styles.sub, { fontFamily: w.fontRegular }]}>{subLine(active)}</Text>
 
-            {/* progress + transport — MUSIC ONLY */}
-            {!showFilm && (
+            {/* progress + transport — decorative, LISTEN (song + podcast) only */}
+            {isListen && (
               <>
                 <View style={styles.progressTrack}>
                   <View style={[styles.progressFill, { backgroundColor: w.accent }]} />
@@ -121,72 +134,73 @@ export default function SlideSound({ world }: Props) {
               </>
             )}
 
-            {/* RATING — editable; score above the boxes so the row fits comfortably */}
-            <Text style={[styles.ratingScore, { fontFamily: w.fontMedium }]}>{activeRating}/10</Text>
-            <View style={styles.ratingRow}>
-              {Array.from({ length: 10 }).map((_, idx) => {
-                const n = idx + 1;
-                const isRating = n === activeRating;
-                const isFilled = n < activeRating;
-                return (
-                  <Pressable
-                    key={n}
-                    onPress={() => setActiveRating(n)}
-                    hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }}
-                    style={styles.ratingPress}
-                  >
-                    <View
-                      style={[
-                        styles.ratingBox,
-                        isRating
-                          ? { backgroundColor: w.accent }
-                          : isFilled
-                          ? { backgroundColor: withAlpha(w.accent, 0.15) }
-                          : { borderWidth: 1, borderColor: withAlpha(w.accent, 0.2) },
-                      ]}
-                    >
-                      <Text
+            {/* RATING — read-only; nothing at all when unrated */}
+            {active.rating > 0 && (
+              <>
+                <Text style={[styles.ratingScore, { fontFamily: w.fontMedium }]}>{active.rating}/10</Text>
+                <View style={styles.ratingRow}>
+                  {Array.from({ length: 10 }).map((_, idx) => {
+                    const n = idx + 1;
+                    const isRating = n === active.rating;
+                    const isFilled = n < active.rating;
+                    return (
+                      <View
+                        key={n}
                         style={[
-                          styles.ratingNum,
-                          { fontFamily: w.fontMedium },
+                          styles.ratingBox,
                           isRating
-                            ? { color: w.bg }
+                            ? { backgroundColor: w.accent }
                             : isFilled
-                            ? { color: palette.textSecondary }
-                            : { color: palette.textMuted },
+                            ? { backgroundColor: withAlpha(w.accent, 0.15) }
+                            : { borderWidth: 1, borderColor: withAlpha(w.accent, 0.2) },
                         ]}
                       >
-                        {n}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text style={[styles.hitLabel, { fontFamily: w.fontRegular }]}>How it hit</Text>
+                        <Text
+                          style={[
+                            styles.ratingNum,
+                            { fontFamily: w.fontMedium },
+                            isRating
+                              ? { color: w.bg }
+                              : isFilled
+                              ? { color: palette.textSecondary }
+                              : { color: palette.textMuted },
+                          ]}
+                        >
+                          {n}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+                <Text style={[styles.hitLabel, { fontFamily: w.fontRegular }]}>How it hit</Text>
+              </>
+            )}
 
-            {/* REACTION */}
-            <Text style={[styles.reaction, { fontFamily: w.fontRegular }]}>
-              “{active.reaction}”
-            </Text>
-
-            {/* STORE */}
-            <Text style={[styles.store, { fontFamily: w.fontRegular }]}>{active.store}</Text>
+            {/* REACTION — only when there is a note */}
+            {hasNote && (
+              <Text style={[styles.reaction, { fontFamily: w.fontRegular }]}>“{active.note.trim()}”</Text>
+            )}
           </View>
 
-          {/* SWAP ROW — the other item, small at the bottom */}
-          <Pressable style={styles.swapRow} onPress={swap}>
-            <View style={[styles.swapThumb, { backgroundColor: w.surface }]} />
-            <View style={styles.swapTextCol}>
-              <Text style={[styles.swapTitle, { fontFamily: w.fontRegular }]} numberOfLines={1}>
-                {other.title}
-              </Text>
-              <Text style={[styles.swapMeta, { fontFamily: w.fontRegular }]} numberOfLines={1}>
-                {otherSub}
-              </Text>
-            </View>
-            <Ionicons name="swap-horizontal" size={20} color={palette.textMuted} />
-          </Pressable>
+          {/* SWAP ROW — the other item, small at the bottom; only when both are filled */}
+          {other && (
+            <Pressable style={styles.swapRow} onPress={swap}>
+              {other.artworkUrl ? (
+                <Image source={{ uri: other.artworkUrl }} style={[styles.swapThumb, swapThumbBox(other.mode)]} />
+              ) : (
+                <View style={[styles.swapThumb, swapThumbBox(other.mode), { backgroundColor: w.surface }]} />
+              )}
+              <View style={styles.swapTextCol}>
+                <Text style={[styles.swapTitle, { fontFamily: w.fontRegular }]} numberOfLines={1}>
+                  {other.title}
+                </Text>
+                <Text style={[styles.swapMeta, { fontFamily: w.fontRegular }]} numberOfLines={1}>
+                  {subLine(other)}
+                </Text>
+              </View>
+              <Ionicons name="swap-horizontal" size={20} color={palette.textMuted} />
+            </Pressable>
+          )}
         </View>
       </Animated.View>
     </View>
@@ -205,15 +219,19 @@ const styles = StyleSheet.create({
   },
 
   // CENTREPIECE
-  centre: { alignItems: 'center' },
+  // fills the space above the swap row (or the whole slide when there is none) and
+  // centres the artwork / title / transport / rating / note block within it
+  centre: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   artwork: {
-    width: ARTWORK,
-    height: ARTWORK,
+    // width/height come from artworkBox(mode)
     borderRadius: radius.lg,
+    overflow: 'hidden',
     shadowOpacity: 0.6,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 8 },
   },
+  artworkImg: { width: '100%', height: '100%' },
+  noArt: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   title: { ...type.title, color: palette.textPrimary, textAlign: 'center', marginTop: space.md },
   sub: { ...type.body, color: palette.textSecondary, textAlign: 'center', marginTop: 2 },
 
@@ -259,17 +277,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // larger touch target: 30pt box + 8pt vertical padding + hitSlop → ≥44pt tall
-  ratingPress: {
-    paddingVertical: 8,
-    marginHorizontal: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 8, // keeps the spacing the old 44pt-tall press targets gave the row
   },
   ratingBox: {
     width: 30,
     height: 30,
+    marginHorizontal: 2,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
@@ -284,13 +297,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     marginTop: space.sm,
   },
-  store: { ...type.caption, color: palette.textMuted, marginTop: space.sm },
 
   // SWAP ROW
   swapRow: { flexDirection: 'row', alignItems: 'center' },
   swapThumb: {
-    width: 56,
-    height: 56,
+    // width/height come from swapThumbBox(mode)
     borderRadius: radius.sm,
     opacity: 0.5,
   },

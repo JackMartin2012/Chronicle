@@ -89,7 +89,7 @@ export default function DayCardCarousel({ world, dateKey }: Props) {
       />
     ) });
     if (data.sound) slides.push({ subtitle: 'Sound & screen', node: (
-      <SlideSound world={world} />
+      <SlideSound world={world} sound={data.sound} />
     ) });
     if (data.newspaper) slides.push({ subtitle: 'Beyond today', node: (
       <SlideNewspaper world={world} />
