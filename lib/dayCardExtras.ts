@@ -37,12 +37,39 @@ const dayBounds = (dateKey: string) => {
   return { start, end };
 };
 
+// Page size when walking the WHOLE day (uncapped mode).
+const PAGE_SIZE = 100;
+
+/** Every asset of one media type in the range, page by page. */
+const getAllAssets = async (
+  range: { createdAfter: number; createdBefore: number; sortBy: MediaLibrary.SortByValue[] },
+  mediaType: 'photo' | 'video'
+): Promise<MediaLibrary.Asset[]> => {
+  const all: MediaLibrary.Asset[] = [];
+  let after: string | undefined;
+  for (;;) {
+    const page = await MediaLibrary.getAssetsAsync({ ...range, mediaType, first: PAGE_SIZE, after });
+    all.push(...page.assets);
+    if (!page.hasNextPage) break;
+    after = page.endCursor;
+  }
+  return all;
+};
+
 /**
  * Query the day's camera roll. Never PROMPTS for permission — opening a card
  * shouldn't throw up a system dialog; if access isn't already granted the
  * photo count and the Camera Roll slide are simply absent.
+ *
+ * Capped at MAX_PHOTO_ITEMS / MAX_VIDEO_ITEMS resolved items (the day-card
+ * slide's preview). Use queryAllCameraRoll for everything.
  */
-export const queryCameraRoll = async (dateKey: string): Promise<CameraRollExtras> => {
+export const queryCameraRoll = (dateKey: string): Promise<CameraRollExtras> => runCameraRollQuery(dateKey, false);
+
+/** The whole day, no cap — for the Camera Roll editor, whose job is showing everything. */
+export const queryAllCameraRoll = (dateKey: string): Promise<CameraRollExtras> => runCameraRollQuery(dateKey, true);
+
+const runCameraRollQuery = async (dateKey: string, uncapped: boolean): Promise<CameraRollExtras> => {
   const empty = (status: CameraRollExtras['status']): CameraRollExtras => ({
     status,
     photoCount: 0,
@@ -60,10 +87,24 @@ export const queryCameraRoll = async (dateKey: string): Promise<CameraRollExtras
       createdBefore: end.getTime(),
       sortBy: [MediaLibrary.SortBy.creationTime],
     };
-    const [photos, videos] = await Promise.all([
-      MediaLibrary.getAssetsAsync({ ...range, mediaType: 'photo', first: MAX_PHOTO_ITEMS }),
-      MediaLibrary.getAssetsAsync({ ...range, mediaType: 'video', first: MAX_VIDEO_ITEMS }),
-    ]);
+    let photoAssets: MediaLibrary.Asset[];
+    let videoAssets: MediaLibrary.Asset[];
+    let photoCount: number;
+    let videoCount: number;
+    if (uncapped) {
+      [photoAssets, videoAssets] = await Promise.all([getAllAssets(range, 'photo'), getAllAssets(range, 'video')]);
+      photoCount = photoAssets.length;
+      videoCount = videoAssets.length;
+    } else {
+      const [photos, videos] = await Promise.all([
+        MediaLibrary.getAssetsAsync({ ...range, mediaType: 'photo', first: MAX_PHOTO_ITEMS }),
+        MediaLibrary.getAssetsAsync({ ...range, mediaType: 'video', first: MAX_VIDEO_ITEMS }),
+      ]);
+      photoAssets = photos.assets;
+      videoAssets = videos.assets;
+      photoCount = photos.totalCount;
+      videoCount = videos.totalCount;
+    }
 
     const items: CameraRollItem[] = [];
     const resolve = async (assets: MediaLibrary.Asset[], kind: 'photo' | 'video') => {
@@ -81,14 +122,14 @@ export const queryCameraRoll = async (dateKey: string): Promise<CameraRollExtras
         });
       }
     };
-    await resolve(photos.assets, 'photo');
-    await resolve(videos.assets, 'video');
+    await resolve(photoAssets, 'photo');
+    await resolve(videoAssets, 'video');
     items.sort((a, b) => a.takenAt - b.takenAt);
 
     return {
       status: 'granted',
-      photoCount: photos.totalCount,
-      videoCount: videos.totalCount,
+      photoCount,
+      videoCount,
       items,
     };
   } catch (e) {

@@ -118,6 +118,9 @@ away. When you fix one, tick it here AND in its source file.
       `overflow: 'hidden'`, so content cannot change it; this is a belt-and-
       braces check for pass two, not a known problem. *(new, Aug 2026 build)*
 
+### Camera Roll editor (Sept 2026, `CameraRollEditor.tsx`)
+- [ ] **KeyboardDismissBar (the shared InputAccessoryView system every other editor uses) doesn't work in `CameraRollEditor.tsx`** — investigated Sept 2026 (tried: removing the conditional fullscreen Modal, an always-mounted test input at the top of the screen — neither restored it), cause not found. Worked around with a local `Keyboard.dismiss()` button instead of the shared pattern. Revisit if this pattern breaks elsewhere, since the cause is still unknown.
+
 ### Story (source: 04_TODAY_AND_EDITORS.md)
 - [ ] Title must be left-aligned like every other editor — Stitch centred it.
       *(04:271)*

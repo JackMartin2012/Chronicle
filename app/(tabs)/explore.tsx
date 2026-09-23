@@ -8,6 +8,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
+import * as MediaLibrary from 'expo-media-library';
 import * as Notifications from 'expo-notifications';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -339,6 +340,8 @@ export default function ThePresent() {
 
   const [archivedDays, setArchivedDays] = useState<{ key: string; entry: DayEntry }[]>([]);
   const [archiveCalYear, setArchiveCalYear] = useState('');
+  // day thumbnails chosen in the Camera Roll editor (today_thumbnail_ → resolved URI)
+  const [chosenThumbs, setChosenThumbs] = useState<Record<string, string>>({});
   const [dayCardKey, setDayCardKey] = useState<string | null>(null);
 
   const [favourites, setFavourites] = useState<Favourite[]>([]);
@@ -522,6 +525,19 @@ export default function ThePresent() {
     }
     setArchivedDays(days);
     if (days.length > 0 && !archiveCalYear) setArchiveCalYear(days[0].key.split('-')[0]);
+
+    // A day's chosen thumbnail (asset id) wins over the legacy photoUri when set
+    const thumbRows = await AsyncStorage.multiGet(days.map(d => `today_thumbnail_${d.key}`));
+    const chosen: Record<string, string> = {};
+    for (const [key, assetId] of thumbRows) {
+      if (!assetId) continue;
+      try {
+        const info = await MediaLibrary.getAssetInfoAsync(assetId);
+        const uri = info.localUri || info.uri;
+        if (uri) chosen[key.replace('today_thumbnail_', '')] = uri;
+      } catch { }
+    }
+    setChosenThumbs(chosen);
   };
 
   const loadFavourites = async () => {
@@ -1048,7 +1064,8 @@ export default function ThePresent() {
                           const dateKey = `${archiveCalYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                           const archiveDay = archiveDayMap[dateKey];
                           const isToday = dateKey === formatDateKey(new Date());
-                          const hasPhoto = !!archiveDay?.photoUri;
+                          const thumbUri = chosenThumbs[dateKey] || archiveDay?.photoUri;
+                          const hasPhoto = !!thumbUri;
                           return (
                             <TouchableOpacity
                               key={day}
@@ -1063,7 +1080,7 @@ export default function ThePresent() {
                               ]}>
                                 {hasPhoto && (
                                   <Image
-                                    source={{ uri: archiveDay!.photoUri }}
+                                    source={{ uri: thumbUri }}
                                     style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
                                     resizeMode="cover"
                                   />

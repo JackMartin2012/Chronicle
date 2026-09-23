@@ -27,6 +27,7 @@ import {
   type,
 } from '@/constants/chronicleTheme';
 import ThreeWordsEditor from '@/components/today/ThreeWordsEditor';
+import CameraRollEditor from '@/components/today/editors/CameraRollEditor';
 import CaptureEditor from '@/components/today/editors/CaptureEditor';
 import FutureNoteEditor from '@/components/today/editors/FutureNoteEditor';
 import LearnedEditor from '@/components/today/editors/LearnedEditor';
@@ -39,6 +40,7 @@ import type { DayEntry, SoundEntry, SoundSlots } from '@/lib/types';
 
 type EditorKey =
   | 'capture'
+  | 'cameraRoll'
   | 'threeWords'
   | 'story'
   | 'sound'
@@ -431,6 +433,16 @@ export default function TodayScreen({ embedded = false }: { embedded?: boolean }
           )}
         </PressableTile>
 
+        {/* 1b — TODAY'S PHOTOS & VIDEOS. Not one of the eight inputs: it never
+            counts toward the progress ring (countFilledInputs is untouched). */}
+        <PressableTile onPress={() => setActiveEditor('cameraRoll')}>
+          <View style={styles.cameraRollRow}>
+            <Ionicons name="images-outline" size={20} color={w.accent} />
+            <Text style={styles.cameraRollLabel}>Today&apos;s photos &amp; videos</Text>
+            <Ionicons name="chevron-forward" size={18} color={palette.textMuted} />
+          </View>
+        </PressableTile>
+
         {/* 2 — THREE WORDS */}
         <PressableTile onPress={() => setActiveEditor('threeWords')}>
           <TileHeading>Today in three words</TileHeading>
@@ -574,6 +586,7 @@ export default function TodayScreen({ embedded = false }: { embedded?: boolean }
       {activeEditor && (
         <Modal visible transparent animationType="slide" onRequestClose={closeEditor}>
           {activeEditor === 'capture' && <CaptureEditor onClose={closeEditor} />}
+          {activeEditor === 'cameraRoll' && <CameraRollEditor onClose={closeEditor} />}
           {activeEditor === 'threeWords' && <ThreeWordsEditor world="present" onClose={closeEditor} />}
           {activeEditor === 'story' && <StoryEditor onClose={closeEditor} />}
           {activeEditor === 'sound' && <SoundEditor onClose={closeEditor} />}
@@ -623,6 +636,10 @@ const styles = StyleSheet.create({
     fontFamily: w.fontRegular,
     color: palette.textMuted,
   },
+
+  // 1b — CAMERA ROLL LINK
+  cameraRollRow: { flexDirection: 'row', alignItems: 'center' },
+  cameraRollLabel: { flex: 1, marginLeft: space.md, fontFamily: w.fontMedium, fontSize: type.bodySmall.fontSize, color: palette.textPrimary },
 
   // 1 — CAPTURE
   capturePhotoFallback: { backgroundColor: w.surface },
