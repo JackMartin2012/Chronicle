@@ -84,7 +84,7 @@ which slides read real data vs. still show sample content.
 | 1 | Cover | `SlideCover.tsx` | Globe (real NASA image) — **DONE Sept 2026**, real data + weather glow (colour mechanism works, flagged for a design pass before release, see `09`) |
 | 2 | Capture | `SlideCapture.tsx` | BeReal pair, tap-swap, hold-to-peek — **DONE — real photos wired, both-photo and solo-photo cases tested on device Sept 2026.** |
 | 3 | Camera roll | `SlideCameraRoll.tsx` | Polaroid + thumb strip — presence wired, body still sample |
-| 4 | Three words | `SlideThreeWords.tsx` | Monumental typography — presence wired, body still sample |
+| 4 | Three words | `SlideThreeWords.tsx` | Monumental typography — **DONE — real words/why/mood wired from ThreeWordsBlock, 0-3 word days and mood-only days handled correctly, tested on device Sept 2026.** |
 | 5 | Story | `SlideStory.tsx` | Dark ruled journal page — **DONE — real journal text, voice note, learned answer, and person-name highlighting wired; editor and slide now share journal page styling via chronicleTheme.ts constants; tested on device Sept 2026.** |
 | 6 | Sound | `SlideSound.tsx` | Album art + ambient glow — **DONE — real listen/watch data wired, single-slot and both-filled cases tested on device, portrait posters for film/TV, swap behaviour confirmed, Sept 2026.** |
 | 8 | Newspaper | `SlideNewspaper.tsx` | Newspaper page — presence wired, fed by Wikipedia any-year archive; lead story still hidden |
