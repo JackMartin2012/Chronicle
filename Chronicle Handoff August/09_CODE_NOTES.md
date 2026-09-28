@@ -119,6 +119,7 @@ away. When you fix one, tick it here AND in its source file.
       braces check for pass two, not a known problem. *(new, Aug 2026 build)*
 
 ### Camera Roll editor (Sept 2026, `CameraRollEditor.tsx`)
+- [x] Rest of the editor tested and working on device: permissions, captions, hide (with confirmation), set-as-thumbnail (confirmed showing in Your Days), favourite toggle, and tap-to-fullscreen all confirmed working. Only the item below is still open.
 - [ ] **KeyboardDismissBar (the shared InputAccessoryView system every other editor uses) doesn't work in `CameraRollEditor.tsx`** — investigated Sept 2026 (tried: removing the conditional fullscreen Modal, an always-mounted test input at the top of the screen — neither restored it), cause not found. Worked around with a local `Keyboard.dismiss()` button instead of the shared pattern. Revisit if this pattern breaks elsewhere, since the cause is still unknown.
 
 ### Story (source: 04_TODAY_AND_EDITORS.md)

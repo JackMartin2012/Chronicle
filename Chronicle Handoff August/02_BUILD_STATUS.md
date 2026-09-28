@@ -113,6 +113,7 @@ by `DayCard.tsx` is untouched). `constants/chronicleTheme.ts` gained
 | Places | `PlacesEditor.tsx` | Built. **Rework VERIFIED APPLIED** — see below. |
 | **Capture** | `CaptureEditor.tsx` | **Built, both passes — real camera. See below.** |
 | **Story** | `StoryEditor.tsx` | **Built, both passes — real audio. See below.** |
+| **Camera Roll** *(9th — outside the original 8; doesn't count toward the progress ring)* | `CameraRollEditor.tsx` | **Built and tested on device, Sept 2026. Caption/hide/favourite/thumbnail actions confirmed working.** |
 
 The eight editor preview routes and `today-preview.tsx` are deleted. Still
 present and throwaway: `app/preview.tsx` (day card carousel) and
