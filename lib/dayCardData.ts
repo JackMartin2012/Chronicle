@@ -54,6 +54,16 @@ export type LiveExtras = {
   archive: { year: number; text: string }[];
   /** null when the record has no weather — see `readLegacyWeather`. */
   weather: LegacyWeather | null;
+  /** today_thumbnail_${dateKey} — the asset id chosen in the Camera Roll editor. Null if unset. */
+  chosenThumbnailId: string | null;
+  /** caption_${assetId} for each of this day's camera-roll items, keyed by id. */
+  captions: Record<string, string>;
+};
+
+/** Slide 3's data — the live query plus the two storage-backed bits it needs to feel real. */
+export type CameraRollSlideData = CameraRollExtras & {
+  chosenThumbnailId: string | null;
+  captions: Record<string, string>;
 };
 
 // ---------------------------------------------------------------------------
@@ -84,7 +94,7 @@ export type DayCardData = {
   } | null;
 
   /** Slide 3. Null when denied, or when the day has no camera roll items. */
-  cameraRoll: CameraRollExtras | null;
+  cameraRoll: CameraRollSlideData | null;
 
   /** Slide 4. Null when there are no words. */
   threeWords: ThreeWordsBlock | null;
@@ -163,7 +173,7 @@ export const buildDayCardData = (
           }
         : null,
 
-    cameraRoll: rollHasItems ? roll : null,
+    cameraRoll: rollHasItems ? { ...roll, chosenThumbnailId: extras.chosenThumbnailId, captions: extras.captions } : null,
     threeWords: wordsFilled ? entry.threeWords : null,
     story: storyHas
       ? {

@@ -10,6 +10,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { useEffect, useState } from 'react';
 
 import { loadNewsForDay } from '@/components/newsFeed';
+import { loadCaptions, loadHiddenPhotos, loadTodayThumbnail } from './photoStore';
 
 import {
   buildDayCardData,
@@ -126,11 +127,16 @@ const runCameraRollQuery = async (dateKey: string, uncapped: boolean): Promise<C
     await resolve(videoAssets, 'video');
     items.sort((a, b) => a.takenAt - b.takenAt);
 
+    // Filtered at the source so a hidden photo can never reappear, in the
+    // editor (uncapped) or the day-card slide (capped) — one list, one place.
+    const hidden = await loadHiddenPhotos();
+    const visibleItems = hidden.length > 0 ? items.filter((it) => !hidden.includes(it.id)) : items;
+
     return {
       status: 'granted',
       photoCount,
       videoCount,
-      items,
+      items: visibleItems,
     };
   } catch (e) {
     console.warn('Camera roll query failed', e);
@@ -161,13 +167,20 @@ export const loadDayCardData = async (
   dateKey: string,
   world: 'past' | 'present'
 ): Promise<DayCardData> => {
-  const [entry, cameraRoll, weather, archive] = await Promise.all([
+  const [entry, cameraRoll, weather, archive, chosenThumbnailId] = await Promise.all([
     loadDayEntry(dateKey),
     queryCameraRoll(dateKey),
     loadLegacyWeather(dateKey),
     loadArchive(dateKey),
+    loadTodayThumbnail(dateKey),
   ]);
-  const extras: LiveExtras = { cameraRoll, weather, archive };
+  // captions depend on knowing which items came back, so this can't join the
+  // Promise.all above
+  const captions =
+    cameraRoll.status === 'granted' && cameraRoll.items.length > 0
+      ? await loadCaptions(cameraRoll.items.map((it) => it.id))
+      : {};
+  const extras: LiveExtras = { cameraRoll, weather, archive, chosenThumbnailId, captions };
   return buildDayCardData(entry, extras, world);
 };
 

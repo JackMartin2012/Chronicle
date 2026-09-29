@@ -225,7 +225,7 @@ not a fixed 8 — decided and applied Sept 2026. `TOTAL_SLIDES` and the explicit
 | — | Carousel shell | Wired — builds only present slides from `DayCardData`, gathers live extras once on open, "N of M" counter |
 | 1 | Cover | **DONE** — real weather (legacy fields), mood, live photo count, real people, weather-reactive globe glow. Glow mechanism works (right colour every time) but is flagged for a further visual design pass before release — see `09_CODE_NOTES.md` |
 | 2 | Capture | **DONE Sept 2026** — real `mainPhotoUri`/`selfieUri`/`selfieIsBig` wired; both-photo (BeReal pair, tap-swap, hold-to-peek) and solo-photo (full-bleed, no swap/peek chrome) cases tested on device |
-| 3 | Camera roll | Presence/absence wired (shows only when the live camera-roll query finds items); body still sample content |
+| 3 | Camera roll | **DONE — real photos, captions, chosen thumbnail, and hidden-photo filtering wired; real counts; tested on device Sept 2026.** |
 | 4 | Three words | **DONE — real words/why/mood wired from ThreeWordsBlock, 0-3 word days and mood-only days handled correctly, tested on device Sept 2026.** |
 | 5 | Story | **DONE — real journal text, voice note, learned answer, and person-name highlighting wired; editor and slide now share journal page styling via chronicleTheme.ts constants; tested on device Sept 2026.** Slide shows if text, voice note, or learned is set; the learned section hides when empty. |
 | 6 | Sound | **DONE — real listen/watch data wired, single-slot and both-filled cases tested on device, portrait posters for film/TV, swap behaviour confirmed, Sept 2026.** Shows if listen or watch is set. |

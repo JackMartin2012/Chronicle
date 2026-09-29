@@ -83,7 +83,7 @@ which slides read real data vs. still show sample content.
 | — | Carousel shell | `components/daycard/DayCardCarousel.tsx` | pager + chrome + dots — **wired Sept 2026**: builds `DayCardData` via `useDayCardData`, drops slides with a null data slice, "N of M" not fixed 8 |
 | 1 | Cover | `SlideCover.tsx` | Globe (real NASA image) — **DONE Sept 2026**, real data + weather glow (colour mechanism works, flagged for a design pass before release, see `09`) |
 | 2 | Capture | `SlideCapture.tsx` | BeReal pair, tap-swap, hold-to-peek — **DONE — real photos wired, both-photo and solo-photo cases tested on device Sept 2026.** |
-| 3 | Camera roll | `SlideCameraRoll.tsx` | Polaroid + thumb strip — presence wired, body still sample |
+| 3 | Camera roll | `SlideCameraRoll.tsx` | Polaroid + thumb strip — **DONE — real photos, captions, chosen thumbnail, and hidden-photo filtering wired; real counts; tested on device Sept 2026.** |
 | 4 | Three words | `SlideThreeWords.tsx` | Monumental typography — **DONE — real words/why/mood wired from ThreeWordsBlock, 0-3 word days and mood-only days handled correctly, tested on device Sept 2026.** |
 | 5 | Story | `SlideStory.tsx` | Dark ruled journal page — **DONE — real journal text, voice note, learned answer, and person-name highlighting wired; editor and slide now share journal page styling via chronicleTheme.ts constants; tested on device Sept 2026.** |
 | 6 | Sound | `SlideSound.tsx` | Album art + ambient glow — **DONE — real listen/watch data wired, single-slot and both-filled cases tested on device, portrait posters for film/TV, swap behaviour confirmed, Sept 2026.** |

@@ -72,7 +72,14 @@ export default function DayCardCarousel({ world, dateKey }: Props) {
       />
     ) });
     if (data.cameraRoll) slides.push({ subtitle: 'Your camera roll', node: (
-      <SlideCameraRoll world={world} />
+      <SlideCameraRoll
+        world={world}
+        items={data.cameraRoll.items}
+        chosenThumbnailId={data.cameraRoll.chosenThumbnailId}
+        captions={data.cameraRoll.captions}
+        photoCount={data.cameraRoll.photoCount}
+        videoCount={data.cameraRoll.videoCount}
+      />
     ) });
     if (data.threeWords) slides.push({ subtitle: '', node: (
       <SlideThreeWords world={world} words={data.threeWords.words} mood={data.threeWords.mood || undefined} />
