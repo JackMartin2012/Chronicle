@@ -5,7 +5,6 @@ import {
   Animated,
   Dimensions,
   Keyboard,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -13,11 +12,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, space, type } from '@/constants/chronicleTheme';
 import EditorFooterProgress from '../EditorFooterProgress';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
+import { useEditorKeyboard } from '../useEditorKeyboard';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
 
 const w = getWorld('present');
@@ -42,7 +41,6 @@ const QUESTIONS = [
 ];
 
 export default function LearnedEditor({ onClose }: { onClose?: () => void }) {
-  const insets = useSafeAreaInsets();
   const dismiss = onClose ?? (() => {});
 
   const [text, setText] = useState('');
@@ -64,30 +62,7 @@ export default function LearnedEditor({ onClose }: { onClose?: () => void }) {
   const [qIndex, setQIndex] = useState(() => Math.floor(Math.random() * QUESTIONS.length));
   const shuffleScale = useRef(new Animated.Value(1)).current;
 
-  // The sheet is FIXED-HEIGHT and bottom-anchored, so KeyboardAvoidingView's
-  // padding behaviour translates the whole thing upward and takes the title and
-  // top row off screen. Instead the keyboard height is tracked directly: the
-  // sheet's top edge stays put, its bottom sits on the keyboard, and the body
-  // absorbs the difference. Ported from StoryEditor.tsx.
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const show = Keyboard.addListener(showEvent, (e) =>
-      setKeyboardHeight(e.endCoordinates.height)
-    );
-    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-
-  const keyboardUp = keyboardHeight > 0;
-  // never taller than the space left above the keyboard
-  const sheetHeight = keyboardUp
-    ? Math.min(SHEET_HEIGHT, SCREEN_H - keyboardHeight - insets.top - space.sm)
-    : SHEET_HEIGHT;
+  const { keyboardHeight, keyboardUp, sheetHeight, insets } = useEditorKeyboard(SHEET_HEIGHT);
 
   const hasText = text.trim().length > 0;
 

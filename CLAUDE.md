@@ -424,6 +424,27 @@ type DayEntry = {
 
 ---
 
+## Keyboard handling for new editors
+
+Any new bottom-sheet editor with a text input must:
+1. Use the `useEditorKeyboard` hook (`components/today/useEditorKeyboard.ts`)
+   for the keyboard height and sheet shrinking. Do not copy the listener
+   code into the editor.
+2. Use the local `KeyboardHideButton`
+   (`components/today/KeyboardHideButton.tsx`) as the hide-keyboard control,
+   not `KeyboardDismissBar`. `KeyboardDismissBar` fails to appear on some
+   screens for an unknown reason (see `09_CODE_NOTES.md`).
+3. If the editor has several text boxes inside a `ScrollView`, copy
+   `NewsEditor.tsx`'s `scrollToField` approach: wrap the scroll content in a
+   `View` with a ref and use `field.measureLayout` against it, triggered from
+   `keyboardDidShow`. Never cache `onLayout` y values, because they are
+   relative to the parent, not the scroll content.
+4. Never put `onPress={Keyboard.dismiss}` on a wrapper around a `ScrollView`.
+5. Existing editors are not being migrated. Don't change them unless they
+   break.
+
+---
+
 ## formatDateKey (used in all three files)
 ```typescript
 const formatDateKey = (date: Date) => {
