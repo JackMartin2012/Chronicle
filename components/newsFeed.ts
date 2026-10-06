@@ -126,29 +126,84 @@ export const getNewsSettings = async (): Promise<NewsSettings> => {
 };
 
 // GDELT — free live/archive headlines, no API key. Only has data from ~2017 onwards.
-export const fetchHeadlines = async (dateKey: string): Promise<Headline[] | null> => {
-  try {
-    const ymd = dateKey.replace(/-/g, '');
-    const res = await fetch(
-      `https://api.gdeltproject.org/api/v2/doc/doc?query=sourcelang:english&mode=artlist&maxrecords=5&format=json&startdatetime=${ymd}000000&enddatetime=${ymd}235959`
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const articles = data?.articles;
-    if (!Array.isArray(articles)) return null;
-    const seen = new Set<string>();
-    const headlines: Headline[] = [];
-    for (const a of articles) {
-      const title = (a.title || '').trim();
-      if (!title || seen.has(title)) continue;
-      seen.add(title);
-      headlines.push({ title, domain: a.domain || a.sourcecountry || 'News', url: a.url });
-      if (headlines.length >= 5) break;
-    }
-    return headlines;
-  } catch {
-    return null;
+// GDELT asks for at most one request every 5 seconds and returns a plain-text
+// 429 (not JSON) if you go faster — easy to hit from a cold app start or two
+// screens opening close together. The three pieces below all exist for that:
+// a shared queue spaces out every request this module makes (any date, not
+// just repeats of the same one) by at least GDELT_MIN_GAP_MS; a 429 specifically
+// (not any other failure) gets one retry after GDELT_RETRY_DELAY_MS; and calls
+// for the SAME dateKey made while one is already in flight share its result
+// instead of firing a second request.
+const GDELT_MIN_GAP_MS = 5000;
+const GDELT_RETRY_DELAY_MS = 6000;
+
+let gdeltLastRequestAt = 0;
+let gdeltQueue: Promise<unknown> = Promise.resolve();
+const headlinesInFlight = new Map<string, Promise<Headline[] | null>>();
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** One network attempt, serialised through the shared queue so it's never
+ * fired within GDELT_MIN_GAP_MS of another request this module has made. */
+const gdeltFetch = (url: string): Promise<Response> => {
+  const run = gdeltQueue.then(async () => {
+    const wait = GDELT_MIN_GAP_MS - (Date.now() - gdeltLastRequestAt);
+    if (wait > 0) await sleep(wait);
+    gdeltLastRequestAt = Date.now();
+    return fetch(url);
+  });
+  // keep the queue moving even if this attempt throws — a failed request
+  // shouldn't jam every request queued behind it
+  gdeltQueue = run.catch(() => undefined);
+  return run;
+};
+
+const parseHeadlines = (data: any): Headline[] | null => {
+  const articles = data?.articles;
+  if (!Array.isArray(articles)) return null;
+  const seen = new Set<string>();
+  const headlines: Headline[] = [];
+  for (const a of articles) {
+    const title = (a.title || '').trim();
+    if (!title || seen.has(title)) continue;
+    seen.add(title);
+    headlines.push({ title, domain: a.domain || a.sourcecountry || 'News', url: a.url });
+    if (headlines.length >= 5) break;
   }
+  return headlines;
+};
+
+const fetchHeadlinesUncached = async (dateKey: string): Promise<Headline[] | null> => {
+  const ymd = dateKey.replace(/-/g, '');
+  const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=sourcelang:english&mode=artlist&maxrecords=5&format=json&startdatetime=${ymd}000000&enddatetime=${ymd}235959`;
+
+  const attempt = async (): Promise<{ rateLimited: boolean; headlines: Headline[] | null }> => {
+    try {
+      const res = await gdeltFetch(url);
+      if (res.status === 429) return { rateLimited: true, headlines: null };
+      if (!res.ok) return { rateLimited: false, headlines: null };
+      return { rateLimited: false, headlines: parseHeadlines(await res.json()) };
+    } catch {
+      return { rateLimited: false, headlines: null };
+    }
+  };
+
+  let result = await attempt();
+  if (result.rateLimited) {
+    await sleep(GDELT_RETRY_DELAY_MS);
+    result = await attempt();
+  }
+  return result.headlines;
+};
+
+export const fetchHeadlines = (dateKey: string): Promise<Headline[] | null> => {
+  const existing = headlinesInFlight.get(dateKey);
+  if (existing) return existing;
+  const promise = fetchHeadlinesUncached(dateKey).finally(() => {
+    headlinesInFlight.delete(dateKey);
+  });
+  headlinesInFlight.set(dateKey, promise);
+  return promise;
 };
 
 // Loads the full news bundle for a date, using the 30-day cache when valid.
@@ -176,8 +231,14 @@ export const loadNewsForDay = async (
         }
         if (settings.news && merged.headlines === undefined) {
           const hl = await fetchHeadlines(dateKey);
-          merged = { ...merged, headlines: hl };
-          changed = true;
+          // null = the fetch failed (rate-limited or otherwise), not "genuinely no
+          // headlines" (that's []). Leave `headlines` undefined so the NEXT open,
+          // still within this 30-day cache window, retries instead of treating
+          // the failure as "already fetched".
+          if (hl !== null) {
+            merged = { ...merged, headlines: hl };
+            changed = true;
+          }
         }
         if (changed) await AsyncStorage.setItem(`news_cache_${dateKey}`, JSON.stringify(merged));
         return { cache: merged, settings };
@@ -192,7 +253,18 @@ export const loadNewsForDay = async (
     settings.news ? fetchHeadlines(dateKey) : Promise.resolve(null),
   ]);
 
-  const cache: NewsCache = { fetchedAt: Date.now(), wikipedia: wiki, football, weather, headlines };
+  const cache: NewsCache = {
+    fetchedAt: Date.now(),
+    wikipedia: wiki,
+    football,
+    weather,
+    // settings off → null (deliberately not fetched; the settings check above
+    // already stops this from retrying every open). Fetch failed → leave the
+    // key OUT of the object (undefined — JSON.stringify drops it) so a later
+    // open within the 30-day window retries rather than caching the failure.
+    // Genuine empty result → [].
+    headlines: settings.news ? (headlines ?? undefined) : null,
+  };
   await AsyncStorage.setItem(`news_cache_${dateKey}`, JSON.stringify(cache));
   return { cache, settings };
 };

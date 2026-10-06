@@ -15,11 +15,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
-import { fetchHeadlines, type Headline } from '@/components/newsFeed';
+import { fetchHeadlines, getNewsSettings, type Headline } from '@/components/newsFeed';
 import { formatDateKey } from '@/lib/dayEntry';
-import { addFavourite, removeFavourite } from '@/lib/favouritesStore';
+import { addFavourite, removeFavourite, updateFavouriteNote } from '@/lib/favouritesStore';
 import { emptyHeadlineState, headlineId, loadNewsSelection, saveNewsSelection, type HeadlineState } from '@/lib/newsStore';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
+import KeyboardHideButton from '../KeyboardHideButton';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -47,32 +48,106 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
   const dateKey = formatDateKey(new Date());
   const dismiss = onClose ?? (() => {});
 
-  const [status, setStatus] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
+  // ROOT CAUSE (found by diffing against PlacesEditor.tsx, which is confirmed
+  // working on device): every other editor in this codebase tracks keyboard
+  // height and shrinks its sheet to fit ABOVE the keyboard. This file never
+  // did — its sheet stayed a constant 92% of the screen regardless, so once
+  // the keyboard opened, the sheet's own bottom portion (exactly where cards
+  // 4/5 and the footer live) sat BEHIND the keyboard rather than in a
+  // correctly-sized, still-scrollable region above it. Matching the
+  // established pattern here fixes that structurally, not by tuning a number.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  const keyboardUp = keyboardHeight > 0;
+  const restHeight = Math.min(SHEET_HEIGHT, SCREEN_H - insets.top - space.base);
+  const sheetHeight = keyboardUp
+    ? Math.min(restHeight, SCREEN_H - keyboardHeight - insets.top - space.sm)
+    : restHeight;
+
+  // 'failed' = the fetch itself failed (null — rate-limited or otherwise) AND
+  // nothing is saved for today, so there's genuinely nothing to show; distinct
+  // from 'empty', which means GDELT answered with a valid, empty list.
+  const [status, setStatus] = useState<'loading' | 'ready' | 'empty' | 'failed' | 'error'>('loading');
   const [items, setItems] = useState<Item[]>([]);
+  // World headlines (settings.news) off: GDELT is never called, only whatever's
+  // already saved for today is shown, with a banner explaining why.
+  const [headlinesOff, setHeadlinesOff] = useState(false);
+
+  // Guards every setState below against firing after unmount — shared by the
+  // initial load AND the "Try again" button, so both can use the same function.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const load = async () => {
+    setStatus('loading');
+    try {
+      const settings = await getNewsSettings();
+      const [freshHeadlines, selection] = await Promise.all([
+        settings.news ? fetchHeadlines(dateKey) : Promise.resolve(null),
+        loadNewsSelection(dateKey),
+      ]);
+      if (!mountedRef.current) return;
+
+      // MERGE: every headline already saved today is always shown, from its
+      // own snapshot, even if the live feed no longer returns it — a saved
+      // headline is never dropped to make room for a fresh one.
+      const savedEntries = Object.entries(selection);
+      const savedIds = new Set(savedEntries.map(([id]) => id));
+      // Nothing saved yet today → this is the first open; fresh headlines
+      // start selected. Once something's saved, later opens treat anything
+      // NOT already known as newly added, so it starts unselected (the user
+      // opts in) rather than silently changing what's on today's page.
+      const isFirstOpenToday = savedEntries.length === 0;
+
+      const savedItems: Item[] = savedEntries
+        .filter(([, st]) => !!st.headline)
+        .map(([id, st]) => ({ id, headline: st.headline!, state: st }));
+
+      const freshOnly = (freshHeadlines ?? []).filter((h) => !savedIds.has(headlineId(h.title)));
+      const room = Math.max(0, 5 - savedItems.length);
+      const newItems: Item[] = freshOnly.slice(0, room).map((h) => {
+        const id = headlineId(h.title);
+        const state: HeadlineState = { ...emptyHeadlineState, selected: isFirstOpenToday, headline: h };
+        return { id, headline: h, state };
+      });
+
+      const combined = [...savedItems, ...newItems];
+      // Only a genuine attempt (settings.news on) that came back null counts as
+      // a failure — settings off deliberately skips the fetch and is never "failed".
+      const fetchFailed = settings.news && freshHeadlines === null;
+      setHeadlinesOff(!settings.news);
+      setItems(combined);
+      if (combined.length === 0) {
+        setStatus(fetchFailed ? 'failed' : 'empty');
+      } else {
+        setStatus('ready');
+      }
+      // Persist the merged list immediately, even before any edit — this is
+      // what makes "nothing saved yet" a one-time state: the NEXT open sees
+      // these as already-known, so only a genuinely new headline (not these)
+      // would start unselected.
+      if (combined.length > 0) persist(combined);
+    } catch {
+      if (mountedRef.current) setStatus('error');
+    }
+  };
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const [headlines, selection] = await Promise.all([fetchHeadlines(dateKey), loadNewsSelection(dateKey)]);
-        if (!active) return;
-        if (!headlines || headlines.length === 0) {
-          setStatus('empty');
-          return;
-        }
-        const built = headlines.map((headline): Item => {
-          const id = headlineId(headline.title);
-          return { headline, id, state: selection[id] ?? emptyHeadlineState };
-        });
-        setItems(built);
-        setStatus('ready');
-      } catch {
-        if (active) setStatus('error');
-      }
-    })();
-    return () => {
-      active = false;
-    };
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -97,9 +172,16 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
     if (it) updateItem(id, { selected: !it.state.selected });
   };
 
+  // Tapping the CURRENT main story's star turns it off, leaving no main story
+  // (so the next comment elsewhere can auto-promote again). Tapping any other
+  // star moves the badge to it, same as before.
   const setMainStory = (id: string) => {
     setItems((prev) => {
-      const next = prev.map((it) => ({ ...it, state: { ...it.state, isMainStory: it.id === id } }));
+      const turningOff = prev.find((it) => it.id === id)?.state.isMainStory ?? false;
+      const next = prev.map((it) => ({
+        ...it,
+        state: { ...it.state, isMainStory: turningOff ? false : it.id === id },
+      }));
       persist(next);
       return next;
     });
@@ -110,17 +192,20 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
   // starred — by this auto-promotion or an explicit tap — only another
   // explicit star tap changes it; commenting elsewhere never steals it back.
   const onCommentChange = (id: string, text: string) => {
+    let favIdToSync: string | null = null;
     setItems((prev) => {
       const hasMainStory = prev.some((it) => it.state.isMainStory);
       const shouldPromote = !hasMainStory && text.trim().length > 0;
-      const next = prev.map((it) =>
-        it.id === id
-          ? { ...it, state: { ...it.state, comment: text, isMainStory: shouldPromote ? true : it.state.isMainStory } }
-          : it
-      );
+      const next = prev.map((it) => {
+        if (it.id !== id) return it;
+        favIdToSync = it.state.favouriteId;
+        return { ...it, state: { ...it.state, comment: text, isMainStory: shouldPromote ? true : it.state.isMainStory } };
+      });
       persist(next);
       return next;
     });
+    // keep an already-favourited headline's note in sync with its comment
+    if (favIdToSync) updateFavouriteNote(favIdToSync, text);
   };
 
   const toggleFavourite = async (id: string) => {
@@ -151,8 +236,26 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
     <View style={styles.root}>
       <Pressable style={styles.backdrop} onPress={dismiss} />
 
-      <View style={[styles.sheet, { height: SHEET_HEIGHT, paddingBottom: insets.bottom + 12 }]}>
-        <Pressable style={styles.sheetInner} onPress={Keyboard.dismiss} accessible={false}>
+      <View
+        style={[
+          styles.sheet,
+          {
+            height: sheetHeight,
+            marginBottom: keyboardHeight,
+            paddingBottom: keyboardUp ? 12 : insets.bottom + 12,
+          },
+        ]}
+      >
+        {/* Plain View, not a Pressable with onPress={Keyboard.dismiss} — that
+            wrapped the WHOLE sheet, including the ScrollView below, and on iOS
+            an ancestor touch responder with onPress can swallow the first pan
+            gesture a ScrollView would otherwise claim (PlacesEditor.tsx has the
+            identical wrapper and scrolls fine, so the wrapper alone isn't
+            PROVEN to be the cause here — but removing its responder entirely
+            rules it out, rather than guessing). Keyboard-dismiss-by-touch now
+            comes from the ScrollView's own keyboardDismissMode="on-drag"
+            below, plus the explicit KeyboardHideButton. */}
+        <View style={styles.sheetInner}>
           <View style={styles.grabber} />
 
           <View style={styles.topRow}>
@@ -168,6 +271,21 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
           <Text style={styles.title}>Today&apos;s headlines</Text>
           <Text style={styles.subtitle}>Pick what mattered today</Text>
 
+          {/* Local workaround — the shared KeyboardDismissBar doesn't appear on
+              this screen either (same unresolved cause as CameraRollEditor.tsx). */}
+          <View style={styles.hideKeyboardRow}>
+            <KeyboardHideButton visible={keyboardUp} />
+          </View>
+
+          {headlinesOff && (
+            <View style={styles.offBanner}>
+              <Ionicons name="information-circle-outline" size={16} color={W50} />
+              <Text style={styles.offBannerText}>
+                Headlines are turned off in Settings — showing what you already saved today.
+              </Text>
+            </View>
+          )}
+
           {status === 'loading' && (
             <View style={styles.centred}>
               <Text style={styles.stateText}>Loading today&apos;s headlines…</Text>
@@ -176,7 +294,18 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
           {status === 'empty' && (
             <View style={styles.centred}>
               <Ionicons name="newspaper-outline" size={32} color={palette.ringSubtle} />
-              <Text style={styles.stateText}>No headlines found for today.</Text>
+              <Text style={styles.stateText}>
+                {headlinesOff ? 'Nothing saved for today yet.' : 'No headlines found for today.'}
+              </Text>
+            </View>
+          )}
+          {status === 'failed' && (
+            <View style={styles.centred}>
+              <Ionicons name="cloud-offline-outline" size={32} color={palette.ringSubtle} />
+              <Text style={styles.stateText}>Couldn&apos;t load headlines right now.</Text>
+              <TouchableOpacity onPress={load} style={styles.retryBtn} hitSlop={8}>
+                <Text style={styles.retryBtnText}>Try again</Text>
+              </TouchableOpacity>
             </View>
           )}
           {status === 'error' && (
@@ -189,6 +318,7 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
             <ScrollView
               style={styles.body}
               contentContainerStyle={styles.bodyContent}
+              keyboardDismissMode="on-drag"
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
@@ -213,7 +343,7 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
               </Text>
             </View>
           )}
-        </Pressable>
+        </View>
       </View>
       <KeyboardDismissBar />
     </View>
@@ -323,6 +453,34 @@ const styles = StyleSheet.create({
 
   centred: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.xl },
   stateText: { marginTop: space.md, fontFamily: w.fontRegular, fontSize: 14, color: W50, textAlign: 'center' },
+  retryBtn: {
+    marginTop: space.lg,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: INPUT_BG,
+  },
+  retryBtnText: { fontFamily: w.fontMedium, fontSize: type.bodySmall.fontSize, color: w.accent },
+
+  hideKeyboardRow: { paddingHorizontal: space.xl },
+
+  offBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: space.md,
+    marginHorizontal: space.xl,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    backgroundColor: INPUT_BG,
+  },
+  offBannerText: {
+    flex: 1,
+    marginLeft: 8,
+    fontFamily: w.fontRegular,
+    fontSize: type.caption.fontSize,
+    color: W50,
+  },
 
   body: { flex: 1, marginTop: space.md },
   bodyContent: { paddingHorizontal: space.xl, paddingBottom: space.lg },

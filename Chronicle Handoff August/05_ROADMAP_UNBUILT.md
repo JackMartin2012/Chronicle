@@ -309,3 +309,12 @@ endpoint returning long semi-structured tag lists rather than a clean single
 label. This is real new integration work, comparable in scope to the Google
 Places vs Mapbox decision, not a quick addition. Revisit as its own scoped task
 if wanted later.
+
+**Share to Chronicle** (future, needs dev build + Apple Developer enrolment):
+a 'Chronicle' option in the iOS share sheet, so from Safari, the BBC app or any
+news app the user can tap Share → Chronicle and have the article's title and
+link arrive in the News editor with no copying. Needs a native share
+extension, which Expo Go can't run. Until then the interim plan is 'open a
+news site' buttons plus 'Paste link from clipboard' in the News editor, which
+reads the page title (user can edit it if a site blocks title reading).
+Considered Oct 2026.

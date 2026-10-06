@@ -46,3 +46,11 @@ export const removeFavourite = async (id: string): Promise<void> => {
   const current = await loadFavourites();
   await saveFavourites(current.filter((f) => f.id !== id));
 };
+
+/** No-op if `id` isn't found (e.g. the favourite was deleted from the Favourites
+ * tab directly) — the caller doesn't need to check first. */
+export const updateFavouriteNote = async (id: string, note: string): Promise<void> => {
+  const current = await loadFavourites();
+  if (!current.some((f) => f.id === id)) return;
+  await saveFavourites(current.map((f) => (f.id === id ? { ...f, note } : f)));
+};
