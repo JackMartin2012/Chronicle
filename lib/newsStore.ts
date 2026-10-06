@@ -46,11 +46,46 @@ export const emptyHeadlineState: HeadlineState = {
 
 const storageKey = (dateKey: string) => `news_selection_${dateKey}`;
 
+// Never carry more than this many selected stories forward from an old save —
+// a safety net for days saved before the 3-story cap existed (or by any other
+// bug), mirroring NewsEditor.tsx's own MAX_SELECTED.
+const MAX_SELECTED_SAFETY = 3;
+
 export const loadNewsSelection = async (dateKey: string): Promise<Record<string, HeadlineState>> => {
   try {
     const raw = await AsyncStorage.getItem(storageKey(dateKey));
     const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    if (!parsed || typeof parsed !== 'object') return {};
+
+    const entries = Object.entries(parsed as Record<string, HeadlineState>);
+    let changed = false;
+
+    // Drop pre-rebuild GDELT-era entries: they have a `headline` snapshot but
+    // no `kind` ('event' | 'link'), since that field didn't exist until the
+    // Wikipedia rebuild — keeping them would mix stale GDELT headlines in
+    // alongside real Wikipedia events. Entries with NO headline at all are
+    // left alone; they're already invisible to the editor (see
+    // loadSavedHeadlines above) and harmless.
+    const kindFiltered = entries.filter(([, st]) => !st.headline || !!st.headline.kind);
+    if (kindFiltered.length !== entries.length) changed = true;
+
+    let selectedSeen = 0;
+    const capped = kindFiltered.map(([id, st]) => {
+      if (!st.selected) return [id, st] as const;
+      selectedSeen += 1;
+      if (selectedSeen > MAX_SELECTED_SAFETY) {
+        changed = true;
+        return [id, { ...st, selected: false }] as const;
+      }
+      return [id, st] as const;
+    });
+
+    const result = Object.fromEntries(capped);
+    // Write the cleaned/capped selection straight back, so this only costs
+    // anything on the first load after the rebuild (or after any future bug
+    // this safety net catches) — every load after that is already clean.
+    if (changed) await saveNewsSelection(dateKey, result);
+    return result;
   } catch {
     return {};
   }
@@ -79,4 +114,16 @@ export const loadSavedHeadlines = async (dateKey: string): Promise<SavedHeadline
   return Object.values(selection)
     .filter((st): st is HeadlineState & { headline: Headline } => st.selected && !!st.headline)
     .map((st) => ({ ...st.headline, comment: st.comment, isMainStory: st.isMainStory }));
+};
+
+// ---- "In other news" — one free-text note per day, separate from the headline
+// map above and NOT counted toward the 3-story cap. ----
+
+const otherNewsKey = (dateKey: string) => `other_news_${dateKey}`;
+
+export const loadOtherNews = async (dateKey: string): Promise<string> =>
+  (await AsyncStorage.getItem(otherNewsKey(dateKey))) ?? '';
+
+export const saveOtherNews = async (dateKey: string, text: string): Promise<void> => {
+  await AsyncStorage.setItem(otherNewsKey(dateKey), text);
 };

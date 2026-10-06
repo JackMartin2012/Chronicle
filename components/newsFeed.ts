@@ -5,7 +5,18 @@ const FOOTBALL_API_KEY = process.env.EXPO_PUBLIC_FOOTBALL_API_KEY;
 
 export type WikiEvent = { year: number; text: string };
 
-export type Headline = { title: string; domain: string; url?: string };
+export type Headline = {
+  title: string;
+  domain: string;
+  url?: string;
+  /**
+   * Additive — only set by lib/currentEvents.ts's Wikipedia-sourced items.
+   * GDELT headlines (fetchHeadlines, below) never set these; existing readers
+   * of Headline are unaffected since both fields are optional.
+   */
+  category?: string;
+  kind?: 'event' | 'link';
+};
 
 export type NewsCache = {
   fetchedAt: number;

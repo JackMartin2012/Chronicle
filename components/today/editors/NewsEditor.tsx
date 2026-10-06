@@ -1,6 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Dimensions,
   Keyboard,
   Platform,
@@ -15,10 +16,19 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
-import { fetchHeadlines, getNewsSettings, type Headline } from '@/components/newsFeed';
+import { fetchCurrentEvents } from '@/lib/currentEvents';
 import { formatDateKey } from '@/lib/dayEntry';
 import { addFavourite, removeFavourite, updateFavouriteNote } from '@/lib/favouritesStore';
-import { emptyHeadlineState, headlineId, loadNewsSelection, saveNewsSelection, type HeadlineState } from '@/lib/newsStore';
+import {
+  emptyHeadlineState,
+  headlineId,
+  loadNewsSelection,
+  loadOtherNews,
+  saveNewsSelection,
+  saveOtherNews,
+  type HeadlineState,
+} from '@/lib/newsStore';
+import type { Headline } from '@/components/newsFeed';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
 import KeyboardHideButton from '../KeyboardHideButton';
 
@@ -33,9 +43,11 @@ const INPUT_BG = '#16233d';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 const MAIN_STORY_BLUE = 'rgba(74,144,217,0.9)';
 // A separate amber from `capsuleGold` in chronicleTheme.ts on purpose — that
-// token is reserved for Future Capsules only. This is the star's own colour,
-// chosen to read clearly as gold/amber against blue without borrowing that one.
+// token is reserved for Future Capsules only. The favourite star's own colour.
 const STAR_GOLD = '#e0a862';
+
+const MAX_SELECTED = 3; // the newspaper page holds at most 3 stories
+const MAX_CANDIDATES = 5; // "the first event of each category", capped
 
 type Item = {
   headline: Headline;
@@ -48,14 +60,8 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
   const dateKey = formatDateKey(new Date());
   const dismiss = onClose ?? (() => {});
 
-  // ROOT CAUSE (found by diffing against PlacesEditor.tsx, which is confirmed
-  // working on device): every other editor in this codebase tracks keyboard
-  // height and shrinks its sheet to fit ABOVE the keyboard. This file never
-  // did — its sheet stayed a constant 92% of the screen regardless, so once
-  // the keyboard opened, the sheet's own bottom portion (exactly where cards
-  // 4/5 and the footer live) sat BEHIND the keyboard rather than in a
-  // correctly-sized, still-scrollable region above it. Matching the
-  // established pattern here fixes that structurally, not by tuning a number.
+  // Every other editor in this codebase tracks keyboard height and shrinks its
+  // sheet to fit ABOVE the keyboard; this file follows the same pattern.
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -73,17 +79,15 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
     ? Math.min(restHeight, SCREEN_H - keyboardHeight - insets.top - space.sm)
     : restHeight;
 
-  // 'failed' = the fetch itself failed (null — rate-limited or otherwise) AND
-  // nothing is saved for today, so there's genuinely nothing to show; distinct
-  // from 'empty', which means GDELT answered with a valid, empty list.
-  const [status, setStatus] = useState<'loading' | 'ready' | 'empty' | 'failed' | 'error'>('loading');
+  // 'failed' = the Wikipedia fetch itself failed (network/parse) AND nothing is
+  // saved for today — distinct from a successful-but-thin result, which still
+  // allows adding a link story or writing "In other news" (see render below).
+  const [status, setStatus] = useState<'loading' | 'ready' | 'failed' | 'error'>('loading');
   const [items, setItems] = useState<Item[]>([]);
-  // World headlines (settings.news) off: GDELT is never called, only whatever's
-  // already saved for today is shown, with a banner explaining why.
-  const [headlinesOff, setHeadlinesOff] = useState(false);
+  const [eventCount, setEventCount] = useState(0); // from the fetch itself, not the merged `items`
+  const [showingMore, setShowingMore] = useState(false);
+  const [otherNews, setOtherNews] = useState('');
 
-  // Guards every setState below against firing after unmount — shared by the
-  // initial load AND the "Try again" button, so both can use the same function.
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -92,55 +96,140 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
     };
   }, []);
 
+  // Scrolls whichever field is currently focused fully into view above the
+  // keyboard — same approach as SoundEditor.tsx's note box: positions are
+  // measured via onLayout, and the scroll fires on keyboardDidShow (which
+  // runs after the keyboard animation AND this sheet's own resize have
+  // settled), never on a fixed timer.
+  const scrollRef = useRef<ScrollView>(null);
+  const contentH = useRef(0);
+  const viewH = useRef(0);
+  // ROOT CAUSE of the original bug: onLayout's layout.y is relative to the
+  // element's IMMEDIATE PARENT only (documented RN behaviour), never to any
+  // ancestor further up — so a comment field's onLayout y was just "how far
+  // down inside THIS CARD" (~50-70pt on every card alike), and the link/other
+  // fields' y was offset from their own section, missing everything stacked
+  // above that section in the actual scroll content. Neither was ever the
+  // field's true position in the ScrollView's content, so the scroll target
+  // always clamped near 0 regardless of which field was focused.
+  //
+  // Fix: measure fresh, at focus time, with the field's own ref via
+  // measureLayout against the ScrollView's INNER CONTENT node (not the
+  // ScrollView's outer viewport) — that's the one call that returns a
+  // position already in the same coordinate space scrollTo() expects.
+  // `scrollRef.current.getInnerViewNode()` isn't a valid measureLayout target
+  // in this RN/Expo version — it threw "ref.measureLayout must be called with
+  // a ref to a native component". A plain <View> we hold our own ref to is a
+  // real native component, so it works as the measurement target instead.
+  const contentRef = useRef<View>(null);
+  const focusedFieldRef = useRef<React.RefObject<View | null> | null>(null);
+  const FOCUS_LEAD = 100; // ~100pt of space above the focused field
+
+  const scrollToField = (fieldRef: React.RefObject<View | null>) => {
+    const contentNode = contentRef.current;
+    const field = fieldRef.current;
+    if (!contentNode || !field) return;
+    try {
+      field.measureLayout(
+        contentNode,
+        (_x: number, y: number, _width: number, height: number) => {
+          const max = Math.max(0, contentH.current - viewH.current);
+          // aim for FOCUS_LEAD of space above the field...
+          let target = y - FOCUS_LEAD;
+          // ...but push further if that wouldn't also clear the field's own
+          // bottom edge above the (soon-to-appear) keyboard
+          target = Math.max(target, y + height - viewH.current);
+          // never scroll above the top or past the end of the content
+          target = Math.min(Math.max(target, 0), max);
+          scrollRef.current?.scrollTo({ y: target, animated: true });
+        },
+        () => {} // measurement failed — nothing to scroll to, not fatal
+      );
+    } catch {
+      // measureLayout must never be able to crash the editor
+    }
+  };
+
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', () => {
+      if (focusedFieldRef.current) scrollToField(focusedFieldRef.current);
+    });
+    return () => shown.remove();
+  }, []);
+
+  // A field calls this from its own onFocus, passing its OWN ref. If the
+  // keyboard is already up (e.g. switching focus straight from one field to
+  // another), scroll immediately rather than waiting for a keyboardDidShow
+  // that won't fire again.
+  const onFieldFocus = (fieldRef: React.RefObject<View | null>) => {
+    focusedFieldRef.current = fieldRef;
+    if (keyboardUp) scrollToField(fieldRef);
+  };
+
   const load = async () => {
     setStatus('loading');
     try {
-      const settings = await getNewsSettings();
-      const [freshHeadlines, selection] = await Promise.all([
-        settings.news ? fetchHeadlines(dateKey) : Promise.resolve(null),
+      const [fresh, selection, savedOtherNews] = await Promise.all([
+        fetchCurrentEvents(dateKey),
         loadNewsSelection(dateKey),
+        loadOtherNews(dateKey),
       ]);
       if (!mountedRef.current) return;
+      setOtherNews(savedOtherNews);
 
-      // MERGE: every headline already saved today is always shown, from its
-      // own snapshot, even if the live feed no longer returns it — a saved
-      // headline is never dropped to make room for a fresh one.
+      // MERGE: every story already saved today (event, or a pasted link) is
+      // always shown from its own snapshot, even if a fresh fetch no longer
+      // returns it — never dropped to make room for something new.
       const savedEntries = Object.entries(selection);
       const savedIds = new Set(savedEntries.map(([id]) => id));
-      // Nothing saved yet today → this is the first open; fresh headlines
-      // start selected. Once something's saved, later opens treat anything
-      // NOT already known as newly added, so it starts unselected (the user
-      // opts in) rather than silently changing what's on today's page.
       const isFirstOpenToday = savedEntries.length === 0;
 
       const savedItems: Item[] = savedEntries
         .filter(([, st]) => !!st.headline)
         .map(([id, st]) => ({ id, headline: st.headline!, state: st }));
 
-      const freshOnly = (freshHeadlines ?? []).filter((h) => !savedIds.has(headlineId(h.title)));
-      const room = Math.max(0, 5 - savedItems.length);
-      const newItems: Item[] = freshOnly.slice(0, room).map((h) => {
-        const id = headlineId(h.title);
-        const state: HeadlineState = { ...emptyHeadlineState, selected: isFirstOpenToday, headline: h };
-        return { id, headline: h, state };
-      });
-
-      const combined = [...savedItems, ...newItems];
-      // Only a genuine attempt (settings.news on) that came back null counts as
-      // a failure — settings off deliberately skips the fetch and is never "failed".
-      const fetchFailed = settings.news && freshHeadlines === null;
-      setHeadlinesOff(!settings.news);
-      setItems(combined);
-      if (combined.length === 0) {
-        setStatus(fetchFailed ? 'failed' : 'empty');
-      } else {
-        setStatus('ready');
+      // Candidates: the first fresh event of each category (fresh ones not
+      // already saved), in the order categories first appear on the page.
+      const freshEvents = (fresh ?? []).filter((h) => !savedIds.has(headlineId(h.title)));
+      const seenCategory = new Set<string>();
+      const candidates: Headline[] = [];
+      const more: Headline[] = [];
+      for (const h of freshEvents) {
+        const cat = h.category ?? 'Other';
+        if (!seenCategory.has(cat) && candidates.length < MAX_CANDIDATES) {
+          seenCategory.add(cat);
+          candidates.push(h);
+        } else {
+          more.push(h);
+        }
       }
-      // Persist the merged list immediately, even before any edit — this is
-      // what makes "nothing saved yet" a one-time state: the NEXT open sees
-      // these as already-known, so only a genuinely new headline (not these)
-      // would start unselected.
-      if (combined.length > 0) persist(combined);
+
+      const alreadySelected = savedItems.filter((it) => it.state.selected).length;
+      let selectedSoFar = alreadySelected;
+      const toItem = (h: Headline, select: boolean): Item => {
+        const id = headlineId(h.title);
+        const state: HeadlineState = { ...emptyHeadlineState, selected: select, headline: h };
+        if (select) selectedSoFar += 1;
+        return { id, headline: h, state };
+      };
+
+      // First open today: the first 3 candidates start selected. Any later
+      // open treats a fresh-only item as new, so it starts UNSELECTED — the
+      // user opts in rather than the page changing under them.
+      const candidateItems = candidates.map((h) =>
+        toItem(h, isFirstOpenToday && selectedSoFar < MAX_SELECTED)
+      );
+      const moreItems = more.map((h) => toItem(h, false));
+
+      const combined = [...savedItems, ...candidateItems, ...moreItems];
+      setItems(combined);
+      setEventCount((fresh ?? []).length);
+      setShowingMore(false);
+      setStatus(fresh === null && savedItems.length === 0 ? 'failed' : 'ready');
+      // Persist the merged list immediately, even before any edit, so the
+      // NEXT open's "first open today" check and "new vs already-known"
+      // distinction are based on what was actually shown, not just on edits.
+      persist(combined);
     } catch {
       if (mountedRef.current) setStatus('error');
     }
@@ -167,14 +256,22 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
     });
   };
 
+  const selectedCount = items.filter((it) => it.state.selected).length;
+
   const toggleSelected = (id: string) => {
     const it = items.find((x) => x.id === id);
-    if (it) updateItem(id, { selected: !it.state.selected });
+    if (!it) return;
+    if (!it.state.selected && selectedCount >= MAX_SELECTED) {
+      Alert.alert('Only 3 stories today', 'Deselect one before adding another.');
+      return;
+    }
+    updateItem(id, { selected: !it.state.selected });
   };
 
-  // Tapping the CURRENT main story's star turns it off, leaving no main story
-  // (so the next comment elsewhere can auto-promote again). Tapping any other
-  // star moves the badge to it, same as before.
+  // Tapping the CURRENT main story's pin turns it off, leaving no main story.
+  // Tapping a different pin moves the badge to it. If no pin is set, the
+  // Newspaper slide falls back to the first selected story — this editor
+  // doesn't need to compute that itself.
   const setMainStory = (id: string) => {
     setItems((prev) => {
       const turningOff = prev.find((it) => it.id === id)?.state.isMainStory ?? false;
@@ -187,24 +284,17 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
     });
   };
 
-  // Auto-promotion: writing a comment on a headline promotes it to main story
-  // ONLY while nothing is currently the main story. Once any headline is
-  // starred — by this auto-promotion or an explicit tap — only another
-  // explicit star tap changes it; commenting elsewhere never steals it back.
   const onCommentChange = (id: string, text: string) => {
     let favIdToSync: string | null = null;
     setItems((prev) => {
-      const hasMainStory = prev.some((it) => it.state.isMainStory);
-      const shouldPromote = !hasMainStory && text.trim().length > 0;
       const next = prev.map((it) => {
         if (it.id !== id) return it;
         favIdToSync = it.state.favouriteId;
-        return { ...it, state: { ...it.state, comment: text, isMainStory: shouldPromote ? true : it.state.isMainStory } };
+        return { ...it, state: { ...it.state, comment: text } };
       });
       persist(next);
       return next;
     });
-    // keep an already-favourited headline's note in sync with its comment
     if (favIdToSync) updateFavouriteNote(favIdToSync, text);
   };
 
@@ -230,7 +320,81 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
     }
   };
 
-  const selectedCount = items.filter((it) => it.state.selected).length;
+  // ---- "Add a story from a link" ----
+  // Positions for the three NewsEditor-level focusable boxes (HeadlineCard's
+  // comment field has its own copy of these, local to each card instance).
+  const linkFieldRef = useRef<View>(null);
+  const linkDraftRef = useRef<View>(null);
+  const otherBoxRef = useRef<View>(null);
+
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkTitleDraft, setLinkTitleDraft] = useState<string | null>(null); // non-null once a fetch attempt has run
+  const [linkLoading, setLinkLoading] = useState(false);
+
+  const submitLink = async () => {
+    const url = linkUrl.trim();
+    if (!url) return;
+    setLinkLoading(true);
+    let title = '';
+    try {
+      const res = await fetch(url);
+      const html = await res.text();
+      const og = /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i.exec(html)
+        ?? /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i.exec(html);
+      const titleTag = /<title[^>]*>([^<]+)<\/title>/i.exec(html);
+      title = (og?.[1] ?? titleTag?.[1] ?? '').trim();
+    } catch {
+      // network error, CORS-ish block, or a site that 403s a plain fetch —
+      // leave title blank, the user types it themselves below
+    }
+    if (mountedRef.current) {
+      setLinkTitleDraft(title);
+      setLinkLoading(false);
+    }
+  };
+
+  const addLinkStory = (titleOverride: string) => {
+    const title = titleOverride.trim();
+    const url = linkUrl.trim();
+    if (!title || !url) return;
+    let domain = 'Link';
+    try {
+      domain = new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      // keep the fallback
+    }
+    const headline: Headline = { title, domain, url, kind: 'link' };
+    const id = headlineId(title);
+    const canSelect = selectedCount < MAX_SELECTED;
+    if (!canSelect) Alert.alert('Only 3 stories today', 'This link was added but not selected — deselect one first.');
+    const state: HeadlineState = { ...emptyHeadlineState, selected: canSelect, headline };
+    setItems((prev) => {
+      const next = [...prev, { id, headline, state }];
+      persist(next);
+      return next;
+    });
+    setLinkUrl('');
+    setLinkTitleDraft(null);
+  };
+
+  // ---- "In other news" ----
+  const onOtherNewsChange = (text: string) => {
+    setOtherNews(text);
+    saveOtherNews(dateKey, text);
+  };
+
+  const visibleEventItems = (() => {
+    // "more" events are everything past MAX_CANDIDATES that came from THIS
+    // load's fresh fetch — simplest robust signal: once `showingMore` is on,
+    // show every non-link item; otherwise show only the first MAX_CANDIDATES
+    // non-link items (saved items always count first, so they're never hidden).
+    const nonLink = items.filter((it) => it.headline.kind !== 'link');
+    return showingMore ? nonLink : nonLink.slice(0, MAX_CANDIDATES);
+  })();
+  const hiddenMoreCount = items.filter((it) => it.headline.kind !== 'link').length - visibleEventItems.length;
+  const linkItems = items.filter((it) => it.headline.kind === 'link');
+
+  const isThin = status === 'ready' && eventCount < 2;
 
   return (
     <View style={styles.root}>
@@ -246,15 +410,6 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
           },
         ]}
       >
-        {/* Plain View, not a Pressable with onPress={Keyboard.dismiss} — that
-            wrapped the WHOLE sheet, including the ScrollView below, and on iOS
-            an ancestor touch responder with onPress can swallow the first pan
-            gesture a ScrollView would otherwise claim (PlacesEditor.tsx has the
-            identical wrapper and scrolls fine, so the wrapper alone isn't
-            PROVEN to be the cause here — but removing its responder entirely
-            rules it out, rather than guessing). Keyboard-dismiss-by-touch now
-            comes from the ScrollView's own keyboardDismissMode="on-drag"
-            below, plus the explicit KeyboardHideButton. */}
         <View style={styles.sheetInner}>
           <View style={styles.grabber} />
 
@@ -262,8 +417,12 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
             <TouchableOpacity onPress={dismiss} hitSlop={10}>
               <Ionicons name="chevron-down" size={24} color={W60} />
             </TouchableOpacity>
-            {/* nothing to save in a batch — every toggle/comment already saved itself */}
-            <TouchableOpacity onPress={dismiss} hitSlop={10}>
+            {/* Dismisses the keyboard first if it's up; only closes the editor
+                once the keyboard is already down. The chevron always closes. */}
+            <TouchableOpacity
+              onPress={() => (keyboardUp ? Keyboard.dismiss() : dismiss())}
+              hitSlop={10}
+            >
               <Text style={styles.topDone}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -271,38 +430,19 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
           <Text style={styles.title}>Today&apos;s headlines</Text>
           <Text style={styles.subtitle}>Pick what mattered today</Text>
 
-          {/* Local workaround — the shared KeyboardDismissBar doesn't appear on
-              this screen either (same unresolved cause as CameraRollEditor.tsx). */}
           <View style={styles.hideKeyboardRow}>
             <KeyboardHideButton visible={keyboardUp} />
           </View>
 
-          {headlinesOff && (
-            <View style={styles.offBanner}>
-              <Ionicons name="information-circle-outline" size={16} color={W50} />
-              <Text style={styles.offBannerText}>
-                Headlines are turned off in Settings — showing what you already saved today.
-              </Text>
-            </View>
-          )}
-
           {status === 'loading' && (
             <View style={styles.centred}>
-              <Text style={styles.stateText}>Loading today&apos;s headlines…</Text>
-            </View>
-          )}
-          {status === 'empty' && (
-            <View style={styles.centred}>
-              <Ionicons name="newspaper-outline" size={32} color={palette.ringSubtle} />
-              <Text style={styles.stateText}>
-                {headlinesOff ? 'Nothing saved for today yet.' : 'No headlines found for today.'}
-              </Text>
+              <Text style={styles.stateText}>Loading today&apos;s events…</Text>
             </View>
           )}
           {status === 'failed' && (
             <View style={styles.centred}>
               <Ionicons name="cloud-offline-outline" size={32} color={palette.ringSubtle} />
-              <Text style={styles.stateText}>Couldn&apos;t load headlines right now.</Text>
+              <Text style={styles.stateText}>Couldn&apos;t load today&apos;s events right now.</Text>
               <TouchableOpacity onPress={load} style={styles.retryBtn} hitSlop={8}>
                 <Text style={styles.retryBtnText}>Try again</Text>
               </TouchableOpacity>
@@ -310,19 +450,36 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
           )}
           {status === 'error' && (
             <View style={styles.centred}>
-              <Text style={styles.stateText}>Couldn&apos;t load today&apos;s headlines.</Text>
+              <Text style={styles.stateText}>Couldn&apos;t load today&apos;s events.</Text>
             </View>
           )}
 
-          {status === 'ready' && (
+          {(status === 'ready' || status === 'failed') && (
             <ScrollView
+              ref={scrollRef}
               style={styles.body}
+              onLayout={(e) => {
+                viewH.current = e.nativeEvent.layout.height;
+              }}
+              onContentSizeChange={(_, h) => {
+                contentH.current = h;
+              }}
               contentContainerStyle={styles.bodyContent}
               keyboardDismissMode="on-drag"
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              {items.map((it) => (
+              <View ref={contentRef}>
+              {isThin && (
+                <View style={styles.thinBanner}>
+                  <Ionicons name="time-outline" size={16} color={W50} />
+                  <Text style={styles.thinBannerText}>
+                    Wikipedia&apos;s page for today is still filling in — you can still add a link or write about your day below.
+                  </Text>
+                </View>
+              )}
+
+              {visibleEventItems.map((it) => (
                 <HeadlineCard
                   key={it.id}
                   item={it}
@@ -330,16 +487,105 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
                   onSetMainStory={() => setMainStory(it.id)}
                   onToggleFavourite={() => toggleFavourite(it.id)}
                   onCommentChange={(text) => onCommentChange(it.id, text)}
+                  onFocusField={onFieldFocus}
                 />
               ))}
+
+              {!showingMore && hiddenMoreCount > 0 && (
+                <TouchableOpacity onPress={() => setShowingMore(true)} style={styles.showMoreRow}>
+                  <Text style={styles.showMoreText}>Show {hiddenMoreCount} more events</Text>
+                  <Ionicons name="chevron-down" size={16} color={w.accent} />
+                </TouchableOpacity>
+              )}
+
+              {linkItems.map((it) => (
+                <HeadlineCard
+                  key={it.id}
+                  item={it}
+                  onToggleSelected={() => toggleSelected(it.id)}
+                  onSetMainStory={() => setMainStory(it.id)}
+                  onToggleFavourite={() => toggleFavourite(it.id)}
+                  onCommentChange={(text) => onCommentChange(it.id, text)}
+                  onFocusField={onFieldFocus}
+                />
+              ))}
+
+              {/* ADD A STORY FROM A LINK — always available, even on a thin/failed day */}
+              <View style={styles.linkSection}>
+                <Text style={styles.sectionLabel}>Add a story from a link</Text>
+                <View ref={linkFieldRef} style={styles.linkField}>
+                  <Ionicons name="link-outline" size={16} color={W50} style={styles.linkFieldIcon} />
+                  <TextInput
+                    inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
+                    style={styles.linkInput}
+                    value={linkUrl}
+                    onChangeText={(t) => {
+                      setLinkUrl(t);
+                      setLinkTitleDraft(null);
+                    }}
+                    onFocus={() => onFieldFocus(linkFieldRef)}
+                    placeholder="Paste a link…"
+                    placeholderTextColor={palette.textMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    returnKeyType="go"
+                    onSubmitEditing={submitLink}
+                  />
+                  {linkUrl.trim().length > 0 && linkTitleDraft === null && (
+                    <TouchableOpacity onPress={submitLink} disabled={linkLoading} style={styles.linkGoBtn}>
+                      <Text style={styles.linkGoText}>{linkLoading ? '…' : 'Go'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {linkTitleDraft !== null && (
+                  <View ref={linkDraftRef} style={styles.linkDraftRow}>
+                    <TextInput
+                      inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
+                      style={styles.linkDraftInput}
+                      value={linkTitleDraft}
+                      onChangeText={setLinkTitleDraft}
+                      onFocus={() => onFieldFocus(linkDraftRef)}
+                      placeholder="Couldn't read a title — type one…"
+                      placeholderTextColor={palette.textMuted}
+                    />
+                    <TouchableOpacity
+                      onPress={() => addLinkStory(linkTitleDraft)}
+                      style={styles.linkAddBtn}
+                      disabled={linkTitleDraft.trim().length === 0}
+                    >
+                      <Text style={styles.linkAddText}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              {/* IN OTHER NEWS — a per-day note, not counted toward the 3 stories */}
+              <View style={styles.otherSection}>
+                <Text style={styles.sectionLabel}>In other news</Text>
+                <View ref={otherBoxRef} style={styles.otherBox}>
+                  <TextInput
+                    inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
+                    style={styles.otherInput}
+                    value={otherNews}
+                    onChangeText={onOtherNewsChange}
+                    onFocus={() => onFieldFocus(otherBoxRef)}
+                    placeholder="Anything else that mattered today…"
+                    placeholderTextColor={palette.textMuted}
+                    multiline
+                  />
+                </View>
+              </View>
+              </View>
             </ScrollView>
           )}
 
-          {status === 'ready' && (
+          {(status === 'ready' || status === 'failed') && (
             <View style={styles.footer}>
               <View style={styles.footerDivider} />
               <Text style={styles.footerCaption}>
-                {selectedCount} selected {selectedCount === 1 ? 'headline' : 'headlines'} join today&apos;s page
+                {selectedCount} of {MAX_SELECTED} stories selected for today&apos;s page
               </Text>
             </View>
           )}
@@ -356,16 +602,21 @@ function HeadlineCard({
   onSetMainStory,
   onToggleFavourite,
   onCommentChange,
+  onFocusField,
 }: {
   item: Item;
   onToggleSelected: () => void;
   onSetMainStory: () => void;
   onToggleFavourite: () => void;
   onCommentChange: (text: string) => void;
+  onFocusField: (fieldRef: React.RefObject<View | null>) => void;
 }) {
   const { headline, state } = item;
   const [commentFocused, setCommentFocused] = useState(false);
   const expanded = commentFocused || state.comment.trim().length > 0;
+  // Local to this card instance — each card (including the last one) tracks
+  // its OWN comment box position, so scroll-into-view works per-card.
+  const commentBoxRef = useRef<View>(null);
 
   return (
     <View style={styles.card}>
@@ -375,22 +626,23 @@ function HeadlineCard({
         </View>
       )}
 
-      {/* GDELT's artlist endpoint gives no per-article time, only the source domain
-          — no fake time is shown rather than inventing one (see summary/notes). */}
       <Text style={styles.sourceLine} numberOfLines={1}>
         {headline.domain}
       </Text>
 
       <Text style={styles.headlineText}>{headline.title}</Text>
 
-      <View style={styles.commentField}>
+      <View ref={commentBoxRef} style={styles.commentField}>
         <Ionicons name="pencil-outline" size={14} color={W50} style={styles.commentIcon} />
         <TextInput
           inputAccessoryViewID={KEYBOARD_ACCESSORY_ID}
           style={[styles.commentInput, expanded && styles.commentInputExpanded]}
           value={state.comment}
           onChangeText={onCommentChange}
-          onFocus={() => setCommentFocused(true)}
+          onFocus={() => {
+            setCommentFocused(true);
+            onFocusField(commentBoxRef);
+          }}
           onBlur={() => setCommentFocused(false)}
           placeholder="Add a comment…"
           placeholderTextColor={palette.textMuted}
@@ -401,13 +653,18 @@ function HeadlineCard({
       <View style={styles.iconRow}>
         <TouchableOpacity onPress={onToggleFavourite} hitSlop={8} style={styles.iconBtn}>
           <Ionicons
-            name={state.favouriteId ? 'bookmark' : 'bookmark-outline'}
+            name={state.favouriteId ? 'star' : 'star-outline'}
             size={20}
-            color={state.favouriteId ? w.accent : W50}
+            color={state.favouriteId ? STAR_GOLD : W50}
           />
         </TouchableOpacity>
         <TouchableOpacity onPress={onSetMainStory} hitSlop={8} style={styles.iconBtn}>
-          <Ionicons name={state.isMainStory ? 'star' : 'star-outline'} size={20} color={state.isMainStory ? STAR_GOLD : W50} />
+          {/* a proper push-pin/thumbtack, not Ionicons' map-marker-shaped "pin" */}
+          <MaterialCommunityIcons
+            name={state.isMainStory ? 'pin' : 'pin-outline'}
+            size={20}
+            color={state.isMainStory ? w.accent : W50}
+          />
         </TouchableOpacity>
         <TouchableOpacity onPress={onToggleSelected} hitSlop={8} style={styles.iconBtn}>
           <View style={[styles.checkCircle, state.selected && styles.checkCircleOn]}>
@@ -464,17 +721,16 @@ const styles = StyleSheet.create({
 
   hideKeyboardRow: { paddingHorizontal: space.xl },
 
-  offBanner: {
+  thinBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginTop: space.md,
-    marginHorizontal: space.xl,
+    marginBottom: space.md,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
     borderRadius: radius.md,
     backgroundColor: INPUT_BG,
   },
-  offBannerText: {
+  thinBannerText: {
     flex: 1,
     marginLeft: 8,
     fontFamily: w.fontRegular,
@@ -483,7 +739,9 @@ const styles = StyleSheet.create({
   },
 
   body: { flex: 1, marginTop: space.md },
-  bodyContent: { paddingHorizontal: space.xl, paddingBottom: space.lg },
+  // extra space below the last box — without it, the scroll-into-view math
+  // for a box near the bottom has nowhere left to scroll TO
+  bodyContent: { paddingHorizontal: space.xl, paddingBottom: 280 },
 
   card: {
     backgroundColor: INPUT_BG,
@@ -552,6 +810,71 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkCircleOn: { backgroundColor: w.accent, borderColor: w.accent },
+
+  showMoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: space.sm,
+    marginBottom: space.md,
+  },
+  showMoreText: { fontFamily: w.fontMedium, fontSize: type.bodySmall.fontSize, color: w.accent, marginRight: 4 },
+
+  sectionLabel: {
+    fontFamily: w.fontMedium,
+    fontSize: type.bodySmall.fontSize,
+    color: palette.textPrimary,
+    marginBottom: space.sm,
+  },
+
+  linkSection: { marginTop: space.sm, marginBottom: space.lg },
+  linkField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: INPUT_BG,
+    paddingHorizontal: space.md,
+  },
+  linkFieldIcon: { marginRight: 8 },
+  linkInput: { flex: 1, padding: 0, fontFamily: w.fontRegular, fontSize: type.bodySmall.fontSize, color: palette.textPrimary },
+  linkGoBtn: { marginLeft: space.sm, paddingHorizontal: space.sm, paddingVertical: 4 },
+  linkGoText: { fontFamily: w.fontMedium, fontSize: type.bodySmall.fontSize, color: w.accent },
+  linkDraftRow: { flexDirection: 'row', alignItems: 'center', marginTop: space.sm },
+  linkDraftInput: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: INPUT_BG,
+    paddingHorizontal: space.md,
+    fontFamily: w.fontRegular,
+    fontSize: type.bodySmall.fontSize,
+    color: palette.textPrimary,
+  },
+  linkAddBtn: {
+    marginLeft: space.sm,
+    height: 40,
+    paddingHorizontal: space.md,
+    borderRadius: 10,
+    backgroundColor: w.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  linkAddText: { fontFamily: w.fontMedium, fontSize: type.bodySmall.fontSize, color: '#ffffff' },
+
+  otherSection: { marginBottom: space.sm },
+  otherBox: {
+    borderRadius: 12,
+    backgroundColor: INPUT_BG,
+    overflow: 'hidden',
+  },
+  otherInput: {
+    minHeight: 64,
+    padding: space.md,
+    fontFamily: w.fontRegular,
+    fontSize: type.bodySmall.fontSize,
+    color: palette.textPrimary,
+  },
 
   footer: {},
   footerDivider: { height: 1, backgroundColor: palette.hairline },

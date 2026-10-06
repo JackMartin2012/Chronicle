@@ -455,6 +455,7 @@ export default function ThePresent() {
   }, []);
 
   useEffect(() => { if (activeTab === 'archive') loadArchive(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'favourites') loadFavourites(); }, [activeTab]);
 
   useEffect(() => {
     if (archivedDays.length > 0 && !archiveCalYear) {
