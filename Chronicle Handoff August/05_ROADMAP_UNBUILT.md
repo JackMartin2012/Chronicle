@@ -89,6 +89,14 @@ to the same structure later.
 (`app/(tabs)/_layout.tsx` has two tabs today), not just a doc edit — plan it as its
 own piece of work.
 
+**Tab layout decision (Oct 2026):** the bottom bar becomes Your Past | You | Your
+Present, with You in the middle. You holds all the user's favourites (songs,
+films, TV, podcasts, articles, places, etc.), plus family, friends and other
+people. The Favourites list stays one shared store (the `favourites` AsyncStorage
+key, `lib/favouritesStore.ts`) that every editor's amber star saves into, so the
+tab can move without reworking the editors. The current Favourites tab in
+`explore.tsx` is temporary and will move into You when it is built.
+
 ---
 
 ## THE APARTMENT "YOU" SCREEN (1.1+, depends on Mii builder)

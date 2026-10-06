@@ -18,7 +18,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
 import { fetchCurrentEvents } from '@/lib/currentEvents';
 import { formatDateKey } from '@/lib/dayEntry';
-import { addFavourite, removeFavourite, updateFavouriteNote } from '@/lib/favouritesStore';
+import {
+  addFavourite,
+  flushFavouriteNoteUpdate,
+  loadFavourites,
+  removeFavourite,
+  scheduleFavouriteNoteUpdate,
+  subscribeFavourites,
+  type Favourite,
+} from '@/lib/favouritesStore';
 import {
   emptyHeadlineState,
   headlineId,
@@ -42,9 +50,6 @@ const W20 = 'rgba(255,255,255,0.2)';
 const INPUT_BG = '#16233d';
 const BACKDROP = 'rgba(0,0,0,0.55)';
 const MAIN_STORY_BLUE = 'rgba(74,144,217,0.9)';
-// A separate amber from `capsuleGold` in chronicleTheme.ts on purpose — that
-// token is reserved for Future Capsules only. The favourite star's own colour.
-const STAR_GOLD = '#e0a862';
 
 const MAX_SELECTED = 3; // the newspaper page holds at most 3 stories
 const MAX_CANDIDATES = 5; // "the first event of each category", capped
@@ -58,7 +63,10 @@ type Item = {
 export default function NewsEditor({ onClose }: { onClose?: () => void }) {
   const insets = useSafeAreaInsets();
   const dateKey = formatDateKey(new Date());
-  const dismiss = onClose ?? (() => {});
+  const dismiss = () => {
+    flushFavouriteNoteUpdate();
+    (onClose ?? (() => {}))();
+  };
 
   // Every other editor in this codebase tracks keyboard height and shrinks its
   // sheet to fit ABOVE the keyboard; this file follows the same pattern.
@@ -87,6 +95,18 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
   const [eventCount, setEventCount] = useState(0); // from the fetch itself, not the merged `items`
   const [showingMore, setShowingMore] = useState(false);
   const [otherNews, setOtherNews] = useState('');
+
+  // Clears any `favouriteId` that no longer exists in the real Favourites
+  // list (e.g. deleted there since this was last saved) — returns a NEW
+  // array only if something actually changed, so a caller can tell.
+  const dropStaleFavouriteIds = (list: Item[], favourites: Favourite[]): Item[] => {
+    const knownIds = new Set(favourites.map((f) => f.id));
+    return list.map((it) =>
+      it.state.favouriteId && !knownIds.has(it.state.favouriteId)
+        ? { ...it, state: { ...it.state, favouriteId: null } }
+        : it
+    );
+  };
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -221,7 +241,12 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
       );
       const moreItems = more.map((h) => toItem(h, false));
 
-      const combined = [...savedItems, ...candidateItems, ...moreItems];
+      let combined = [...savedItems, ...candidateItems, ...moreItems];
+      // The star must follow the real list — a favourite deleted from the
+      // Favourites tab since this was saved must show as off on reopen, not
+      // stay lit forever.
+      const favourites = await loadFavourites();
+      combined = dropStaleFavouriteIds(combined, favourites);
       setItems(combined);
       setEventCount((fresh ?? []).length);
       setShowingMore(false);
@@ -237,6 +262,22 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // While this editor stays open, a star must switch off the moment its
+  // favourite is deleted elsewhere (the Favourites tab), not just on the
+  // next reopen.
+  useEffect(() => {
+    const unsubscribe = subscribeFavourites((favourites) => {
+      setItems((prev) => {
+        const next = dropStaleFavouriteIds(prev, favourites);
+        const changed = next.some((it, i) => it !== prev[i]);
+        if (changed) persist(next);
+        return changed ? next : prev;
+      });
+    });
+    return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -295,17 +336,29 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
       persist(next);
       return next;
     });
-    if (favIdToSync) updateFavouriteNote(favIdToSync, text);
+    // Debounced (~400ms after typing stops), not one write per keystroke —
+    // flushed on close below so a pending one isn't lost.
+    if (favIdToSync) scheduleFavouriteNoteUpdate(favIdToSync, text);
   };
 
   const toggleFavourite = async (id: string) => {
     const it = items.find((x) => x.id === id);
     if (!it) return;
-    if (it.state.favouriteId) {
+    // Re-check the link against the real list right before acting — it may
+    // have been deleted in the Favourites tab a moment ago (the subscription
+    // above should already have caught that, but this is the direct guard a
+    // tap always goes through). A star whose favourite is already gone must
+    // create a new one, never try to remove something that isn't there.
+    const favouriteStillExists = it.state.favouriteId
+      ? (await loadFavourites()).some((f) => f.id === it.state.favouriteId)
+      : false;
+
+    if (it.state.favouriteId && favouriteStillExists) {
       const favId = it.state.favouriteId;
       updateItem(id, { favouriteId: null });
       await removeFavourite(favId);
     } else {
+      if (it.state.favouriteId && !favouriteStillExists) updateItem(id, { favouriteId: null });
       const displayDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
       const fav = await addFavourite({
         category: 'article',
@@ -655,7 +708,7 @@ function HeadlineCard({
           <Ionicons
             name={state.favouriteId ? 'star' : 'star-outline'}
             size={20}
-            color={state.favouriteId ? STAR_GOLD : W50}
+            color={state.favouriteId ? palette.favouriteStar : W50}
           />
         </TouchableOpacity>
         <TouchableOpacity onPress={onSetMainStory} hitSlop={8} style={styles.iconBtn}>

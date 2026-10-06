@@ -25,6 +25,11 @@ export const palette = {
   // Capsules only. Never use this anywhere else.
   capsuleGold: '#f5c842',
 
+  // The "this is favourited" star, wherever a favourite toggle appears
+  // (SoundEditor.tsx, NewsEditor.tsx). A separate amber from capsuleGold on
+  // purpose — that one stays capsules-only.
+  favouriteStar: '#e0a862',
+
   // Text
   textPrimary: '#ffffff',
   textSecondary: 'rgba(255,255,255,0.70)',

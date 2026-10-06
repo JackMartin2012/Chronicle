@@ -78,6 +78,9 @@ export type SoundEntry = {
   note: string;
   /** iTunes trackId/collectionId. */
   externalId: string;
+  /** The linked Favourites-list row, or absent/null if not favourited. Optional
+   * so old saved entries (before this field existed) still load fine. */
+  favouriteId?: string | null;
 };
 
 /** Two independent slots — picking a song must not clear a chosen film. */

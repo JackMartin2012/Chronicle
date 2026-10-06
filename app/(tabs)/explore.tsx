@@ -33,6 +33,12 @@ import Svg, { Circle } from 'react-native-svg';
 import DailySelfie from '../../components/DailySelfie';
 import TodayScreen from '../../components/today/TodayScreen';
 import DayCard, { hashUri } from '../../components/DayCard';
+import PillRow from '@/components/PillRow';
+import {
+  loadFavourites as loadFavouritesFromStore,
+  saveFavouritesList,
+  subscribeFavourites,
+} from '@/lib/favouritesStore';
 
 const { width } = Dimensions.get('window');
 const CAL_SLOT_WIDTH = Math.floor((width - 32) / 7);
@@ -455,7 +461,13 @@ export default function ThePresent() {
   }, []);
 
   useEffect(() => { if (activeTab === 'archive') loadArchive(); }, [activeTab]);
-  useEffect(() => { if (activeTab === 'favourites') loadFavourites(); }, [activeTab]);
+  // Keeps the tab current the moment ANY editor (or this screen itself)
+  // writes a favourite — no tab-switch needed to see it, and no reload race
+  // with an edit that's still in flight.
+  useEffect(() => {
+    const unsubscribe = subscribeFavourites(setFavourites);
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     if (archivedDays.length > 0 && !archiveCalYear) {
@@ -546,14 +558,18 @@ export default function ThePresent() {
     setChosenThumbs(chosen);
   };
 
+  // Both now route through lib/favouritesStore.ts (same 'favourites' key, same
+  // JSON shape) instead of talking to AsyncStorage directly, so this screen's
+  // writes queue against the Sound/News editors' writes rather than racing
+  // them — and so subscribeFavourites (below) can notify this screen of a
+  // change made somewhere else.
   const loadFavourites = async () => {
-    const raw = await AsyncStorage.getItem('favourites');
-    if (raw) setFavourites(JSON.parse(raw));
+    setFavourites(await loadFavouritesFromStore());
   };
 
   const saveFavourites = async (updated: Favourite[]) => {
     setFavourites(updated);
-    await AsyncStorage.setItem('favourites', JSON.stringify(updated));
+    await saveFavouritesList(updated);
   };
 
   const loadCapsules = async () => {
@@ -1121,14 +1137,14 @@ export default function ThePresent() {
 
       {activeTab === 'favourites' && (
         <View style={styles.container}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.favFilterStrip} contentContainerStyle={styles.favFilterContent}>
+          <PillRow>
             {favCategories.map(cat => (
               <TouchableOpacity key={cat.key} style={[styles.favFilterPill, favFilter === cat.key && styles.favFilterPillActive]} onPress={() => setFavFilter(cat.key)}>
                 <Text style={styles.favFilterEmoji}>{cat.emoji}</Text>
                 <Text style={[styles.favFilterText, favFilter === cat.key && styles.favFilterTextActive]}>{cat.label}</Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </PillRow>
           {filteredFavourites.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyEmoji}>⭐</Text>
@@ -1213,14 +1229,14 @@ export default function ThePresent() {
           <ScrollView showsVerticalScrollIndicator={false}>
             <Text style={styles.addFavTitle}>Add a Favourite</Text>
             <Text style={styles.addFavLabel}>Category</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.addFavCategoryRow}>
+            <PillRow contentStyle={{ paddingHorizontal: 0 }}>
               {favCategories.filter(c => c.key !== 'all').map(cat => (
                 <TouchableOpacity key={cat.key} style={[styles.addFavCatPill, newFav.category === cat.key && styles.addFavCatPillActive]} onPress={() => setNewFav(prev => ({ ...prev, category: cat.key }))}>
                   <Text style={styles.addFavCatEmoji}>{cat.emoji}</Text>
                   <Text style={[styles.addFavCatText, newFav.category === cat.key && styles.addFavCatTextActive]}>{cat.label}</Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </PillRow>
             <Text style={styles.addFavLabel}>Photo (optional)</Text>
             <TouchableOpacity style={styles.addFavPhotoButton} onPress={pickFavPhoto}>
               {newFav.photoUri ? <Image source={{ uri: newFav.photoUri }} style={styles.addFavPhotoPreview} />
@@ -1954,13 +1970,16 @@ const styles = StyleSheet.create({
   calDayNumFilled: { position: 'absolute', bottom: 4, left: 5, color: '#ffffff', fontSize: 12, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
   calDayNumEmpty: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '700' },
 
-  // Favourites
-  favFilterStrip: { maxHeight: 54 },
-  favFilterContent: { paddingHorizontal: 16, gap: 8, paddingVertical: 10 },
-  favFilterPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'transparent' },
+  // Favourites — the outer strip/content styles moved into components/PillRow.tsx
+  favFilterPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, overflow: 'visible', backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'transparent' },
   favFilterPillActive: { backgroundColor: 'rgba(74,144,217,0.25)', borderColor: 'rgba(74,144,217,0.45)' },
-  favFilterEmoji: { fontSize: 13 },
-  favFilterText: { fontSize: 13, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
+  // Explicit, equal lineHeight on both — an emoji glyph commonly renders
+  // taller than its nominal fontSize/lineHeight on iOS (a real, documented
+  // platform quirk, independent of anything in this file), and leaving
+  // lineHeight unset for the label text left its line box at whatever the
+  // platform computed by default rather than something known and generous.
+  favFilterEmoji: { fontSize: 13, lineHeight: 18 },
+  favFilterText: { fontSize: 13, lineHeight: 18, color: 'rgba(255,255,255,0.4)', fontWeight: '600' },
   favFilterTextActive: { color: '#ffffff' },
   favGrid: { paddingHorizontal: 16, paddingBottom: 140, gap: 12 },
   favCard: { backgroundColor: '#101c33', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(74,144,217,0.22)', overflow: 'hidden' },
@@ -2001,7 +2020,6 @@ const styles = StyleSheet.create({
   addFavModal: { flex: 1, backgroundColor: '#0b1526', paddingTop: 70, paddingHorizontal: 20 },
   addFavTitle: { fontSize: 26, fontFamily: 'SpaceGrotesk_700Bold', color: '#ffffff', marginBottom: 20 },
   addFavLabel: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 8, marginTop: 12 },
-  addFavCategoryRow: { gap: 8, paddingBottom: 4 },
   addFavCatPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'transparent' },
   addFavCatPillActive: { backgroundColor: 'rgba(74,144,217,0.25)', borderColor: 'rgba(74,144,217,0.45)' },
   addFavCatEmoji: { fontSize: 13 },

@@ -21,6 +21,14 @@ import { getWorld, motion, palette, space, type } from '@/constants/chronicleThe
 import EditorFooterProgress from '../EditorFooterProgress';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
 import { countFilledInputs, formatDateKey, loadDayEntry, saveDayEntry } from '@/lib/dayEntry';
+import {
+  addFavourite,
+  loadFavourites,
+  removeFavourite,
+  subscribeFavourites,
+  updateFavouriteNote,
+  updateFavouriteRating,
+} from '@/lib/favouritesStore';
 
 const w = getWorld('present');
 const { height: SCREEN_H } = Dimensions.get('window');
@@ -64,7 +72,28 @@ type SoundEntry = {
   rating: number; // 1-10, 0 = unrated
   note: string;
   externalId: string; // iTunes trackId/collectionId
+  // Local duplicate of lib/types.ts's SoundEntry (see its own note on that
+  // duplication) — needs the same field so favouriting can set/read it.
+  favouriteId?: string | null;
 };
+
+// No dedicated "Podcast" category exists in explore.tsx's favCategories —
+// podcasts favourite under Song, the closest fit, same as film/tv both
+// favourite under the one "Movie / TV" category.
+const FAVOURITE_CATEGORY_BY_MEDIA: Record<MediaType, string> = {
+  song: 'song',
+  podcast: 'song',
+  film: 'movie',
+  tv: 'movie',
+};
+
+// Identity check for "is this the SAME pick" — used to decide whether a
+// stored slot is a safe base to merge a favouriteId into, or just stale data
+// left over from before "Change" swapped in something else. externalId is
+// the iTunes id, stable and unique; title is the fallback for entries with
+// none (a film with no iTunes match, resolved via Wikipedia instead).
+const isSameTrack = (a: SoundEntry, b: SoundEntry): boolean =>
+  a.externalId && b.externalId ? a.externalId === b.externalId : a.title === b.title;
 
 const TITLE_BY_MODE: Record<SoundMode, string> = {
   listen: 'What did you listen to today?',
@@ -219,24 +248,46 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
     watch: null,
   });
   const [completed, setCompleted] = useState(0);
-  // TODO: placeholder for the Favourites feature. This star is decorative — local
-  // state only, per slot, NOT saved and NOT part of SoundEntry. Wire it to the
-  // Favourites tab when that feature is built.
-  const [starred, setStarred] = useState<Record<SoundMode, boolean>>({ listen: false, watch: false });
   const [heroH, setHeroH] = useState(0);
   // The hero is invisible at 0. selectResult animates it in; a seeded entry
   // never goes through selectResult, so seeding must set it to 1 itself.
   const heroAnim = useRef(new Animated.Value(0)).current; // 0 → 1: hero scale-in + fade
 
+  // Clears any `favouriteId` on either slot that no longer exists in the real
+  // Favourites list (e.g. deleted there since this was last saved), mutating
+  // them in place so the caller can save/display the result directly.
+  const dropStaleFavouriteLinks = (
+    slots: { listen: SoundEntry | null; watch: SoundEntry | null },
+    knownIds: Set<string>
+  ): boolean => {
+    let changed = false;
+    (['listen', 'watch'] as const).forEach((m) => {
+      const e = slots[m];
+      if (e?.favouriteId && !knownIds.has(e.favouriteId)) {
+        slots[m] = { ...e, favouriteId: null };
+        changed = true;
+      }
+    });
+    return changed;
+  };
+
   // Seed from today's record so reopening shows both slots as you left them,
   // and lands on whichever side you actually filled.
   useEffect(() => {
     let active = true;
-    loadDayEntry(formatDateKey(new Date())).then((day) => {
+    Promise.all([loadDayEntry(formatDateKey(new Date())), loadFavourites()]).then(([day, favourites]) => {
       if (!active) return;
-      if (day.sound.listen || day.sound.watch) heroAnim.setValue(1);
-      setEntries({ listen: day.sound.listen, watch: day.sound.watch });
-      if (!day.sound.listen && day.sound.watch) {
+      const slots = { listen: day.sound.listen, watch: day.sound.watch };
+      const knownIds = new Set(favourites.map((f) => f.id));
+      // The star must follow the real list — a favourite deleted from the
+      // Favourites tab since this was saved must show as off on reopen, not
+      // stay lit forever.
+      if (dropStaleFavouriteLinks(slots, knownIds)) {
+        saveDayEntry(formatDateKey(new Date()), { sound: slots });
+      }
+      if (slots.listen || slots.watch) heroAnim.setValue(1);
+      setEntries(slots);
+      if (!slots.listen && slots.watch) {
         setMode('watch');
         setDisplayMode('watch');
       }
@@ -246,6 +297,23 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
       active = false;
     };
   }, [heroAnim]);
+
+  // While this editor stays open, the star must switch off the moment its
+  // favourite is deleted elsewhere (the Favourites tab), not just on the
+  // next reopen.
+  useEffect(() => {
+    const unsubscribe = subscribeFavourites((favourites) => {
+      const knownIds = new Set(favourites.map((f) => f.id));
+      setEntries((prev) => {
+        const slots = { ...prev };
+        if (!dropStaleFavouriteLinks(slots, knownIds)) return prev;
+        saveDayEntry(formatDateKey(new Date()), { sound: slots });
+        return slots;
+      });
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const entry = entries[mode]; // the current mode's slot
   const anyFilled = !!entries.listen || !!entries.watch;
@@ -396,10 +464,114 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
   };
 
   const changeSelection = () => {
+    const cur = entries[mode];
     setEntries((prev) => ({ ...prev, [mode]: null })); // keeps the previous query → search re-runs
-    setStarred((prev) => ({ ...prev, [mode]: false })); // a new pick starts un-starred
+    // If the entry being replaced was linked to a favourite, clear that link
+    // in storage right away. Change never otherwise touches storage, so the
+    // stored slot would keep describing the OLD song indefinitely — and the
+    // next star-tap on whatever's picked next could mistake it for the
+    // current pick (see toggleFavourite's isSameTrack guard, which this
+    // makes doubly sure of). The favourite row itself is untouched.
+    if (cur?.favouriteId) {
+      const dateKey = formatDateKey(new Date());
+      loadDayEntry(dateKey).then((current) => {
+        const storedSlot = current.sound[mode];
+        if (storedSlot && storedSlot.favouriteId === cur.favouriteId) {
+          saveDayEntry(dateKey, { sound: { [mode]: { ...storedSlot, favouriteId: null } } });
+        }
+      });
+    }
   };
 
+  // Mirrors NewsEditor.tsx's toggleFavourite: adds/removes a real Favourites
+  // row, immediately, and keeps the link on the entry so it survives reopening
+  // (once Done saves it — see handleDone; this editor batch-saves on Done,
+  // same as rating/note, rather than per-action like NewsEditor).
+  // Reads fresh from storage rather than using live `entries` state, because
+  // `entries` can hold unsaved edits (rating/note typed, or even a brand-new
+  // pick) that the chevron is meant to discard. ORPHAN BUG this fixes: the
+  // favouriteId link itself used to live only in that same unsaved local
+  // state, so a chevron-dismiss lost the link — the star showed off on
+  // reopen, and tapping it again created a duplicate Favourites row. The link
+  // (and, for a never-saved slot, the whole entry — see below) is now written
+  // to the day record immediately, same partial-merge saveDayEntry() every
+  // other editor uses, so it survives however the sheet closes.
+  const toggleFavourite = async () => {
+    if (!entry) return;
+    const dateKey = formatDateKey(new Date());
+    const current = await loadDayEntry(dateKey);
+    const storedSlot = current.sound[mode];
+
+    // A stored slot is only a safe merge base when it's the SAME pick as the
+    // live entry — otherwise (no stored slot, OR a stale one left over from
+    // before "Change" swapped in a different song/film) it must be ignored
+    // entirely, or favouriting would read/write the WRONG entry's data. This
+    // is the exact bug Change → pick something else → star it used to hit.
+    const matchesStored = !!storedSlot && isSameTrack(storedSlot, entry);
+
+    // Re-check the link against the real list right before acting — it may
+    // have been deleted in the Favourites tab a moment ago (the subscription
+    // above should already have caught that, but this is the direct guard a
+    // tap always goes through). A star whose favourite is already gone must
+    // create a new one, never try to remove something that isn't there.
+    const favouriteStillExists = entry.favouriteId
+      ? (await loadFavourites()).some((f) => f.id === entry.favouriteId)
+      : false;
+
+    if (entry.favouriteId && favouriteStillExists) {
+      const favId = entry.favouriteId;
+      setEntries((prev) => {
+        const cur = prev[mode];
+        return cur ? { ...prev, [mode]: { ...cur, favouriteId: null } } : prev;
+      });
+      await removeFavourite(favId);
+      // Only the link changes when storedSlot really is this track — never
+      // merge into a mismatched stored slot.
+      const base = matchesStored ? storedSlot! : entry;
+      await saveDayEntry(dateKey, { sound: { [mode]: { ...base, favouriteId: null } } });
+    } else {
+      if (entry.favouriteId && !favouriteStillExists) {
+        // clear the stale link before adding a fresh one
+        setEntries((prev) => {
+          const cur = prev[mode];
+          return cur ? { ...prev, [mode]: { ...cur, favouriteId: null } } : prev;
+        });
+      }
+      // The favourite's own name/rating/note/etc. ALWAYS come from the live
+      // `entry` — that's what's visibly selected and being starred, never a
+      // stored slot, even a matching one (lib/favouritesStore.ts's own
+      // dedupe-and-reuse handles the "rating/note went stale" case safely).
+      const source = entry;
+      const displayDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+      const fav = await addFavourite({
+        category: FAVOURITE_CATEGORY_BY_MEDIA[source.mediaType],
+        name: source.title,
+        rating: source.rating,
+        note: source.note,
+        photoUri: source.artworkUrl || '',
+        dateKey,
+        displayDate,
+      });
+      setEntries((prev) => {
+        const cur = prev[mode];
+        return cur ? { ...prev, [mode]: { ...cur, favouriteId: fav.id } } : prev;
+      });
+      // EDGE CASE, as asked: if there's no matching stored slot (never saved,
+      // OR stale/from a different pick), save the WHOLE live entry, link
+      // included — not just the link — so the favourite points at a title
+      // that actually exists in the day record. If storedSlot DOES match,
+      // only the link changes; rating/note/etc. stay exactly as last saved,
+      // matching "don't save the rest of the unsaved edits".
+      const baseForSave = matchesStored ? storedSlot! : entry;
+      await saveDayEntry(dateKey, { sound: { [mode]: { ...baseForSave, favouriteId: fav.id } } });
+    }
+  };
+
+  // Rating is live, unsaved state until Done — syncing it to the favourite on
+  // every tap would be the same orphan-bug class as toggleFavourite just
+  // fixed (chevron discards this, Favourites wouldn't know). The favourite's
+  // rating/note are kept in sync in handleDone instead, at the one point this
+  // is actually saved.
   const tapRating = (n: number) => {
     setEntries((prev) => {
       const cur = prev[mode];
@@ -413,13 +585,27 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
     ]).start();
   };
 
-  const handleDone = () => {
+  const handleDone = async () => {
     if (anyFilled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     // both slots together — they're independent, but saving one alone would
     // read as "the other was cleared"
     saveDayEntry(formatDateKey(new Date()), {
       sound: { listen: entries.listen, watch: entries.watch },
     });
+    // This is the one point rating/note actually become saved (chevron
+    // discards them) — so it's also the point any favourited slot's
+    // Favourites-list row gets brought in line with what was just saved.
+    // AWAITED (handleDone is now async) so dismiss() can't fire — and the
+    // user navigate to the Favourites tab — before these writes actually
+    // land; lib/favouritesStore.ts also now queues them so the two can't
+    // race each other regardless.
+    for (const m of ['listen', 'watch'] as const) {
+      const e = entries[m];
+      if (e?.favouriteId) {
+        await updateFavouriteNote(e.favouriteId, e.note);
+        await updateFavouriteRating(e.favouriteId, e.rating);
+      }
+    }
     dismiss();
   };
 
@@ -624,12 +810,12 @@ export default function SoundEditor({ onClose }: { onClose?: () => void }) {
                 <TouchableOpacity onPress={changeSelection} hitSlop={10}>
                   <Text style={styles.changeLink}>Change</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => setStarred((prev) => ({ ...prev, [mode]: !prev[mode] }))}
-                  hitSlop={10}
-                  style={styles.starBtn}
-                >
-                  <Ionicons name={starred[mode] ? 'star' : 'star-outline'} size={18} color={w.accent} />
+                <TouchableOpacity onPress={toggleFavourite} hitSlop={10} style={styles.starBtn}>
+                  <Ionicons
+                    name={entry.favouriteId ? 'star' : 'star-outline'}
+                    size={18}
+                    color={entry.favouriteId ? palette.favouriteStar : W50}
+                  />
                 </TouchableOpacity>
               </View>
 

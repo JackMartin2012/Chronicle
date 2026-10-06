@@ -357,3 +357,7 @@ Not blocking further carousel wiring — flag before launch.
 ## Search inputs
 
 Fixed Sept 2026 — placeholder/cursor vertical misalignment in SoundEditor, PlacesEditor, and PeopleEditor search inputs, verified on device. Person-name tap in SlideStory.tsx is still a no-op — parked for when person profiles are built.
+
+## Favourites
+
+Open, parked (Oct 2026): in Present > Favourites, the filter pills (Song, Movie / TV, Book) have their text and emoji clipped along the bottom whenever 'All' is selected. With any other pill selected, every pill renders full height and nothing is clipped. Not first-load related: reproduces every time the tab is shown with All selected. Not caused by maxHeight (removed), lineHeight (set), or stale code (restarted with --clear, same result). Cause not found. Parked because this tab is being redesigned into the You tab, so do not spend more time on it. If the same pattern appears in a new pill row, test it with the first pill selected.
