@@ -100,6 +100,8 @@ by `DayCard.tsx` is untouched). `constants/chronicleTheme.ts` gained
 `components/today/TodayScreen.tsx` — calm dark mosaic of tiles.
 
 ### Editors — ALL 8 BUILT (all in `components/today/editors/`)
+`CameraRollEditor.tsx` and `NewsEditor.tsx` are the 9th and 10th editors —
+both outside the original 8, both excluded from the progress ring.
 `ThreeWordsEditor.tsx` is the exception to the folder: it sits in
 `components/today/`.
 
@@ -114,6 +116,7 @@ by `DayCard.tsx` is untouched). `constants/chronicleTheme.ts` gained
 | **Capture** | `CaptureEditor.tsx` | **Built, both passes — real camera. See below.** |
 | **Story** | `StoryEditor.tsx` | **Built, both passes — real audio. See below.** |
 | **Camera Roll** *(9th — outside the original 8; doesn't count toward the progress ring)* | `CameraRollEditor.tsx` | **Built and tested on device, Sept 2026. Caption/hide/favourite/thumbnail actions confirmed working.** |
+| **News** *(10th — outside the original 8; doesn't count toward the progress ring)* | `NewsEditor.tsx` | **Built and tested on device, Oct 2026. Source is Wikipedia Current events (`lib/currentEvents.ts`). Max 3 stories on the page, pin = main story, amber star = favourite (saves to Favourites as Article), paste-a-link import, 'In other news' text box. Newspaper slide not yet wired to it.** |
 
 The eight editor preview routes and `today-preview.tsx` are deleted. Still
 present and throwaway: `app/preview.tsx` (day card carousel) and

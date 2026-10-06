@@ -123,6 +123,12 @@ away. When you fix one, tick it here AND in its source file.
 - [ ] **KeyboardDismissBar (the shared InputAccessoryView system every other editor uses) doesn't work in `CameraRollEditor.tsx`** — investigated Sept 2026 (tried: removing the conditional fullscreen Modal, an always-mounted test input at the top of the screen — neither restored it), cause not found. Worked around with a local `Keyboard.dismiss()` button instead of the shared pattern. Revisit if this pattern breaks elsewhere, since the cause is still unknown.
 - [ ] Known minor edge case (Sept 2026): SlideCameraRoll's summary count uses the real, uncapped photo/video totals, but the thumbnail strip only shows the first 20 photos + 4 videos (the existing query cap) — so on an unusually busy day the summary number can exceed what's shown in the strip. Not fixed; would need either lifting the cap or a '+N more' affordance. Low priority.
 
+### News editor (Oct 2026, `NewsEditor.tsx`)
+- [ ] KeyboardDismissBar also failed in NewsEditor; local KeyboardHideButton is the workaround.
+- [x] GDELT was dropped as the headline source because it doesn't rank by importance (`fetchHeadlines` is still used by the old DayCard World slide).
+- [x] Old GDELT-era saved stories are filtered out in newsStore.
+- [ ] Link titles can't be read from Reuters, AP or NYT (blocked), so the user types them.
+
 ### Story (source: 04_TODAY_AND_EDITORS.md)
 - [ ] Title must be left-aligned like every other editor — Stitch centred it.
       *(04:271)*
