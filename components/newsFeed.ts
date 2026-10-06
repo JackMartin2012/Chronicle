@@ -143,7 +143,7 @@ export const fetchHeadlines = async (dateKey: string): Promise<Headline[] | null
       if (!title || seen.has(title)) continue;
       seen.add(title);
       headlines.push({ title, domain: a.domain || a.sourcecountry || 'News', url: a.url });
-      if (headlines.length >= 4) break;
+      if (headlines.length >= 5) break;
     }
     return headlines;
   } catch {

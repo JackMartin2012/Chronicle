@@ -294,3 +294,18 @@ iTunes fetching with crash-proofing, and the two slides that need updating
 (Sound → Listen/Watch model; Story → serif body).
 
 This remains the single biggest remaining chunk and the least glamorous.
+
+### News / Newspaper
+
+**Real topic categories for headlines** (e.g. 'Environment', 'Science', 'Business')
+— considered Sept 2026 while designing the News editor, deliberately dropped from
+that build. GDELT's `doc/doc?mode=artlist` endpoint (used by `fetchHeadlines` in
+`components/newsFeed.ts`) does NOT return any topic/theme field — confirmed via
+GDELT's own documentation and a third-party client library; the only fields
+available are `url`, `url_mobile`, `title`, `seendate`, `socialimage`, `domain`,
+`language`, `sourcecountry`. Getting real categories would require integrating
+GDELT's separate GKG (Global Knowledge Graph) data product — a different, heavier
+endpoint returning long semi-structured tag lists rather than a clean single
+label. This is real new integration work, comparable in scope to the Google
+Places vs Mapbox decision, not a quick addition. Revisit as its own scoped task
+if wanted later.

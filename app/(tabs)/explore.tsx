@@ -144,6 +144,11 @@ const favCategories = [
   { key: 'restaurant', label: 'Restaurant', emoji: '🍽️' },
   { key: 'recipe', label: 'Recipe', emoji: '🍳' },
   { key: 'place', label: 'Place', emoji: '📍' },
+  // Added Sept 2026 for the new News editor's bookmark action (components/today/editors/NewsEditor.tsx),
+  // which favourites headlines under this category. `category` is a plain string here, so this is
+  // additive only — nothing else in this list or its consumers (filter pills, add-favourite picker,
+  // getCategoryEmoji) needed to change.
+  { key: 'article', label: 'Article', emoji: '📰' },
 ];
 
 const getWeatherInfo = (code: number, temp: number) => {
