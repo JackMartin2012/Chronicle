@@ -87,7 +87,7 @@ which slides read real data vs. still show sample content.
 | 4 | Three words | `SlideThreeWords.tsx` | Monumental typography — **DONE — real words/why/mood wired from ThreeWordsBlock, 0-3 word days and mood-only days handled correctly, tested on device Sept 2026.** |
 | 5 | Story | `SlideStory.tsx` | Dark ruled journal page — **DONE — real journal text, voice note, learned answer, and person-name highlighting wired; editor and slide now share journal page styling via chronicleTheme.ts constants; tested on device Sept 2026.** |
 | 6 | Sound | `SlideSound.tsx` | Album art + ambient glow — **DONE — real listen/watch data wired, single-slot and both-filled cases tested on device, portrait posters for film/TV, swap behaviour confirmed, Sept 2026.** |
-| 8 | Newspaper | `SlideNewspaper.tsx` | Newspaper page — presence wired, fed by Wikipedia any-year archive; lead story still hidden |
+| 8 | Newspaper | `SlideNewspaper.tsx` | Newspaper page — **DONE (Part 1) Oct 2026: cream newsprint page with blackletter "The Daily Chronicle", built from the News editor's saved picks (pinned lead, up to 2 others, up to 3 "On this day" facts, "In other news" text), topic labels, tap-to-expand headlines. Part 2 (engraving pictures, topic picker for pasted links, own-photo option) not built.** |
 
 **New in `lib/`:** `dayCardData.ts` (the `DayCardData` shape + `buildDayCardData`)
 and `dayCardExtras.ts` (`useDayCardData`, the live camera-roll/weather/archive
@@ -116,7 +116,7 @@ both outside the original 8, both excluded from the progress ring.
 | **Capture** | `CaptureEditor.tsx` | **Built, both passes — real camera. See below.** |
 | **Story** | `StoryEditor.tsx` | **Built, both passes — real audio. See below.** |
 | **Camera Roll** *(9th — outside the original 8; doesn't count toward the progress ring)* | `CameraRollEditor.tsx` | **Built and tested on device, Sept 2026. Caption/hide/favourite/thumbnail actions confirmed working.** |
-| **News** *(10th — outside the original 8; doesn't count toward the progress ring)* | `NewsEditor.tsx` | **Built and tested on device, Oct 2026. Source is Wikipedia Current events (`lib/currentEvents.ts`). Max 3 stories on the page, pin = main story, amber star = favourite (saves to Favourites as Article), paste-a-link import, 'In other news' text box. Newspaper slide not yet wired to it.** |
+| **News** *(10th — outside the original 8; doesn't count toward the progress ring)* | `NewsEditor.tsx` | **Built and tested on device, Oct 2026. Source is Wikipedia Current events (`lib/currentEvents.ts`). Max 3 stories on the page, pin = main story, amber star = favourite (saves to Favourites as Article), paste-a-link import, "In other news" text box, "On this day" picks (up to 3, from Wikipedia's any-year archive). Wired to the Newspaper slide.** |
 
 The eight editor preview routes and `today-preview.tsx` are deleted. Still
 present and throwaway: `app/preview.tsx` (day card carousel) and

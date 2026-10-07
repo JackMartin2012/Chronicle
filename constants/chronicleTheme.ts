@@ -45,6 +45,13 @@ export const palette = {
   polaroidInk: '#2a2622',
   paperCream: '#f3ece0',
 
+  // The Newspaper slide (slide 8) only — an old-fashioned cream-and-black
+  // front page, deliberately NOT either world's bg/accent. See SlideNewspaper.tsx.
+  newsprintBg: '#f1e8d4',
+  newsprintInk: '#1a1714',
+  newsprintMuted: '#6b6258',
+  newsprintRule: 'rgba(26,23,20,0.55)',
+
   danger: '#ff4444',
 } as const;
 
@@ -69,10 +76,18 @@ export const fonts = {
   // Diegetic only — polaroid captions. Never in UI chrome.
   handwriting: 'Caveat_400Regular',
 
-  // Diegetic only — newspaper masthead (slide 8, both worlds).
-  // NOTE: this means Fraunces must be loaded even in the Present world.
+  // Diegetic only — newspaper slide 8, both worlds. `masthead` is also used
+  // for story headlines on that slide (bold Fraunces); `mastheadTitle` is the
+  // blackletter used ONLY for "The Daily Chronicle" title text itself.
+  // NOTE: this means Fraunces (and UnifrakturCook) must be loaded even in the
+  // Present world.
   masthead: 'Fraunces_800ExtraBold',
   mastheadBody: 'Fraunces_400Regular',
+  mastheadTitle: 'UnifrakturCook_700Bold',
+  // The quote comment's real italic — Space Grotesk (Present's fontRegular)
+  // has no italic file at all, so `fontStyle: 'italic'` silently did nothing
+  // on it. Fraunces does ship one; used for the quote regardless of world.
+  mastheadQuote: 'Fraunces_400Regular_Italic',
 } as const;
 
 /**

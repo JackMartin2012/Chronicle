@@ -230,14 +230,22 @@ not a fixed 8 — decided and applied Sept 2026. `TOTAL_SLIDES` and the explicit
 | 5 | Story | **DONE — real journal text, voice note, learned answer, and person-name highlighting wired; editor and slide now share journal page styling via chronicleTheme.ts constants; tested on device Sept 2026.** Slide shows if text, voice note, or learned is set; the learned section hides when empty. |
 | 6 | Sound | **DONE — real listen/watch data wired, single-slot and both-filled cases tested on device, portrait posters for film/TV, swap behaviour confirmed, Sept 2026.** Shows if listen or watch is set. |
 | 7 | Map | Not built, unchanged |
-| 8 | Newspaper | Presence/absence wired — fed by the Wikipedia **any-year archive** (new, see `newsFeed.ts` below), max 2 entries; lead story stays hidden (see below) |
+| 8 | Newspaper | **DONE (Part 1) Oct 2026: cream newsprint page with blackletter "The Daily Chronicle", built from the News editor's saved picks (pinned lead, up to 2 others, up to 3 "On this day" facts, "In other news" text), topic labels, tap-to-expand headlines. Part 2 (engraving pictures, topic picker for pasted links, own-photo option) not built.** |
 
-**Newspaper's reflection block is HIDDEN, not mapped to `futureNote`** — a note
+**Superseded (kept for history):** the paragraph below, and the "SLIDE 8 — BEYOND
+TODAY (NEWSPAPER)" design-spec section above it, describe the ORIGINAL plan — a
+dark newspaper fed by GDELT/Wikipedia/football with a handwritten reflection
+note. That plan was replaced: the built slide is the cream newsprint page
+described in the table row above, sourced from the News editor's own saved
+picks (`lib/newsStore.ts`), not GDELT/football, and has no reflection note at
+all. See `02_BUILD_STATUS.md` for the current state.
+
+~~**Newspaper's reflection block is HIDDEN, not mapped to `futureNote`** — a note
 to future-you isn't a reaction to the day's news, and mapping them would be
 misleading. Logged as a future field needed if the slide keeps a reflection
 concept. Same slide's lead-story mechanic ("user saves a headline that
 mattered + writes a reaction") is unbuilt for the same reason as before — no
-headline source chosen — see `09_CODE_NOTES.md`.
+headline source chosen — see `09_CODE_NOTES.md`.~~
 
 **`newsFeed.ts` change:** `fetchWikipedia` now also returns a separate
 `wikipedia.archive` list — events from ANY year for the calendar date, not just

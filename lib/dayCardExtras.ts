@@ -9,7 +9,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { useEffect, useState } from 'react';
 
 import { loadCaptions, loadHiddenPhotos, loadTodayThumbnail } from './photoStore';
-import { loadOtherNews, loadSavedHeadlines } from './newsStore';
+import { loadOnThisDay, loadOtherNews, loadSavedHeadlines } from './newsStore';
 
 import {
   buildDayCardData,
@@ -157,12 +157,13 @@ export const loadDayCardData = async (
   dateKey: string,
   world: 'past' | 'present'
 ): Promise<DayCardData> => {
-  const [entry, cameraRoll, weather, savedHeadlines, otherNews, chosenThumbnailId] = await Promise.all([
+  const [entry, cameraRoll, weather, savedHeadlines, otherNews, onThisDay, chosenThumbnailId] = await Promise.all([
     loadDayEntry(dateKey),
     queryCameraRoll(dateKey),
     loadLegacyWeather(dateKey),
     loadSavedHeadlines(dateKey),
     loadOtherNews(dateKey),
+    loadOnThisDay(dateKey),
     loadTodayThumbnail(dateKey),
   ]);
   // captions depend on knowing which items came back, so this can't join the
@@ -176,6 +177,7 @@ export const loadDayCardData = async (
     weather,
     savedHeadlines,
     otherNews,
+    onThisDay,
     chosenThumbnailId,
     captions,
   };

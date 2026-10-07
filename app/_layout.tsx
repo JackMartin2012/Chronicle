@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Caveat_400Regular } from '@expo-google-fonts/caveat';
-import { Fraunces_300Light, Fraunces_400Regular, Fraunces_600SemiBold, Fraunces_700Bold, Fraunces_800ExtraBold } from '@expo-google-fonts/fraunces';
+import { Fraunces_300Light, Fraunces_400Regular, Fraunces_400Regular_Italic, Fraunces_600SemiBold, Fraunces_700Bold, Fraunces_800ExtraBold } from '@expo-google-fonts/fraunces';
 import { SpaceGrotesk_300Light, SpaceGrotesk_400Regular, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
+// Newspaper slide (slide 8) masthead only — see constants/chronicleTheme.ts's
+// fonts.mastheadTitle. Only one weight exists on Google Fonts.
+import { UnifrakturCook_700Bold } from '@expo-google-fonts/unifrakturcook';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -11,6 +14,7 @@ export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Fraunces_300Light,
     Fraunces_400Regular,
+    Fraunces_400Regular_Italic,
     Fraunces_600SemiBold,
     Fraunces_700Bold,
     Fraunces_800ExtraBold,
@@ -19,6 +23,7 @@ export default function RootLayout() {
     SpaceGrotesk_600SemiBold,
     SpaceGrotesk_700Bold,
     Caveat_400Regular,
+    UnifrakturCook_700Bold,
   });
   const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
   const router = useRouter();

@@ -31,12 +31,16 @@ import {
   emptyHeadlineState,
   headlineId,
   loadNewsSelection,
+  loadOnThisDay,
   loadOtherNews,
   saveNewsSelection,
+  saveOnThisDay,
   saveOtherNews,
   type HeadlineState,
+  type OnThisDayFact,
 } from '@/lib/newsStore';
-import type { Headline } from '@/components/newsFeed';
+import { fetchWikipedia } from '@/components/newsFeed';
+import type { Headline, WikiEvent } from '@/components/newsFeed';
 import KeyboardDismissBar, { KEYBOARD_ACCESSORY_ID } from '../KeyboardDismissBar';
 import KeyboardHideButton from '../KeyboardHideButton';
 
@@ -53,6 +57,7 @@ const MAIN_STORY_BLUE = 'rgba(74,144,217,0.9)';
 
 const MAX_SELECTED = 3; // the newspaper page holds at most 3 stories
 const MAX_CANDIDATES = 5; // "the first event of each category", capped
+const MAX_ON_THIS_DAY = 3; // the newspaper page's "On this day" section holds at most 3 facts
 
 type Item = {
   headline: Headline;
@@ -95,6 +100,13 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
   const [eventCount, setEventCount] = useState(0); // from the fetch itself, not the merged `items`
   const [showingMore, setShowingMore] = useState(false);
   const [otherNews, setOtherNews] = useState('');
+
+  // "On this day" — Wikipedia's any-year facts for the date, separate fetch
+  // and separate status from the main events list above (one can fail while
+  // the other succeeds).
+  const [onThisDayStatus, setOnThisDayStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [onThisDayFacts, setOnThisDayFacts] = useState<WikiEvent[]>([]);
+  const [onThisDayPicks, setOnThisDayPicks] = useState<OnThisDayFact[]>([]);
 
   // Clears any `favouriteId` that no longer exists in the real Favourites
   // list (e.g. deleted there since this was last saved) — returns a NEW
@@ -188,14 +200,21 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
 
   const load = async () => {
     setStatus('loading');
+    setOnThisDayStatus('loading');
     try {
-      const [fresh, selection, savedOtherNews] = await Promise.all([
+      const year = dateKey.split('-')[0];
+      const [fresh, selection, savedOtherNews, wiki, savedOnThisDay] = await Promise.all([
         fetchCurrentEvents(dateKey),
         loadNewsSelection(dateKey),
         loadOtherNews(dateKey),
+        fetchWikipedia(dateKey, year),
+        loadOnThisDay(dateKey),
       ]);
       if (!mountedRef.current) return;
       setOtherNews(savedOtherNews);
+      setOnThisDayFacts(wiki?.archive ?? []);
+      setOnThisDayStatus(wiki ? 'ready' : 'failed');
+      setOnThisDayPicks(savedOnThisDay);
 
       // MERGE: every story already saved today (event, or a pasted link) is
       // always shown from its own snapshot, even if a fresh fetch no longer
@@ -307,6 +326,25 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
       return;
     }
     updateItem(id, { selected: !it.state.selected });
+  };
+
+  // ---- "On this day" ----
+  const toggleOnThisDay = (fact: WikiEvent) => {
+    setOnThisDayPicks((prev) => {
+      const already = prev.some((p) => p.year === fact.year && p.text === fact.text);
+      if (already) {
+        const next = prev.filter((p) => !(p.year === fact.year && p.text === fact.text));
+        saveOnThisDay(dateKey, next);
+        return next;
+      }
+      if (prev.length >= MAX_ON_THIS_DAY) {
+        Alert.alert('Only 3 facts today', 'Deselect one before adding another.');
+        return prev;
+      }
+      const next = [...prev, { year: fact.year, text: fact.text }];
+      saveOnThisDay(dateKey, next);
+      return next;
+    });
   };
 
   // Tapping the CURRENT main story's pin turns it off, leaving no main story.
@@ -562,6 +600,36 @@ export default function NewsEditor({ onClose }: { onClose?: () => void }) {
                   onFocusField={onFieldFocus}
                 />
               ))}
+
+              {/* ON THIS DAY — Wikipedia's any-year facts for the date; up to 3 picks */}
+              <View style={styles.onThisDaySection}>
+                <Text style={styles.sectionLabel}>On this day</Text>
+                {onThisDayStatus === 'loading' && (
+                  <Text style={styles.onThisDayStateText}>Loading…</Text>
+                )}
+                {onThisDayStatus === 'failed' && (
+                  <Text style={styles.onThisDayStateText}>Couldn&apos;t load facts.</Text>
+                )}
+                {onThisDayStatus === 'ready' && onThisDayFacts.map((fact, i) => {
+                  const selected = onThisDayPicks.some((p) => p.year === fact.year && p.text === fact.text);
+                  return (
+                    <TouchableOpacity
+                      key={i}
+                      style={styles.onThisDayRow}
+                      onPress={() => toggleOnThisDay(fact)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.onThisDayText}>
+                        <Text style={styles.onThisDayYear}>{fact.year}</Text>
+                        <Text style={styles.onThisDayFactText}>{fact.text}</Text>
+                      </View>
+                      <View style={[styles.checkCircle, selected && styles.checkCircleOn]}>
+                        {selected && <Ionicons name="checkmark" size={14} color="#ffffff" />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
 
               {/* ADD A STORY FROM A LINK — always available, even on a thin/failed day */}
               <View style={styles.linkSection}>
@@ -878,6 +946,33 @@ const styles = StyleSheet.create({
     fontSize: type.bodySmall.fontSize,
     color: palette.textPrimary,
     marginBottom: space.sm,
+  },
+
+  onThisDaySection: { marginTop: space.sm, marginBottom: space.lg },
+  onThisDayStateText: {
+    fontFamily: w.fontRegular,
+    fontSize: type.bodySmall.fontSize,
+    color: W50,
+  },
+  onThisDayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: INPUT_BG,
+    borderRadius: radius.lg,
+    padding: space.base,
+    marginBottom: space.sm,
+  },
+  onThisDayText: { flex: 1, marginRight: space.md },
+  onThisDayYear: {
+    fontFamily: w.fontMedium,
+    fontSize: type.bodySmall.fontSize,
+    color: palette.textPrimary,
+  },
+  onThisDayFactText: {
+    marginTop: 2,
+    fontFamily: w.fontRegular,
+    fontSize: type.caption.fontSize,
+    color: W60,
   },
 
   linkSection: { marginTop: space.sm, marginBottom: space.lg },

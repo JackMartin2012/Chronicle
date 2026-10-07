@@ -8,7 +8,7 @@
 // that slide, and the carousel drops that slide entirely — no empty states.
 // The cover is the one exception; it is generated, so it always exists.
 
-import type { SavedHeadline } from './newsStore';
+import type { OnThisDayFact, SavedHeadline } from './newsStore';
 import type { DayEntry, Person, SoundSlots, ThreeWordsBlock } from './types';
 
 // ---------------------------------------------------------------------------
@@ -54,6 +54,8 @@ export type LiveExtras = {
   savedHeadlines: SavedHeadline[];
   /** The News editor's "In other news" free-text box for this day; '' if unset. */
   otherNews: string;
+  /** This day's picked "On this day" facts, from lib/newsStore.ts's loadOnThisDay. */
+  onThisDay: OnThisDayFact[];
   /** today_thumbnail_${dateKey} — the asset id chosen in the Camera Roll editor. Null if unset. */
   chosenThumbnailId: string | null;
   /** caption_${assetId} for each of this day's camera-roll items, keyed by id. */
@@ -112,17 +114,20 @@ export type DayCardData = {
 
   /**
    * Slide 8. Sourced from the News editor's saved picks (lib/newsStore.ts),
-   * not the Wikipedia on-this-day archive (that's still used by the legacy
-   * DayCard.tsx's World slide, independently — see newsFeed.ts).
+   * not the Wikipedia on-this-day archive from newsFeed.ts (that's a
+   * DIFFERENT, same-named idea — the legacy DayCard.tsx's World slide still
+   * uses it independently, unrelated to this `onThisDay` field).
    * `lead` is whichever selected story was pinned (isMainStory), or the first
-   * selected one if none was pinned. `others` is the rest, capped at 2. Null
-   * (slide hidden) when there are no selected stories AND no "In other news"
-   * text for the day.
+   * selected one if none was pinned. `others` is the rest, capped at 2.
+   * `onThisDay` is up to 3 facts the user picked in the News editor. Null
+   * (slide hidden) when there are no selected stories, no "On this day"
+   * picks, AND no "In other news" text for the day.
    */
   newspaper: {
     lead?: SavedHeadline;
     others: SavedHeadline[];
     otherNews: string;
+    onThisDay: OnThisDayFact[];
   } | null;
 };
 
@@ -191,10 +196,10 @@ export const buildDayCardData = (
     newspaper: (() => {
       const selected = extras.savedHeadlines;
       const hasOtherNews = extras.otherNews.trim().length > 0;
-      if (selected.length === 0 && !hasOtherNews) return null;
+      if (selected.length === 0 && !hasOtherNews && extras.onThisDay.length === 0) return null;
       const lead = selected.find((h) => h.isMainStory) ?? selected[0];
       const others = lead ? selected.filter((h) => h !== lead).slice(0, 2) : [];
-      return { lead, others, otherNews: extras.otherNews };
+      return { lead, others, otherNews: extras.otherNews, onThisDay: extras.onThisDay };
     })(),
   };
 };

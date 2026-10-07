@@ -127,3 +127,47 @@ export const loadOtherNews = async (dateKey: string): Promise<string> =>
 export const saveOtherNews = async (dateKey: string, text: string): Promise<void> => {
   await AsyncStorage.setItem(otherNewsKey(dateKey), text);
 };
+
+// ---- "On this day" — up to 3 of Wikipedia's any-year facts for the date,
+// picked in the News editor. Saved as a snapshot (not just a year/index) so a
+// pick survives the source list changing, same reasoning as SavedHeadline's
+// `headline` snapshot above. ----
+
+export type OnThisDayFact = { year: number; text: string };
+
+const onThisDayKey = (dateKey: string) => `on_this_day_${dateKey}`;
+
+export const loadOnThisDay = async (dateKey: string): Promise<OnThisDayFact[]> => {
+  try {
+    const raw = await AsyncStorage.getItem(onThisDayKey(dateKey));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveOnThisDay = async (dateKey: string, facts: OnThisDayFact[]): Promise<void> => {
+  await AsyncStorage.setItem(onThisDayKey(dateKey), JSON.stringify(facts));
+};
+
+// ---- Topic labels for the Newspaper slide's story headers, from the saved
+// Headline's `category` (set by lib/currentEvents.ts from Wikipedia's Current
+// events portal headings). Anything else — old GDELT-era saves, pasted links,
+// or a heading Wikipedia doesn't use — shows no label. ----
+
+const TOPIC_LABELS: Record<string, string> = {
+  'Armed conflicts and attacks': 'CONFLICT',
+  'Arts and culture': 'ARTS',
+  'Business and economy': 'BUSINESS',
+  'Disasters and accidents': 'DISASTERS',
+  'Health and environment': 'HEALTH',
+  'International relations': 'WORLD',
+  'Law and crime': 'CRIME',
+  'Politics and elections': 'POLITICS',
+  'Science and technology': 'SCIENCE',
+  Sports: 'SPORT',
+};
+
+export const topicLabel = (category?: string): string | null =>
+  (category && TOPIC_LABELS[category]) || null;
