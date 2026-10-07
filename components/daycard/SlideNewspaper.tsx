@@ -1,8 +1,8 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { fonts, getWorld, palette, radius, space, type } from '@/constants/chronicleTheme';
+import { fonts, getWorld, palette, space, type } from '@/constants/chronicleTheme';
+import type { SavedHeadline } from '@/lib/newsStore';
 
 // derive an rgba from a hex accent token so we can use it at partial opacity
 const withAlpha = (hex: string, alpha: number) => {
@@ -15,29 +15,30 @@ const withAlpha = (hex: string, alpha: number) => {
 
 type Props = {
   world: 'past' | 'present';
+  date: Date;
+  newspaper: {
+    lead?: SavedHeadline;
+    others: SavedHeadline[];
+    otherNews: string;
+  };
 };
 
-// TODO: real world-news / archive / reflection data; sample copy for now.
-const DATELINE = 'Thursday 24 July 2026';
-const LEAD = {
-  headline: 'Global climate summit reaches historic agreement on ocean protection',
-  source: 'BBC · 14:02',
-  reaction: "Didn't expect it to happen this fast. Everyone at work talked about nothing else.",
-};
-const ARCHIVE = [
-  { year: '1969', event: 'Apollo 11 returns to Earth' },
-  { year: '1983', event: 'The first mobile phone call is made in the UK' },
-];
-const REFLECTION = {
-  question: 'What are you looking forward to?',
-  answer: 'Getting the keys in September. Making that flat feel like ours.',
+const dateline = (date: Date) => {
+  const weekday = date.toLocaleDateString('en-GB', { weekday: 'long' });
+  const month = date.toLocaleDateString('en-GB', { month: 'long' });
+  return `${weekday} ${date.getDate()} ${month} ${date.getFullYear()}`;
 };
 
 // Slide 8 — "Beyond today". A physical newspaper page, DARK (white ink on
-// blue-black). Diegetic exception: masthead + headlines use the serif (Fraunces)
-// even in the Present world — it's part of the newspaper object. Chrome from carousel.
-export default function SlideNewspaper({ world }: Props) {
+// blue-black), text only — no photo block. Diegetic exception: masthead +
+// headlines use the serif (Fraunces) even in the Present world — it's part
+// of the newspaper object. Sourced from the News editor's saved picks
+// (lib/newsStore.ts), not the Wikipedia on-this-day archive (see
+// lib/dayCardData.ts). Chrome from carousel. Tapping a story does nothing yet.
+export default function SlideNewspaper({ world, date, newspaper }: Props) {
   const w = getWorld(world);
+  const { lead, others, otherNews } = newspaper;
+  const hasOtherNews = otherNews.trim().length > 0;
 
   return (
     <ScrollView style={[styles.root, { backgroundColor: w.bg }]} contentContainerStyle={styles.content}>
@@ -46,60 +47,59 @@ export default function SlideNewspaper({ world }: Props) {
       <Text style={[styles.masthead, { fontFamily: fonts.masthead }]}>Chronicle</Text>
       <View style={styles.ruleThin} />
       <View style={styles.mastheadMeta}>
-        <Text style={[styles.metaText, { fontFamily: w.fontRegular }]}>{DATELINE}</Text>
-        <Text style={[styles.metaText, { fontFamily: w.fontRegular }]}>The day in the world</Text>
+        <Text style={[styles.metaText, { fontFamily: w.fontRegular }]}>{dateline(date)}</Text>
+        <Text style={[styles.metaText, { fontFamily: w.fontRegular }]}>The world today</Text>
       </View>
 
       {/* LEAD STORY */}
-      <View style={[styles.leadPhoto, { backgroundColor: w.surface }]}>
-        <LinearGradient
-          pointerEvents="none"
-          colors={['transparent', w.bg]}
-          style={styles.leadScrim}
-        />
-      </View>
-      <Text style={[styles.headline, { fontFamily: fonts.masthead }]}>{LEAD.headline}</Text>
-      <Text style={[styles.source, { fontFamily: w.fontRegular }]}>{LEAD.source}</Text>
-
-      <View style={[styles.quote, { borderLeftColor: withAlpha(w.accent, 0.3) }]}>
-        <Text style={[styles.quoteText, { fontFamily: w.fontRegular }]}>“{LEAD.reaction}”</Text>
-      </View>
-
-      <View style={[styles.ruleThin, { marginVertical: space.lg }]} />
-
-      {/* FROM THE ARCHIVE */}
-      <Text style={[styles.archiveHeading, { fontFamily: fonts.mastheadBody }]}>From the archive</Text>
-      <View style={styles.archiveRow}>
-        <View style={styles.archiveCol}>
-          <Text style={[styles.archiveText, { fontFamily: w.fontRegular }]}>
-            <Text style={[styles.archiveYear, { fontFamily: w.fontBold }]}>{ARCHIVE[0].year}</Text>
-            {`  ${ARCHIVE[0].event}`}
+      {lead && (
+        <>
+          <Text style={[styles.headline, { fontFamily: fonts.masthead }]} numberOfLines={4}>
+            {lead.title}
           </Text>
-        </View>
-        <View style={styles.archiveDivider} />
-        <View style={styles.archiveCol}>
-          <Text style={[styles.archiveText, { fontFamily: w.fontRegular }]}>
-            <Text style={[styles.archiveYear, { fontFamily: w.fontBold }]}>{ARCHIVE[1].year}</Text>
-            {`  ${ARCHIVE[1].event}`}
-          </Text>
-        </View>
-      </View>
+          <Text style={[styles.source, { fontFamily: w.fontRegular }]}>{lead.domain}</Text>
 
-      <View style={[styles.ruleThick, { marginVertical: space.lg }]} />
+          {lead.comment.trim().length > 0 && (
+            <View style={[styles.quote, { borderLeftColor: withAlpha(w.accent, 0.3) }]}>
+              <Text style={[styles.quoteText, { fontFamily: w.fontRegular }]}>“{lead.comment.trim()}”</Text>
+            </View>
+          )}
+        </>
+      )}
 
-      {/* THE REFLECTION — a note resting ON the newspaper */}
-      <View style={styles.note}>
-        <Text style={[styles.noteLabel, { fontFamily: w.fontRegular }]}>For future you</Text>
-        <Text style={[styles.noteQuestion, { fontFamily: w.fontRegular }]}>{REFLECTION.question}</Text>
-        <Text style={[styles.noteAnswer, { fontFamily: w.fontRegular }]}>{REFLECTION.answer}</Text>
-      </View>
+      {/* OTHER SELECTED STORIES */}
+      {others.length > 0 && (
+        <>
+          {lead && <View style={[styles.ruleThin, { marginVertical: space.lg }]} />}
+          {others.map((story, i) => (
+            <View key={i}>
+              {i > 0 && <View style={[styles.ruleThin, { marginVertical: space.md }]} />}
+              <Text style={[styles.otherHeadline, { fontFamily: fonts.masthead }]} numberOfLines={3}>
+                {story.title}
+              </Text>
+              <Text style={[styles.source, { fontFamily: w.fontRegular }]}>{story.domain}</Text>
+              {story.comment.trim().length > 0 && (
+                <Text style={[styles.otherComment, { fontFamily: w.fontRegular }]}>“{story.comment.trim()}”</Text>
+              )}
+            </View>
+          ))}
+        </>
+      )}
+
+      {/* IN OTHER NEWS */}
+      {hasOtherNews && (
+        <>
+          <View style={[styles.ruleThick, { marginVertical: space.lg }]} />
+          <Text style={[styles.sectionHeading, { fontFamily: fonts.mastheadBody }]}>In other news</Text>
+          <Text style={[styles.otherNewsText, { fontFamily: w.fontRegular }]}>{otherNews.trim()}</Text>
+        </>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  // generous bottom padding so the tilted reflection note clears the page dots
   content: { paddingHorizontal: space.screenX, paddingTop: space.lg, paddingBottom: space.xxxl },
 
   // rules — white ink at two weights
@@ -121,16 +121,8 @@ const styles = StyleSheet.create({
   },
   metaText: { ...type.micro, color: palette.textMuted },
 
-  // LEAD STORY
-  leadPhoto: {
-    width: '100%',
-    height: 150,
-    borderRadius: radius.sm,
-    overflow: 'hidden',
-    marginTop: space.lg,
-  },
-  leadScrim: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' },
-  headline: { ...type.headline, color: palette.textPrimary, marginTop: space.md },
+  // LEAD STORY — text only, no photo block
+  headline: { ...type.headline, color: palette.textPrimary, marginTop: space.lg },
   source: { ...type.micro, color: palette.textMuted, marginTop: space.xs },
 
   quote: {
@@ -145,32 +137,16 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 
-  // FROM THE ARCHIVE
-  archiveHeading: { ...type.caption, color: palette.textSecondary, marginBottom: space.sm },
-  archiveRow: { flexDirection: 'row' },
-  archiveCol: { flex: 1 },
-  archiveDivider: {
-    width: 1,
-    backgroundColor: palette.textPrimary,
-    opacity: 0.2,
-    marginHorizontal: space.md,
+  // OTHER SELECTED STORIES
+  otherHeadline: { ...type.bodySmall, color: palette.textPrimary },
+  otherComment: {
+    ...type.caption,
+    fontStyle: 'italic',
+    color: palette.textSecondary,
+    marginTop: space.xs,
   },
-  archiveText: { ...type.caption, color: palette.textSecondary },
-  archiveYear: { color: palette.textPrimary },
 
-  // THE REFLECTION — warm note, tilted, soft shadow, NOT a bordered card
-  note: {
-    backgroundColor: palette.polaroidInk, // warm dark tone (#2a2622)
-    borderRadius: radius.md,
-    padding: space.base,
-    marginHorizontal: space.sm,
-    transform: [{ rotate: '-2deg' }],
-    shadowColor: '#000',
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  noteLabel: { ...type.micro, color: palette.textMuted },
-  noteQuestion: { ...type.bodySmall, color: palette.textPrimary, marginTop: space.xs },
-  noteAnswer: { ...type.body, color: palette.textPrimary, opacity: 0.85, marginTop: space.xs },
+  // IN OTHER NEWS
+  sectionHeading: { ...type.caption, color: palette.textSecondary, marginBottom: space.sm },
+  otherNewsText: { ...type.body, color: palette.textPrimary, opacity: 0.85 },
 });

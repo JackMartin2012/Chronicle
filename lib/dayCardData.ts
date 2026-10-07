@@ -8,6 +8,7 @@
 // that slide, and the carousel drops that slide entirely — no empty states.
 // The cover is the one exception; it is generated, so it always exists.
 
+import type { SavedHeadline } from './newsStore';
 import type { DayEntry, Person, SoundSlots, ThreeWordsBlock } from './types';
 
 // ---------------------------------------------------------------------------
@@ -47,13 +48,12 @@ export type LegacyWeather = {
 
 export type LiveExtras = {
   cameraRoll: CameraRollExtras | null;
-  /**
-   * Wikipedia on-this-day events for the day, from newsFeed's loadNewsForDay
-   * (30-day cache; respects the wiki setting). Empty when off or offline.
-   */
-  archive: { year: number; text: string }[];
   /** null when the record has no weather — see `readLegacyWeather`. */
   weather: LegacyWeather | null;
+  /** This day's selected News-editor stories, from lib/newsStore.ts's loadSavedHeadlines. */
+  savedHeadlines: SavedHeadline[];
+  /** The News editor's "In other news" free-text box for this day; '' if unset. */
+  otherNews: string;
   /** today_thumbnail_${dateKey} — the asset id chosen in the Camera Roll editor. Null if unset. */
   chosenThumbnailId: string | null;
   /** caption_${assetId} for each of this day's camera-roll items, keyed by id. */
@@ -111,14 +111,18 @@ export type DayCardData = {
   sound: SoundSlots | null;
 
   /**
-   * Slide 8. Filled from the Wikipedia archive only (max 2 entries). The
-   * reflection block is hidden (futureNote is not a reaction to the news) and
-   * `lead` stays unset until a headline-save feature exists. Null when there
-   * are no archive entries, which hides the slide.
+   * Slide 8. Sourced from the News editor's saved picks (lib/newsStore.ts),
+   * not the Wikipedia on-this-day archive (that's still used by the legacy
+   * DayCard.tsx's World slide, independently — see newsFeed.ts).
+   * `lead` is whichever selected story was pinned (isMainStory), or the first
+   * selected one if none was pinned. `others` is the rest, capped at 2. Null
+   * (slide hidden) when there are no selected stories AND no "In other news"
+   * text for the day.
    */
   newspaper: {
-    lead?: { headline: string; source: string; reaction: string };
-    archive: { year: string; event: string }[];
+    lead?: SavedHeadline;
+    others: SavedHeadline[];
+    otherNews: string;
   } | null;
 };
 
@@ -184,9 +188,13 @@ export const buildDayCardData = (
         }
       : null,
     sound: soundHas ? sound : null,
-    newspaper:
-      extras.archive.length > 0
-        ? { archive: extras.archive.slice(0, 2).map((e) => ({ year: String(e.year), event: e.text })) }
-        : null,
+    newspaper: (() => {
+      const selected = extras.savedHeadlines;
+      const hasOtherNews = extras.otherNews.trim().length > 0;
+      if (selected.length === 0 && !hasOtherNews) return null;
+      const lead = selected.find((h) => h.isMainStory) ?? selected[0];
+      const others = lead ? selected.filter((h) => h !== lead).slice(0, 2) : [];
+      return { lead, others, otherNews: extras.otherNews };
+    })(),
   };
 };

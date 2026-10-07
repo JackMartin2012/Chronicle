@@ -2,15 +2,14 @@
 //
 // Runs ONCE when the carousel opens (see useDayCardData); slides never call
 // MediaLibrary or storage themselves. Everything here is read-only and
-// on-device apart from the news archive, which goes through newsFeed's
-// existing 30-day cache.
+// on-device.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
 import { useEffect, useState } from 'react';
 
-import { loadNewsForDay } from '@/components/newsFeed';
 import { loadCaptions, loadHiddenPhotos, loadTodayThumbnail } from './photoStore';
+import { loadOtherNews, loadSavedHeadlines } from './newsStore';
 
 import {
   buildDayCardData,
@@ -154,24 +153,16 @@ const loadLegacyWeather = async (dateKey: string): Promise<LegacyWeather | null>
   }
 };
 
-const loadArchive = async (dateKey: string) => {
-  try {
-    const { cache } = await loadNewsForDay(dateKey);
-    return cache?.wikipedia?.archive ?? [];
-  } catch {
-    return [];
-  }
-};
-
 export const loadDayCardData = async (
   dateKey: string,
   world: 'past' | 'present'
 ): Promise<DayCardData> => {
-  const [entry, cameraRoll, weather, archive, chosenThumbnailId] = await Promise.all([
+  const [entry, cameraRoll, weather, savedHeadlines, otherNews, chosenThumbnailId] = await Promise.all([
     loadDayEntry(dateKey),
     queryCameraRoll(dateKey),
     loadLegacyWeather(dateKey),
-    loadArchive(dateKey),
+    loadSavedHeadlines(dateKey),
+    loadOtherNews(dateKey),
     loadTodayThumbnail(dateKey),
   ]);
   // captions depend on knowing which items came back, so this can't join the
@@ -180,7 +171,14 @@ export const loadDayCardData = async (
     cameraRoll.status === 'granted' && cameraRoll.items.length > 0
       ? await loadCaptions(cameraRoll.items.map((it) => it.id))
       : {};
-  const extras: LiveExtras = { cameraRoll, weather, archive, chosenThumbnailId, captions };
+  const extras: LiveExtras = {
+    cameraRoll,
+    weather,
+    savedHeadlines,
+    otherNews,
+    chosenThumbnailId,
+    captions,
+  };
   return buildDayCardData(entry, extras, world);
 };
 
